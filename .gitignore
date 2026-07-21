@@ -1,0 +1,19 @@
+# Dependencies (प्रोजेक्ट साईझ खूप मोठी असते म्हणून हे टाकायचे नाही)
+/node_modules
+
+# Build Output
+/dist
+/build
+
+# Security & Secrets (हे सर्वात महत्वाचे आहे!)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor & Log files
+.DS_Store
+*.log
+.vscode/
+.idea/
