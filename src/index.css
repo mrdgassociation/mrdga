@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* 💡 Custom Theme Colors for MRDGA */
+:root {
+  --bg-dark: #08090d;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: #ffffff;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Glass Panel Component (No Slate Blue, Pure Warm Glass) */
+.glass-panel {
+  background: rgba(15, 15, 20, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+/* 🖨️ A4 PDF Print Styles */
+@media print {
+  /* प्रिंट करताना बॅकग्राउंड काळं न येता पांढरं आणि प्रिंट-फ्रेंडली दिसेल */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* मोबाईल/ॲप चे नेव्हिगेशन, हेडर आणि फिल्टर्स लपवा */
+  nav, header, button, .glass-panel, select, input {
+    display: none !important;
+  }
+
+  /* फक्त प्रिंट एरिया दाखवा */
+  .print-area {
+    display: block !important;
+    background: white !important;
+    color: black !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* प्रिंट टेबल बॉर्डर्स */
+  .print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    color: black !important;
+  }
+
+  .print-area th, .print-area td {
+    border: 1px solid #000 !important;
+    padding: 6px !important;
+    color: black !important;
+  }
+
+  .print-area h1 {
+    color: #000 !important;
+  }
+}
