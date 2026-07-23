@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { dataService, getCompetitionDetails } from '../services/dataService';
 import { generateRegistrationId } from '../utils/registrationId';
 import Swal from 'sweetalert2';
-import { Trophy, Calendar, MapPin, Users, Phone, Upload, ChevronRight, ChevronLeft, MessageSquare, Clock, User } from 'lucide-react';
+import { Trophy, Calendar, MapPin, Users, Phone, Upload, ChevronRight, ChevronLeft, MessageSquare, Clock, User, AlertTriangle } from 'lucide-react';
 
 const priorityDistricts = ["Mumbai Suburban", "Mumbai", "Thane", "Palghar", "Pune", "Raigad", "Ratnagiri"];
 const otherDistricts = ["Ahilyanagar (Ahmednagar)", "Akola", "Amravati", "Chhatrapati Sambhatanagar (Aurangabad)", "Beed", "Bhandara", "Buldhana", "Chandrapur", "Dhule", "Gadchiroli", "Gondia", "Hingoli", "Jalgaon", "Jalna", "Kolhapur", "Latur", "Nagpur", "Nanded", "Nandurbar", "Nashik", "Dharashiv (Osmanabad)", "Parbhani", "Sangli", "Satara", "Sindhudurg", "Solapur", "Wardha", "Washim", "Yavatmal"];
@@ -30,6 +30,7 @@ export default function RegistrationForm({ competitionId }) {
 
   // 🔒 Security & Lock States
   const [isFormOpen, setIsFormOpen] = useState(true);
+  const [isValidComp, setIsValidComp] = useState(true); // 🛡️ नवीन चेक: स्पर्धा वैध आहे की नाही
   const [statusLoading, setStatusLoading] = useState(true);
 
   const [step, setStep] = useState(1);
@@ -37,18 +38,35 @@ export default function RegistrationForm({ competitionId }) {
   const [teamLogo, setTeamLogo] = useState(null);
   const [captainPhoto, setCaptainPhoto] = useState(null);
 
-  // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे
-  useEffect(() => {
-    const loadCompInfo = async () => {
-      setCompLoading(true);
-      setStatusLoading(true);
-      try {
-        const targetId = competitionId || '2026';
-        const details = await getCompetitionDetails(targetId);
-        console.log("📊 [REG FORM] Setting Competition Details in State:", details);
+
+ // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे (With Security Check)
+  
+    // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे (With Security Check)
+useEffect(() => {
+  const loadCompInfo = async () => {
+    setCompLoading(true);
+    setStatusLoading(true);
+    try {
+      const targetId = competitionId || '2026';
+      const details = await getCompetitionDetails(targetId);
+      console.log("📊 [REG FORM] Setting Competition Details in State:", details);
+
+      // 🛡️ SECURITY CHECK 1: जर स्पर्धा आयडी डेटाबेसमध्ये नसेल किंवा Fallback डेटा आला असेल
+      // (जर details नसेल किंवा details.isGeneral === true असेल किंवा details मधील id/competitionId जुळत नसेल)
+      if (
+        !details || 
+        details.isGeneral === true || 
+        details.isFallback === true ||
+        (!details.id && !details.competitionId)
+      ) {
+        console.warn("⚠️ [REG FORM] Competition ID is Invalid/Fallback:", targetId);
+        setIsValidComp(false);
+        setCompDetails(null);
+      } else {
+        setIsValidComp(true);
         setCompDetails(details);
 
-        // 🔒 SECURITY CHECK: कॉम्पिटिशनचा isFormOpen === false असेल तर फॉर्म ब्लॉक करा
+        // 🔒 SECURITY CHECK 2: कॉम्पिटिशनचा isFormOpen === false असेल तर फॉर्म ब्लॉक करा
         if (details && details.isFormOpen === false) {
           setIsFormOpen(false);
         } else {
@@ -56,16 +74,18 @@ export default function RegistrationForm({ competitionId }) {
           const status = await dataService.getFormStatus(targetId);
           setIsFormOpen(status?.isOpen !== false);
         }
-      } catch (err) {
-        console.error("❌ [REG FORM] Error fetching details/status:", err);
-      } finally {
-        setCompLoading(false);
-        setStatusLoading(false);
       }
-    };
+    } catch (err) {
+      console.error("❌ [REG FORM] Error fetching details/status:", err);
+      setIsValidComp(false);
+    } finally {
+      setCompLoading(false);
+      setStatusLoading(false);
+    }
+  };
 
-    loadCompInfo();
-  }, [competitionId]);
+  loadCompInfo();
+}, [competitionId]);
 
   const { register, handleSubmit, trigger, formState: { errors } } = useForm({
     resolver: zodResolver(formSchema)
@@ -82,11 +102,11 @@ export default function RegistrationForm({ competitionId }) {
   // 💾 Form Submit Handler with Back-end Security Check
   const onSubmit = async (data) => {
     // 🔒 BACK-END SECURITY LOCK
-    if (!isFormOpen) {
+    if (!isValidComp || !isFormOpen) {
       Swal.fire({
         icon: 'error',
-        title: 'अर्जाची मुदत संपली आहे!',
-        text: 'या स्पर्धेची ऑनलाइन नोंदणी असोसिएशनतर्फे बंद करण्यात आली आहे.',
+        title: 'अर्जाची मुदत संपली किंवा अवैध स्पर्धा!',
+        text: 'या स्पर्धेची नोंदणी उपलब्ध नाही किंवा असोसिएशनतर्फे बंद करण्यात आली आहे.',
         confirmButtonColor: '#ef4444',
         background: '#0c0d14',
         color: '#fff'
@@ -163,10 +183,42 @@ export default function RegistrationForm({ competitionId }) {
     return <div className="min-h-screen bg-[#08090d] text-amber-400 flex items-center justify-center text-xs animate-pulse font-bold">माहिती लोड होत आहे...</div>;
   }
 
-  // 🚫 🔒 FORM CLOSED / BLOCKED SCREEN (जर फॉर्म बंद असेल तर हा स्क्रीन दिसेल)
+  // 🛑 🔒 SECURITY SCREEN 1: जर स्पर्धा आयडी चुकीचा असेल (उदा. COMP-2026-08)
+  if (!isValidComp) {
+    return (
+      <div className="max-w-2xl mx-auto my-12 px-4 font-sans">
+        <div className="p-6 sm:p-10 bg-[#0c0d14] border border-rose-500/30 rounded-3xl text-center space-y-4 shadow-2xl">
+          
+          <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black shadow-lg">
+            ⚠️
+          </div>
+          
+          <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
+            अवैध स्पर्धा आयडी ({competitionId})!
+          </h2>
+          
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+            तुम्ही उघडलेला स्पर्धा आयडी <b className="text-amber-400 font-mono">"{competitionId}"</b> अस्तित्वात नाही किंवा चुकीचा आहे. कृपया अधिकृत स्पर्धेची निवड करूनच अर्ज भरावा.
+          </p>
+
+          <div className="pt-4 border-t border-slate-800/80 flex justify-center gap-3">
+            <a 
+              href="#/competitions" 
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl transition shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              ← अधिकृत स्पर्धांची यादी पहा
+            </a>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // 🚫 🔒 SECURITY SCREEN 2: जर फॉर्म बंद असेल तर हा स्क्रीन दिसेल
   if (!isFormOpen) {
     return (
-      <div className="max-w-2xl mx-auto my-12 px-4">
+      <div className="max-w-2xl mx-auto my-12 px-4 font-sans">
         <div className="p-6 sm:p-10 bg-[#0c0d14] border border-rose-500/30 rounded-3xl text-center space-y-4 shadow-2xl">
           
           <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black shadow-lg">
@@ -195,9 +247,9 @@ export default function RegistrationForm({ competitionId }) {
     );
   }
 
-  // 📝 जर फॉर्म सुरू असेल तर खालील मुख्य फॉर्म उघडेल
+  // 📝 जर स्पर्धा वैध आणि फॉर्म सुरू असेल तरच खालील मुख्य फॉर्म उघडेल
   return (
-    <div className="max-w-3xl mx-auto my-6 px-4 space-y-4">
+    <div className="max-w-3xl mx-auto my-6 px-4 space-y-4 font-sans">
       
       {/* 🏆 SECTION: Competition Header Banner */}
       <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-[#0c0d14] to-[#0c0d14] border border-amber-500/40 shadow-xl space-y-1 text-left">
