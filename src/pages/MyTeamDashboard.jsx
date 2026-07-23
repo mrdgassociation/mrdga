@@ -119,7 +119,7 @@ export default function MyTeamDashboard() {
             {myTeams.length === 0 ? (
               <div className="p-8 bg-[#0c0d14] border border-slate-800 rounded-3xl text-center space-y-3">
                 <p className="text-slate-400 text-xs">या ईमेल आयडीने कोणताही नोंदणी अर्ज भरलेला नाही.</p>
-                <a href="#/form/2026" className="inline-block px-4 py-2 bg-amber-500 text-black font-extrabold text-xs rounded-xl">
+                <a href="#/form/COMP-2026-01" className="inline-block px-4 py-2 bg-amber-500 text-black font-extrabold text-xs rounded-xl">
                   नवीन संघ नोंदणी करा 🚀
                 </a>
               </div>

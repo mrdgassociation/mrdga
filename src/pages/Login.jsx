@@ -40,7 +40,7 @@ export default function Login() {
           confirmButtonText: 'नवीन नोंदणी करा'
         }).then((res) => {
           if (res.isConfirmed) {
-            navigate('/form/2026');
+            navigate('/Home');
           }
         });
       } else if (error.message === "ACCOUNT_INACTIVE") {

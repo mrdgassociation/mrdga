@@ -29,7 +29,7 @@ export default function Layout({ children }) {
 
   const navItems = [
     { label: 'मुख्य पान', path: '/', icon: Home },
-    { label: 'नोंदणी फॉर्म', path: '/form/2026', icon: FileText },
+    { label: 'नोंदणी फॉर्म', path: '/form/COMP-2026-01', icon: FileText },
     { label: 'ॲडमिन पोर्टल', path: '/admin', icon: Shield },
   ];
 
