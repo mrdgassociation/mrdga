@@ -8,25 +8,40 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
     try {
       const user = await authService.loginWithGoogle();
+      
       Swal.fire({
         icon: 'success',
         title: 'लॉगिन यशस्वी!',
-        text: `स्वागत आहे, ${user.displayName} (${user.role})`,
+        text: `स्वागत आहे, ${user.displayName}`,
         timer: 1500,
         showConfirmButton: false
       });
-      navigate('/admin');
+
+      // 🎯 ROLE BASED REDIRECTION (रोलनुसार योग्य पेजवर पाठवणे)
+      if (user.role === 'Team') {
+        // 📊 गोविंदा पथक असेल तर 'माझे स्टेटस' पेजवर नेणे
+        navigate('/my-status');
+      } else {
+        // 👑 ॲडमिन / सुपर ॲडमिन असेल तर 'ॲडमिन डॅशबोर्ड' वर नेणे
+        navigate('/admin');
+      }
+
     } catch (error) {
       if (error.message === "UNAUTHORIZED_EMAIL") {
         Swal.fire({
           icon: 'error',
-          title: 'परवानगी नाही!',
-          text: 'तुमचा ईमेल आयडी ॲडमिन लिस्टमध्ये समाविष्ट नाही. कृपया सुपर ॲडमिनशी संपर्क साधा.',
-          confirmButtonColor: '#FF6600'
+          title: 'नोंदणी सापडली नाही!',
+          text: 'तुमच्या ईमेलने कोणतीही संघ नोंदणी झालेली नाही किंवा ॲडमिन लिस्टमध्ये समाविष्ट नाही. कृपया आधी संघ नाव नोंदणी फॉर्म भरा.',
+          confirmButtonColor: '#FF6600',
+          confirmButtonText: 'नवीन नोंदणी करा'
+        }).then((res) => {
+          if (res.isConfirmed) {
+            navigate('/form/2026');
+          }
         });
       } else if (error.message === "ACCOUNT_INACTIVE") {
         Swal.fire({
@@ -55,14 +70,14 @@ const handleGoogleLogin = async () => {
         </div>
 
         <div>
-          <h1 className="text-2xl font-black text-white">MRDGA Admin Portal</h1>
-          <p className="text-slate-400 text-sm mt-1">फक्त अधिकृत व्यवस्थापकांसाठी</p>
+          <h1 className="text-2xl font-black text-white">MRDGA Digital Portal</h1>
+          <p className="text-slate-400 text-sm mt-1">आयोजक, असोसिएशन व गोविंदा पथकांसाठी</p>
         </div>
 
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full py-3.5 px-4 bg-white text-slate-900 font-bold rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-100 transition shadow-lg"
+          className="w-full py-3.5 px-4 bg-white text-slate-900 font-bold rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-100 transition shadow-lg cursor-pointer"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
           {loading ? "लॉगिन होत आहे..." : "Google ने लॉगिन करा"}

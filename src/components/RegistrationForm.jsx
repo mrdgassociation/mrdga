@@ -1,20 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { dataService } from '../services/dataService';
+import { dataService, getCompetitionDetails } from '../services/dataService';
 import { generateRegistrationId } from '../utils/registrationId';
 import Swal from 'sweetalert2';
-import { User, Phone, Users, Upload, ChevronRight, ChevronLeft, MessageSquare } from 'lucide-react';
+import { Trophy, Calendar, MapPin, Users, Phone, Upload, ChevronRight, ChevronLeft, MessageSquare, Clock, User } from 'lucide-react';
 
-const priorityDistricts = ["Mumbai Suburban", "Mumbai", "Thane", "Palghar"];
-const otherDistricts = [
-  "Ahilyanagar (Ahmednagar)", "Akola", "Amravati", "Chhatrapati Sambhajinagar (Aurangabad)", 
-  "Beed", "Bhandara", "Buldhana", "Chandrapur", "Dhule", "Gadchiroli", "Gondia", 
-  "Hingoli", "Jalgaon", "Jalna", "Kolhapur", "Latur", "Nagpur", "Nanded", 
-  "Nandurbar", "Nashik", "Dharashiv (Osmanabad)", "Parbhani", "Pune", "Raigad", 
-  "Ratnagiri", "Sangli", "Satara", "Sindhudurg", "Solapur", "Wardha", "Washim", "Yavatmal"
-];
+const priorityDistricts = ["Mumbai Suburban", "Mumbai", "Thane", "Palghar", "Pune", "Raigad", "Ratnagiri"];
+const otherDistricts = ["Ahilyanagar (Ahmednagar)", "Akola", "Amravati", "Chhatrapati Sambhatanagar (Aurangabad)", "Beed", "Bhandara", "Buldhana", "Chandrapur", "Dhule", "Gadchiroli", "Gondia", "Hingoli", "Jalgaon", "Jalna", "Kolhapur", "Latur", "Nagpur", "Nanded", "Nandurbar", "Nashik", "Dharashiv (Osmanabad)", "Parbhani", "Sangli", "Satara", "Sindhudurg", "Solapur", "Wardha", "Washim", "Yavatmal"];
 
 const formSchema = z.object({
   teamName: z.string().min(3, "टीमचे नाव कमीत कमी ३ अक्षरांचे असावे"),
@@ -23,7 +17,6 @@ const formSchema = z.object({
   vibhag: z.string().min(2, "विभाग / तालुका आवश्यक आहे"),
   pincode: z.string().optional(),
   playerCount: z.coerce.number().min(5, "कमीत कमी ५ खेळाडू आवश्यक आहेत"),
-  
   captainName: z.string().min(2, "कॅप्टन/कोचचे नाव आवश्यक आहे"),
   captainPhone: z.string().regex(/^[6-9]\d{9}$/, "१० अंकी वैध मोबाईल नंबर टाका"),
   managerName: z.string().min(2, "मॅनेजरचे नाव आवश्यक आहे"),
@@ -31,127 +24,209 @@ const formSchema = z.object({
   email: z.string().email("वैध ईमेल आयडी टाका"),
 });
 
-export default function RegistrationForm({ season = "2026" }) {
+export default function RegistrationForm({ competitionId }) {
+  const [compDetails, setCompDetails] = useState(null);
+  const [compLoading, setCompLoading] = useState(true);
+
+  // 🔒 Security & Lock States
+  const [isFormOpen, setIsFormOpen] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(true);
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  
   const [teamLogo, setTeamLogo] = useState(null);
   const [captainPhoto, setCaptainPhoto] = useState(null);
-  const [logoOverSize, setLogoOverSize] = useState(false);
 
-  const SUPPORT_WHATSAPP_NUMBER = "919876543210";
+  // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे
+  useEffect(() => {
+    const loadCompInfo = async () => {
+      setCompLoading(true);
+      setStatusLoading(true);
+      try {
+        const targetId = competitionId || '2026';
+        const details = await getCompetitionDetails(targetId);
+        console.log("📊 [REG FORM] Setting Competition Details in State:", details);
+        setCompDetails(details);
 
-  const { register, handleSubmit, trigger, watch, formState: { errors } } = useForm({
-    resolver: zodResolver(formSchema),
-    defaultValues: { season }
+        // 🔒 SECURITY CHECK: कॉम्पिटिशनचा isFormOpen === false असेल तर फॉर्म ब्लॉक करा
+        if (details && details.isFormOpen === false) {
+          setIsFormOpen(false);
+        } else {
+          // ग्लोबल फॉर्म स्टेटस चेक
+          const status = await dataService.getFormStatus(targetId);
+          setIsFormOpen(status?.isOpen !== false);
+        }
+      } catch (err) {
+        console.error("❌ [REG FORM] Error fetching details/status:", err);
+      } finally {
+        setCompLoading(false);
+        setStatusLoading(false);
+      }
+    };
+
+    loadCompInfo();
+  }, [competitionId]);
+
+  const { register, handleSubmit, trigger, formState: { errors } } = useForm({
+    resolver: zodResolver(formSchema)
   });
 
-  const currentTeamName = watch("teamName") || "आमचा संघ";
-
-  const handleLogoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 1024 * 1024) { // 1 MB limit
-        setLogoOverSize(true);
-        setTeamLogo(null);
-      } else {
-        setLogoOverSize(false);
-        setTeamLogo(file);
-      }
-    }
-  };
-
-  // स्टेप व्हॅलिडेशन - फक्त पुढील स्टेपवर नेण्यासाठी
   const handleNext = async (e) => {
-    e.preventDefault(); // फॉर्म डायरेक्ट सबमिट होण्यापासून रोखणे
+    e.preventDefault();
     let isValid = false;
-
-    if (step === 1) {
-      isValid = await trigger(["teamName", "category", "district", "vibhag", "playerCount"]);
-    } else if (step === 2) {
-      isValid = await trigger(["captainName", "captainPhone", "managerName", "managerPhone", "email"]);
-    }
-    
-    if (isValid) {
-      setStep((prev) => prev + 1); // स्टेप वाढवणे (उदा. 2 वरून 3 वर जाणे)
-    }
+    if (step === 1) isValid = await trigger(["teamName", "category", "district", "vibhag", "playerCount"]);
+    else if (step === 2) isValid = await trigger(["captainName", "captainPhone", "managerName", "managerPhone", "email"]);
+    if (isValid) setStep((prev) => prev + 1);
   };
 
+  // 💾 Form Submit Handler with Back-end Security Check
   const onSubmit = async (data) => {
+    // 🔒 BACK-END SECURITY LOCK
+    if (!isFormOpen) {
+      Swal.fire({
+        icon: 'error',
+        title: 'अर्जाची मुदत संपली आहे!',
+        text: 'या स्पर्धेची ऑनलाइन नोंदणी असोसिएशनतर्फे बंद करण्यात आली आहे.',
+        confirmButtonColor: '#ef4444',
+        background: '#0c0d14',
+        color: '#fff'
+      });
+      return;
+    }
+
     setLoading(true);
     try {
+      const targetSeason = compDetails?.season || "2026";
+      const seasonYear = targetSeason.slice(-2);
 
-        // 🛑 १. डुप्लिकेट एन्ट्री चेक
-      const dupCheck = await dataService.checkDuplicateTeam(data.teamName, data.captainPhone, season);
-      
+      const dupCheck = await dataService.checkDuplicateTeam(data.teamName, data.captainPhone, competitionId || targetSeason);
       if (dupCheck.isDuplicate) {
         setLoading(false);
-        Swal.fire({
-          icon: 'warning',
-          title: 'आधीच नोंदणी झाली आहे!',
-          text: dupCheck.reason,
-          confirmButtonColor: '#FF6600'
+        Swal.fire({ 
+          icon: 'warning', 
+          title: 'आधीच नोंदणी झाली आहे!', 
+          text: dupCheck.reason, 
+          confirmButtonColor: '#FF6600',
+          background: '#0c0d14',
+          color: '#fff'
         });
-        return; // फॉर्म सबमिट होण्यापासून रोखणे
+        return;
       }
-      
-      const seasonYear = season.slice(-2);
+
       const regId = await generateRegistrationId(data.category, seasonYear);
 
       const payload = {
         registrationId: regId,
-        season,
+        competitionId: competitionId || `COMP-${targetSeason}`,
+        competitionTitle: compDetails?.title || "दहीहंडी स्पर्धा",
+        season: targetSeason,
         teamName: data.teamName,
         category: data.category,
         district: data.district,
         vibhag: data.vibhag,
         pincode: data.pincode || "",
         playerCount: data.playerCount,
-        captain: {
-          name: data.captainName,
-          phone: data.captainPhone,
-        },
-        manager: {
-          name: data.managerName,
-          phone: data.managerPhone,
-        },
+        captain: { name: data.captainName, phone: data.captainPhone },
+        manager: { name: data.managerName, phone: data.managerPhone },
         email: data.email,
-        status: "Pending",
-        internalProbability: 50
+        status: "Pending"
       };
 
-      // ImgBB + Firestore मध्ये सेव्ह करणे
-      await dataService.saveTeam(payload, {
-        logo: teamLogo,
-        captainPhoto: captainPhoto
-      });
+      await dataService.saveTeam(payload, { logo: teamLogo, captainPhoto });
 
       Swal.fire({
         icon: 'success',
-        title: 'रजिस्ट्रेशन यशस्वी झाले!',
-        html: `तुमचा रजिस्ट्रेशन आयडी: <br/><b class="text-2xl text-amber-400 my-2 block">${regId}</b> कृपया हा आयडी जतन करून ठेवा.`,
+        title: 'रजिस्ट्रेशन यशस्वी!',
+        html: `संघाचे नाव: <b>${data.teamName}</b><br/>स्पर्धा: <b class="text-amber-400">${compDetails?.title || 'दहीहंडी चषक'}</b><br/>आयडी: <b class="text-xl text-amber-400 font-mono my-2 block">${regId}</b>`,
         confirmButtonColor: '#FF6600',
-        confirmButtonText: 'मुख्य पानावर जा'
-      }).then(() => {
-        window.location.href = "#/";
-      });
+        confirmButtonText: 'मुख्य पानावर जा',
+        background: '#0c0d14',
+        color: '#fff'
+      }).then(() => { window.location.href = "#/"; });
 
     } catch (err) {
-      console.error("❌ Registration error:", err);
-      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'रजिस्ट्रेशन करताना अडचण आली. पुन्हा प्रयत्न करा.' });
+      console.error("Registration Error:", err);
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'त्रुटी!', 
+        text: 'रजिस्ट्रेशन करताना अडचण आली.',
+        background: '#0c0d14',
+        color: '#fff' 
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const whatsappUrl = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(
-    `नमस्कार, मी माझ्या संघाचा HD Logo/PDF पाठवत आहे.\nसंघ नाव: ${currentTeamName}`
-  )}`;
+  // ⏳ Loading State
+  if (statusLoading || compLoading) {
+    return <div className="min-h-screen bg-[#08090d] text-amber-400 flex items-center justify-center text-xs animate-pulse font-bold">माहिती लोड होत आहे...</div>;
+  }
 
+  // 🚫 🔒 FORM CLOSED / BLOCKED SCREEN (जर फॉर्म बंद असेल तर हा स्क्रीन दिसेल)
+  if (!isFormOpen) {
+    return (
+      <div className="max-w-2xl mx-auto my-12 px-4">
+        <div className="p-6 sm:p-10 bg-[#0c0d14] border border-rose-500/30 rounded-3xl text-center space-y-4 shadow-2xl">
+          
+          <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black shadow-lg">
+            🚫
+          </div>
+          
+          <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
+            या स्पर्धेची ऑनलाइन नोंदणी बंद झाली आहे!
+          </h2>
+          
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+            <b className="text-amber-400">{compDetails?.title || 'दहीहंडी स्पर्धा'}</b> साठी अर्जांची मुदत पूर्ण झाली आहे किंवा असोसिएशनतर्फे नवीन अर्ज स्वीकारणे थांबवले आहे.
+          </p>
+
+          <div className="pt-4 border-t border-slate-800/80 flex justify-center gap-3">
+            <a 
+              href="#/competitions" 
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl transition shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              ← इतर उपलब्ध स्पर्धा पहा
+            </a>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // 📝 जर फॉर्म सुरू असेल तर खालील मुख्य फॉर्म उघडेल
   return (
-    <div className="max-w-3xl mx-auto my-8 px-4">
+    <div className="max-w-3xl mx-auto my-6 px-4 space-y-4">
+      
+      {/* 🏆 SECTION: Competition Header Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-[#0c0d14] to-[#0c0d14] border border-amber-500/40 shadow-xl space-y-1 text-left">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 bg-amber-500 text-black font-extrabold text-[10px] rounded-md uppercase tracking-wider">
+            अधिकृत नोंदणी अर्ज
+          </span>
+          {compDetails?.season && (
+            <span className="px-2 py-0.5 bg-slate-800 text-amber-400 font-mono text-[10px] font-bold rounded-md">
+              हंगाम {compDetails.season}
+            </span>
+          )}
+        </div>
+
+        <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 pt-1">
+          <Trophy className="w-5 h-5 text-amber-400 shrink-0" /> 
+          {compDetails?.title ? compDetails.title : "महाराष्ट्र राज्य दहीहंडी स्पर्धा नोंदणी"}
+        </h1>
+
+        {compDetails?.venue && (
+          <p className="text-xs text-slate-300 flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {compDetails.venue} 
+            {compDetails?.startDate && ` • (${compDetails.startDate})`}
+          </p>
+        )}
+      </div>
+
       {/* Stepper Header */}
-      <div className="glass-panel p-4 rounded-2xl mb-8 flex justify-between items-center text-xs font-semibold">
+      <div className="glass-panel p-4 rounded-2xl flex justify-between items-center text-xs font-semibold">
         <div className={`flex items-center gap-2 ${step >= 1 ? 'text-amber-400' : 'text-slate-500'}`}>
           <span className="w-6 h-6 rounded-full border border-current flex items-center justify-center">1</span>
           <span>संघ माहिती</span>
@@ -159,7 +234,7 @@ export default function RegistrationForm({ season = "2026" }) {
         <div className="h-[1px] w-8 bg-slate-700" />
         <div className={`flex items-center gap-2 ${step >= 2 ? 'text-amber-400' : 'text-slate-500'}`}>
           <span className="w-6 h-6 rounded-full border border-current flex items-center justify-center">2</span>
-          <span>संपर्क (कॅप्टन/मॅनेजर)</span>
+          <span>संपर्क</span>
         </div>
         <div className="h-[1px] w-8 bg-slate-700" />
         <div className={`flex items-center gap-2 ${step >= 3 ? 'text-amber-400' : 'text-slate-500'}`}>
@@ -170,8 +245,6 @@ export default function RegistrationForm({ season = "2026" }) {
 
       {/* Main Form Body */}
       <form onSubmit={handleSubmit(onSubmit)} className="glass-panel p-6 sm:p-8 rounded-3xl space-y-6">
-        
-        {/* Step 1: Team Info */}
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
@@ -208,12 +281,8 @@ export default function RegistrationForm({ season = "2026" }) {
                 <label className="block text-sm text-slate-300 mb-1">जिल्हा (District) *</label>
                 <select {...register("district")} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none">
                   <option value="">निवडा</option>
-                  <optgroup label="प्रमुख जिल्हे">
-                    {priorityDistricts.map(d => <option key={d} value={d}>{d}</option>)}
-                  </optgroup>
-                  <optgroup label="इतर जिल्हे">
-                    {otherDistricts.map(d => <option key={d} value={d}>{d}</option>)}
-                  </optgroup>
+                  <optgroup label="प्रमुख जिल्हे">{priorityDistricts.map(d => <option key={d} value={d}>{d}</option>)}</optgroup>
+                  <optgroup label="इतर जिल्हे">{otherDistricts.map(d => <option key={d} value={d}>{d}</option>)}</optgroup>
                 </select>
                 {errors.district && <p className="text-red-400 text-xs mt-1">{errors.district.message}</p>}
               </div>
@@ -232,7 +301,6 @@ export default function RegistrationForm({ season = "2026" }) {
           </div>
         )}
 
-        {/* Step 2: Contact Details */}
         {step === 2 && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
@@ -248,7 +316,7 @@ export default function RegistrationForm({ season = "2026" }) {
 
               <div>
                 <label className="block text-sm text-slate-300 mb-1">कॅप्टन मोबाईल नंबर *</label>
-                <input {...register("captainPhone")} placeholder="9876543210" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("captainPhone")} placeholder="9876040010" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.captainPhone && <p className="text-red-400 text-xs mt-1">{errors.captainPhone.message}</p>}
               </div>
             </div>
@@ -262,7 +330,7 @@ export default function RegistrationForm({ season = "2026" }) {
 
               <div>
                 <label className="block text-sm text-slate-300 mb-1">मॅनेजर मोबाईल नंबर *</label>
-                <input {...register("managerPhone")} placeholder="9876543210" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("managerPhone")} placeholder="9876011010" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.managerPhone && <p className="text-red-400 text-xs mt-1">{errors.managerPhone.message}</p>}
               </div>
             </div>
@@ -275,79 +343,45 @@ export default function RegistrationForm({ season = "2026" }) {
           </div>
         )}
 
-        {/* Step 3: Photo Upload (Optional Step) */}
         {step === 3 && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-fadeIn">
             <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
               <Upload className="w-5 h-5" /> ३. संघाचा लोगो व कॅप्टनचा फोटो (ऐच्छिक)
             </h2>
 
-            <div className="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center hover:border-amber-400 transition bg-slate-900/50">
+            <div className="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center hover:border-amber-400 transition bg-slate-900/50 space-y-3">
               <label className="cursor-pointer block space-y-2">
                 <Upload className="w-8 h-8 text-amber-400 mx-auto" />
-                <span className="block text-sm text-slate-200 font-semibold">संघाचा लोगो (Team Logo - Max 1MB)</span>
-                <span className="block text-xs text-slate-400">PNG, JPG निवडा (नसल्यास रिकामे ठेवा)</span>
-                <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+                <span className="block text-sm text-slate-200 font-semibold">संघाचा लोगो (Team Logo)</span>
+                <input type="file" accept="image/*" onChange={(e) => setTeamLogo(e.target.files[0])} className="hidden" />
               </label>
-
-              {teamLogo && <p className="text-xs text-green-400 font-semibold mt-2">✓ निवडले: {teamLogo.name}</p>}
-
-              {logoOverSize && (
-                <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left space-y-2">
-                  <p className="text-xs text-amber-300 font-medium">
-                    ⚠️ तुमची फाईल १ MB पेक्षा मोठी आहे किंवा HD/PDF आहे.
-                  </p>
-                  <a 
-                    href={whatsappUrl} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold text-xs rounded-lg transition"
-                  >
-                    <MessageSquare className="w-4 h-4" /> WhatsApp वर लोगो पाठवा
-                  </a>
-                </div>
-              )}
+              {teamLogo && <p className="text-xs text-emerald-400 font-semibold">✓ निवडले: {teamLogo.name}</p>}
             </div>
 
-            <div className="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center hover:border-amber-400 transition bg-slate-900/50">
+            <div className="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center hover:border-amber-400 transition bg-slate-900/50 space-y-3">
               <label className="cursor-pointer block space-y-2">
                 <User className="w-8 h-8 text-amber-400 mx-auto" />
-                <span className="block text-sm text-slate-200 font-semibold">कॅप्टनचा फोटो (Captain Photo - ऐच्छिक)</span>
+                <span className="block text-sm text-slate-200 font-semibold">कॅप्टनचा फोटो (Captain Photo)</span>
                 <input type="file" accept="image/*" onChange={(e) => setCaptainPhoto(e.target.files[0])} className="hidden" />
               </label>
-              {captainPhoto && <p className="text-xs text-green-400 font-semibold mt-2">✓ निवडले: {captainPhoto.name}</p>}
+              {captainPhoto && <p className="text-xs text-emerald-400 font-semibold">✓ निवडले: {captainPhoto.name}</p>}
             </div>
           </div>
         )}
 
-        {/* Buttons Section */}
         <div className="flex justify-between items-center pt-4 border-t border-slate-800">
           {step > 1 ? (
-            <button 
-              type="button" 
-              onClick={() => setStep(step - 1)} 
-              className="px-5 py-2.5 bg-slate-800 text-white font-semibold rounded-xl flex items-center gap-1 hover:bg-slate-700"
-            >
+            <button type="button" onClick={() => setStep(step - 1)} className="px-5 py-2.5 bg-slate-800 text-white font-semibold rounded-xl flex items-center gap-1 hover:bg-slate-700 cursor-pointer">
               <ChevronLeft className="w-4 h-4" /> मागे
             </button>
           ) : <div />}
 
-          {/* स्टेप १ आणि २ वर असताना 'type="button"' मुळे फॉर्म सबमिट न होता स्टेप ३ उघडेल */}
           {step < 3 ? (
-            <button 
-              type="button" 
-              onClick={handleNext} 
-              className="px-6 py-2.5 bg-amber-500 text-black font-bold rounded-xl flex items-center gap-1 hover:bg-amber-400"
-            >
+            <button type="button" onClick={handleNext} className="px-6 py-2.5 bg-amber-500 text-black font-bold rounded-xl flex items-center gap-1 hover:bg-amber-400 cursor-pointer">
               पुढील स्टेप <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            /* फक्त स्टेप ३ वरच मुख्य सबमिट बटण येईल */
-            <button 
-              type="submit" 
-              disabled={loading} 
-              className="px-8 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-extrabold rounded-xl hover:opacity-90 disabled:opacity-50 shadow-lg shadow-amber-500/20"
-            >
+            <button type="submit" disabled={loading} className="px-8 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-extrabold rounded-xl hover:opacity-90 disabled:opacity-50 shadow-lg shadow-amber-500/20 cursor-pointer">
               {loading ? "प्रक्रिया सुरू आहे..." : "रजिस्ट्रेशन सबमिट करा"}
             </button>
           )}

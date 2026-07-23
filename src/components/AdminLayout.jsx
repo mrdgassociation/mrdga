@@ -42,14 +42,20 @@ export default function AdminLayout({ children }) {
       
       {/* 🔹 Mobile Top Navbar */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0c0d14] border-b border-amber-500/20 sticky top-0 z-40">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-600 p-0.5 flex items-center justify-center">
-            <div className="w-full h-full bg-[#0c0d14] rounded-[6px] flex items-center justify-center text-amber-400">
-              <Shield className="w-4 h-4" />
-            </div>
-          </div>
-          <span className="font-black text-sm text-white">MRDGA <span className="text-amber-400">Admin</span></span>
-        </div>
+      <div className="flex items-center gap-2.5">
+  <img 
+    src="./mrdga-logo.png" 
+    alt="MRDGA Logo" 
+    className="w-8 h-8 object-contain rounded-lg shrink-0"
+    onError={(e) => {
+      // फॉलबॅक जर फाईल सापडली नाही तर
+      console.error("Logo failed to load from ./mrdga-logo.png");
+    }}
+  />
+  <span className="font-black text-sm text-white">
+    MRDGA <span className="text-amber-400">Admin</span>
+  </span>
+</div>
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -71,25 +77,16 @@ export default function AdminLayout({ children }) {
         <div className="space-y-6">
           
           {/* Logo & Mobile Close Header */}
-          <div className="flex items-center justify-between px-2 py-2 border-b border-amber-500/10">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 p-0.5 flex items-center justify-center">
-                <div className="w-full h-full bg-[#0c0d14] rounded-[10px] flex items-center justify-center text-amber-400">
-                  <Shield className="w-4 h-4" />
-                </div>
-              </div>
-              <div>
-                <h1 className="font-black text-sm text-white leading-tight">MRDGA Admin</h1>
-                <p className="text-[10px] text-amber-400 font-medium">कंट्रोल पॅनेल ({userRole})</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <img 
+              src="./mrdga-logo.png" 
+              alt="MRDGA Logo" 
+              className="w-9 h-9 object-contain rounded-lg shrink-0"
+            />
+            <div>
+              <h1 className="font-black text-sm text-white leading-tight">MRDGA Admin</h1>
+              <p className="text-[10px] text-amber-400 font-medium">कंट्रोल पॅनेल</p>
             </div>
-
-            <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden p-1 text-gray-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Navigation Links */}

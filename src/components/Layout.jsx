@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, FileText, Shield, Menu, X, LogOut, User } from 'lucide-react';
 import { authService } from '../services/authService';
+import mrdgaLogo from '/public/mrdga-logo.png'; // किंवा import mrdgaLogo from '../assets/mrdga-logo.png';
 
 export default function Layout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -42,18 +43,30 @@ export default function Layout({ children }) {
       <header className="sticky top-0 z-40 bg-[#0c0d14]/95 backdrop-blur-md border-b border-amber-500/20 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           
-          {/* Logo & Brand Name */}
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 p-0.5 shadow-lg shadow-amber-500/20 flex items-center justify-center">
-              <div className="w-full h-full bg-[#0c0d14] rounded-[10px] flex items-center justify-center text-amber-400">
-                <Shield className="w-5 h-5 fill-amber-400/20" />
-              </div>
+      {/* Logo & Brand Name */}
+      <Link to="/" className="flex items-center gap-3 group">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 p-0.5 shadow-lg shadow-amber-500/20 flex items-center justify-center shrink-0">
+          <div className="w-full h-full bg-[#0c0d14] rounded-[10px] flex items-center justify-center overflow-hidden p-0.5">
+            <img 
+              src="/mrdga-logo.png" 
+              alt="MRDGA Logo" 
+              className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-200"
+              onError={(e) => {
+                // जर इमेज लोड झाली नाही तर फॉलबॅक म्हणून शील्ड आयकॉन दिसेल
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div className="hidden w-full h-full items-center justify-center text-amber-400">
+              <Shield className="w-5 h-5 fill-amber-400/20" />
             </div>
-            <div>
-              <h1 className="font-black text-base tracking-wide text-white leading-tight">MRDGA</h1>
-              <p className="text-[10px] text-amber-400/90 font-medium">महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन</p>
-            </div>
-          </Link>
+          </div>
+        </div>
+        <div>
+          <h1 className="font-black text-base tracking-wide text-white leading-tight">MRDGA</h1>
+          <p className="text-[10px] text-amber-400/90 font-medium">महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन</p>
+        </div>
+      </Link>
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-2">

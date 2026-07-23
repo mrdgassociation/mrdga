@@ -7,7 +7,8 @@ import {
   getDocs, 
   updateDoc, 
   query, 
-  where 
+  where,
+  arrayUnion // 👈 Missing import added for addTeamComment
 } from "firebase/firestore";
 
 /**
@@ -17,46 +18,172 @@ export async function uploadToImgBB(file) {
   if (!file) return null;
 
   const apiKey = import.meta.env.VITE_IMGBB_API_KEY;
+
+  const getBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+
   if (!apiKey) {
-    console.error("❌ VITE_IMGBB_API_KEY Missing! Check your .env file.");
-    return null;
+    console.error("❌ VITE_IMGBB_API_KEY Missing!");
+    return await getBase64(file);
   }
 
-  const formData = new FormData();
-  formData.append("image", file);
-
   try {
+    const base64Data = (await getBase64(file)).split(',')[1];
+    const formData = new FormData();
+    formData.append("image", base64Data);
+
     const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
       method: "POST",
       body: formData,
     });
 
     const data = await response.json();
+
     if (data.success) {
       console.log("📸 ImgBB Direct Image Link:", data.data.url);
       return data.data.url;
     } else {
-      console.error("❌ ImgBB API Error:", data);
-      return null;
+      console.warn("⚠️ ImgBB Error! Fallback to Base64:", data.error?.message);
+      return await getBase64(file);
     }
   } catch (error) {
-    console.error("❌ Upload Error to ImgBB:", error);
-    return null;
+    console.warn("⚠️ ImgBB Upload Failed, using Local Fallback:", error);
+    return await getBase64(file);
   }
 }
 
+// 🎯 Fetch Single Competition Details
+export const getCompetitionDetails = async (compId) => {
+  console.log("==========================================");
+  console.log("🔍 [FETCH COMP DETAIL] Target ID:", compId);
+
+  try {
+    if (!compId || compId === '2026' || compId === '2025' || compId === '2027') {
+      console.log("ℹ️ [FETCH COMP DETAIL] General Year Form Detected:", compId);
+      return {
+        title: "महाराष्ट्र राज्य दहीहंडी असोसिएशन अधिकृत नोंदणी",
+        season: compId || "2026",
+        isGeneral: true
+      };
+    }
+
+    const docRef = doc(db, 'competitions', compId);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      console.log("✅ [FETCH COMP DETAIL] Found by Doc ID:", docSnap.data());
+      return docSnap.data();
+    }
+
+    console.log("🔎 [FETCH COMP DETAIL] Querying by competitionId field...");
+    const q = query(collection(db, 'competitions'), where('competitionId', '==', compId));
+    const querySnap = await getDocs(q);
+
+    if (!querySnap.empty) {
+      const foundData = querySnap.docs[0].data();
+      console.log("✅ [FETCH COMP DETAIL] Found by competitionId Query:", foundData);
+      return foundData;
+    }
+
+    console.warn("⚠️ [FETCH COMP DETAIL] No document found for:", compId);
+    return {
+      title: "महाराष्ट्र राज्य दहीहंडी असोसिएशन अधिकृत नोंदणी",
+      season: "2026",
+      isGeneral: true
+    };
+
+  } catch (err) {
+    console.error("❌ [FETCH COMP DETAIL ERROR]:", err);
+    return null;
+  }
+};
+
+// 🎯 SECTION: Fetch All Competitions List (Latest First)
+export const getAllCompetitions = async () => {
+  console.log("==========================================");
+  console.log("🔍 [getAllCompetitions] Fetching all competitions from Firestore...");
+  try {
+    const querySnapshot = await getDocs(collection(db, 'competitions'));
+    const list = [];
+    querySnapshot.forEach((doc) => {
+      list.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // 💡 Latest Competitions Top ला दाखवण्यासाठी Sorting
+    list.sort((a, b) => (b.startDate || b.competitionId || '').localeCompare(a.startDate || a.competitionId || ''));
+
+    console.log("📊 [getAllCompetitions] Sorted List:", list);
+    return list;
+  } catch (err) {
+    console.error("❌ [getAllCompetitions ERROR]:", err);
+    return [];
+  }
+};
+
+// 🎯 SECTION: Update Competition Wise Form Status
+// 🎯 SECTION: Smart Competition Form Status Update (dataService.js)
+export const updateCompetitionFormStatus = async (compId, isFormOpen) => {
+  console.log(`==========================================`);
+  console.log(`⏳ [UPDATE COMP FORM] Target ID: ${compId} | New Status: ${isFormOpen}`);
+
+  try {
+    // 1️⃣ आधी Direct Document ID ने अपडेट करण्याचा प्रयत्न करा
+    const directDocRef = doc(db, "competitions", compId);
+    const directSnap = await getDoc(directDocRef);
+
+    if (directSnap.exists()) {
+      await updateDoc(directDocRef, {
+        isFormOpen,
+        updatedAt: new Date().toISOString()
+      });
+      console.log(`✅ [UPDATE COMP FORM] Updated directly by Doc ID: ${compId}`);
+      return true;
+    }
+
+    // 2️⃣ जर Doc ID ने नसेल सापडला, तर 'competitionId' Field वरून Query करा
+    console.log(`🔎 [UPDATE COMP FORM] Searching by competitionId field...`);
+    const q = query(collection(db, "competitions"), where("competitionId", "==", compId));
+    const querySnap = await getDocs(q);
+
+    if (!querySnap.empty) {
+      const targetDocId = querySnap.docs[0].id;
+      const targetDocRef = doc(db, "competitions", targetDocId);
+      await updateDoc(targetDocRef, {
+        isFormOpen,
+        updatedAt: new Date().toISOString()
+      });
+      console.log(`✅ [UPDATE COMP FORM] Updated via Query Doc ID: ${targetDocId}`);
+      return true;
+    }
+
+    // 3️⃣ जर डॉक्युमेंट नसेलच, तर setDoc (Merge: true) ने नवीन सेव्ह / अपडेट करा
+    console.warn(`⚠️ [UPDATE COMP FORM] No existing doc found. Creating/Merging with setDoc...`);
+    await setDoc(directDocRef, {
+      competitionId: compId,
+      isFormOpen,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    console.log(`✅ [UPDATE COMP FORM] Created/Merged successfully for: ${compId}`);
+    return true;
+
+  } catch (error) {
+    console.error("❌ [UPDATE COMP FORM ERROR]:", error);
+    throw error;
+  }
+};
 /**
  * Main Data Service Layer (Pure Firestore + ImgBB)
  */
-
-
 export const dataService = {
-  
 
-    // 🔍 डुप्लिकेट चेक फंक्शन
+  // 🔍 डुप्लिकेट चेक फंक्शन
   async checkDuplicateTeam(teamName, captainPhone, season = "2026") {
     try {
-      // १. आधी टीमच्या नावाने चेक करा (Exact Match)
       const qName = query(
         collection(db, "teams"),
         where("season", "==", season),
@@ -68,7 +195,6 @@ export const dataService = {
         return { isDuplicate: true, reason: `"${teamName}" या नावाचा संघ आधीच नोंदणीकृत आहे!` };
       }
 
-      // २. किंवा कॅप्टनच्या मोबाईल नंबरने चेक करा
       const qPhone = query(
         collection(db, "teams"),
         where("season", "==", season),
@@ -83,19 +209,15 @@ export const dataService = {
       return { isDuplicate: false };
     } catch (error) {
       console.error("Duplicate check error:", error);
-      return { isDuplicate: false }; // एरर आल्यास सबमिशन न रोखता पुढे जाऊ द्यावे
+      return { isDuplicate: false };
     }
   },
 
-
-
-  // Save or Update Team (Form Submit साठी)
+  // Save or Update Team
   async saveTeam(teamData, files = {}) {
     const uploadedUrls = {};
-
     console.log("⏳ Uploading images to ImgBB...");
 
-    // Upload Files via ImgBB (Logo & Captain Photo)
     for (const [key, file] of Object.entries(files)) {
       if (file && typeof file !== 'string') {
         const imageUrl = await uploadToImgBB(file);
@@ -118,12 +240,7 @@ export const dataService = {
       payload.createdAt = new Date().toISOString();
     }
 
-    console.log("📦 Saving Final Payload to Firestore...", payload);
-
-    // Save to Firestore Collection ("teams")
     await setDoc(doc(db, "teams", teamData.registrationId), payload, { merge: true });
-    
-    console.log("🎉 Successfully Saved in Firestore!");
     return payload;
   },
 
@@ -134,7 +251,7 @@ export const dataService = {
     return docSnap.exists() ? docSnap.data() : null;
   },
 
-  // Fetch All Teams (Admin Dashboard साठी)
+  // Fetch All Teams (Admin Dashboard)
   async getAllTeams(season = "2026") {
     const q = query(collection(db, "teams"), where("season", "==", season));
     const querySnapshot = await getDocs(q);
@@ -151,7 +268,7 @@ export const dataService = {
     });
   },
 
-  // 💡 TEAM COMMENTS & REMARKS PATCH
+  // Team Comments & Remarks
   async addTeamComment(regId, commentData) {
     try {
       const teamRef = doc(db, "teams", regId);
@@ -165,18 +282,16 @@ export const dataService = {
           createdAt: new Date().toISOString()
         })
       });
-      console.log("✅ Comment added successfully!");
     } catch (error) {
       console.error("❌ Error adding comment:", error);
       throw error;
     }
   },
 
-  // 💡 USER MANAGEMENT APIS (Only for Super Admin)
+  // User Management APIs
   async getAllUsers() {
     try {
-      const usersCol = collection(db, "users");
-      const snapshot = await getDocs(usersCol);
+      const snapshot = await getDocs(collection(db, "users"));
       return snapshot.docs.map(doc => ({ email: doc.id, ...doc.data() }));
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -200,8 +315,40 @@ export const dataService = {
       console.error("Error saving user:", error);
       throw error;
     }
-  }
-  
+  },
 
+  // Form Status APIs (Global or Competition Wise)
+  async getFormStatus(compId = "general") {
+    try {
+      const docRef = doc(db, "settings", `registration_status_${compId}`);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+      return { isOpen: true, message: "नोंदणी सुरू आहे." };
+    } catch (error) {
+      return { isOpen: true };
+    }
+  },
+
+  async updateFormStatus(isOpen, compId = "general", message = "") {
+    try {
+      const docRef = doc(db, "settings", `registration_status_${compId}`);
+      await setDoc(docRef, {
+        isOpen,
+        message,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (error) {
+      console.error("Error updating form status:", error);
+      throw error;
+    }
+  },
+
+  // Helper Functions Export
+  getAllCompetitions,
+  getCompetitionDetails,
+  updateCompetitionFormStatus
 };
 
