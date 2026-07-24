@@ -3,19 +3,22 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      strategies: 'injectManifest', // 🎯 आपली स्वतःची firebase-messaging-sw.js वापरण्यासाठी हे आवश्यक आहे
+      strategies: 'injectManifest',
       srcDir: 'public',
       filename: 'firebase-messaging-sw.js',
-      registerType: 'autoUpdate',
+      swDest: 'dist/firebase-messaging-sw.js',
       injectRegister: 'auto',
+      registerType: 'autoUpdate',
+      injectManifest: {
+        injectionPoint: undefined // 🎯 Custom Firebase SW असल्यास Manifest Injection Warning Bypass करण्यासाठी
+      },
       devOptions: {
-        enabled: true // 🧪 Local Dev Mode वर PWA टेस्ट करण्यासाठी
+        enabled: true
       },
       includeAssets: [
         'favicon.ico', 
@@ -54,5 +57,5 @@ export default defineConfig({
       }
     })
   ],
-  base: '/mrdga/', // GitHub Repository चे नाव
+  base: '/mrdga/',
 })

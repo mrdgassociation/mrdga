@@ -1,6 +1,9 @@
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
+// 📦 Workbox Precache Manifest Injection Site
+self.__WB_MANIFEST;
+
 let messaging = null;
 
 // 1️⃣ Install Event - नवीन सर्व्हिस वर्कर लगेच लोड करण्यासाठी
