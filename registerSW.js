@@ -1,1 +1,1 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/mrdga/sw.js', { scope: '/mrdga/' })})}
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/mrdga/firebase-messaging-sw.js', { scope: '/mrdga/' })})}
