@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/mrdga/dev-sw.js?dev-sw', { scope: '/mrdga/', type: 'classic' })

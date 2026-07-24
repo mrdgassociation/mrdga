@@ -54,7 +54,7 @@ export default function Competitions() {
 
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            if (['Super Admin', 'Admin'].includes(userData.role)) {
+            if (['Super Admin' ].includes(userData.role)) {
               setIsSuperAdmin(true);
             } else {
               setIsSuperAdmin(false);

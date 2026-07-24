@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
   FileSpreadsheet, Printer, Search, BarChart3, 
-  MapPin, Phone, MessageSquare, User
+  MapPin, Phone, MessageSquare, User, Lock
 } from 'lucide-react';
 
 export default function Reports() {
@@ -26,7 +26,9 @@ export default function Reports() {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [competitionFilter, setCompetitionFilter] = useState('ALL');
 
+  // Role & Department States
   const [userRole, setUserRole] = useState('Reviewer');
+  const [userDepartment, setUserDepartment] = useState('MRDGA'); // 🏢 Department State
 
   // ==========================================
   // #SECTION 3: FETCH DATA
@@ -52,8 +54,9 @@ export default function Reports() {
       if (user) {
         try {
           const userDoc = await authService.getUserRole(user.email);
-          if (userDoc && userDoc.role) {
-            setUserRole(userDoc.role);
+          if (userDoc) {
+            if (userDoc.role) setUserRole(userDoc.role);
+            if (userDoc.department) setUserDepartment(userDoc.department); // 🏢 Fetch Department
           }
         } catch (e) {
           console.error("Role fetch error:", e);
@@ -72,6 +75,12 @@ export default function Reports() {
     ? 'सर्व दहीहंडी स्पर्धांचा एकत्रित अहवाल' 
     : (selectedCompObj?.title || competitionFilter);
 
+  // 🔐 1. हा रिपोर्ट फक्त MRDGA किंवा SUPER विभागाच्या युझरलाच दिसेल (Insurance ला ब्लॉक)
+  const hasAccessToReports = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA';
+
+  // 🔐 2. Excel डाऊनलोड आणि PDF/Print बटणे फक्त Super Admin व MRDGA Admin लाच दिसतील (Reviewer ला नाही)
+  const canExportAndPrint = hasAccessToReports && ['Super Admin', 'Admin'].includes(userRole);
+
   // ==========================================
   // #SECTION 4: EXPORT & PRINT HANDLERS
   // ==========================================
@@ -87,13 +96,12 @@ export default function Reports() {
 
     window.print();
 
-    // प्रिंट बंद झाल्यावर ओरिजिनल टायटल परत ठेवणे
     setTimeout(() => {
       document.title = originalTitle;
     }, 1000);
   };
 
-  // 📊 Excel Export with Detailed Fields
+  // 📊 Excel Export with Detailed Fields (स्पर्धा टीम नोंदींचा डेटा)
   const handleExportToExcel = () => {
     if (filteredTeams.length === 0) {
       Swal.fire({
@@ -177,6 +185,17 @@ export default function Reports() {
     return filteredTeams.filter(t => t.category === catKey);
   };
 
+  // 🔒 Permission Check: जर MRDGA किंवा SUPER नसेल तर ब्लॉक करा
+  if (!loading && !hasAccessToReports) {
+    return (
+      <div className="p-8 text-center space-y-3 font-sans">
+        <Lock className="w-10 h-10 text-rose-500 mx-auto" />
+        <h2 className="text-base font-bold text-white">तुम्हाला या अहवालाचा ॲक्सेस नाही.</h2>
+        <p className="text-xs text-gray-400">हा स्पर्धा अहवाल फक्त MRDGA असोसिएशन टीमसाठी राखीव आहे.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3.5 max-w-7xl mx-auto px-1 py-1 font-sans">
 
@@ -200,7 +219,6 @@ export default function Reports() {
             width: 100% !important;
             padding: 0 !important;
           }
-          /* PDF मध्ये प्रत्येक कॅटेगरी अनिवार्यपणे नवीन पानावर जाईल */
           .print-page-break {
             page-break-before: always !important;
             break-before: page !important;
@@ -236,7 +254,8 @@ export default function Reports() {
           </div>
         </div>
 
-        {['Super Admin', 'Admin'].includes(userRole) && (
+        {/* 🔐 फक्त Super Admin आणि MRDGA Admin लाच Excel व PDF चे ऑप्शन्स दिसतील (Reviewer ला नाही) */}
+        {canExportAndPrint && (
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
             <button
               onClick={handleExportToExcel}
@@ -293,7 +312,6 @@ export default function Reports() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-          {/* 1. Competition Dropdown */}
           <select
             value={competitionFilter}
             onChange={(e) => setCompetitionFilter(e.target.value)}
@@ -307,7 +325,6 @@ export default function Reports() {
             ))}
           </select>
 
-          {/* 2. Category Dropdown */}
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -322,7 +339,6 @@ export default function Reports() {
             ))}
           </select>
 
-          {/* 3. District Dropdown */}
           <select
             value={districtFilter}
             onChange={(e) => setDistrictFilter(e.target.value)}
@@ -334,7 +350,6 @@ export default function Reports() {
             ))}
           </select>
 
-          {/* 4. Status Dropdown */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -357,14 +372,11 @@ export default function Reports() {
         <p className="p-8 text-center text-gray-400 text-xs font-medium">कोणतीही नोंदणी सापडली नाही.</p>
       ) : (
         <>
-          {/* 📱 MOBILE VIEW CARDS (फक्त मोबाईलवर दिसतील) */}
+          {/* 📱 MOBILE VIEW CARDS */}
           <div className="no-print grid grid-cols-1 md:hidden gap-3">
             {filteredTeams.map((team, idx) => {
               const c1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
               const c1Phone = team.captain?.phone || team.contact1?.phone || '';
-
-              const c2Name = team.manager?.name || team.contact2?.name || '';
-              const c2Phone = team.manager?.phone || team.contact2?.phone || '';
 
               return (
                 <div key={team.registrationId || idx} className="glass-panel p-3.5 rounded-2xl border border-amber-500/20 bg-black/40 space-y-2.5">
@@ -410,7 +422,6 @@ export default function Reports() {
           {/* 💻 DESKTOP & PRINTABLE SECTION */}
           <div className="hidden md:block print-area glass-panel rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-4 bg-[#0c0d14] text-white">
             
-            {/* 🏆 १. मुख्य असोसिएशन हेडर (स्क्रीनवर फक्त १ वेळेस वर दिसेल) */}
             <div className="mb-4 pb-3 border-b border-gray-600 flex justify-between items-center">
               <div>
                 <h1 className="text-base font-black text-amber-400 uppercase tracking-wide">
@@ -440,10 +451,9 @@ export default function Reports() {
               </div>
             )}
 
-            {/* 🤼 CATEGORY 2: M6 (पुरुष ६ थर) BLOCK - (PDF मध्ये नवीन पानावर जाईल) */}
+            {/* 🤼 CATEGORY 2: M6 (पुरुष ६ थर) BLOCK */}
             {getTeamsByCategory('M6').length > 0 && (
               <div className="mb-6 space-y-2 print-page-break">
-                {/* 🖨️ प्रिंट करताना दुसऱ्या पानावर हेडर येण्यासाठी */}
                 <div className="hidden print:block mb-3 pb-2 border-b border-gray-400">
                   <h1 className="text-sm font-black text-black uppercase">MAHARASHTRA RAJYA DAHIHANDI GOVINDA ASSOCIATION</h1>
                   <h2 className="text-xs font-bold text-black">🏆 {selectedCompTitle}</h2>
@@ -456,7 +466,7 @@ export default function Reports() {
               </div>
             )}
 
-            {/* 🤼 CATEGORY 3: WOMEN (महिला पथक) BLOCK - (PDF मध्ये नवीन पानावर जाईल) */}
+            {/* 🤼 CATEGORY 3: WOMEN (महिला पथक) BLOCK */}
             {getTeamsByCategory('W').length > 0 && (
               <div className="mb-6 space-y-2 print-page-break">
                 <div className="hidden print:block mb-3 pb-2 border-b border-gray-400">

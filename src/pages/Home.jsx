@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SplashScreen from '../components/SplashScreen';
+import InstallPWAButton from '../components/InstallPWAButton';
 
 import { useCompetitions } from '../hooks/useCompetitions';
 
@@ -51,6 +52,7 @@ const [showSplash, setShowSplash] = useState(() => {
     const activeCompId = getActiveCompId();
     navigate(`/form/${activeCompId}`);
   };
+
 
   return (
     <>
@@ -219,6 +221,8 @@ const [showSplash, setShowSplash] = useState(() => {
         </div>
 
         <Footer />
+          <InstallPWAButton />
+
       </div>
     </>
   );

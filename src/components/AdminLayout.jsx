@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Shield, LayoutDashboard, LogOut, ArrowLeft, Menu, X, User, FileText, UserCheck } from 'lucide-react';
+import { Shield, LayoutDashboard, LogOut, ArrowLeft, Menu, X, User, FileText, UserCheck,Sliders,Bell } from 'lucide-react';
 import { authService } from '../services/authService';
 
 export default function AdminLayout({ children }) {
@@ -129,6 +129,36 @@ export default function AdminLayout({ children }) {
                 <UserCheck className="w-4 h-4 text-amber-400" /> युझर मॅनेजमेंट
               </Link>
             )}
+
+             {userRole === 'Super Admin' && (
+              <Link
+                to="/admin/settings"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/settings'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <Sliders className="w-4 h-4 text-amber-400" /> पेजेस ऑन/ऑफ (Settings)
+              </Link>
+            )}
+
+            {/* 🔒 5. नोटिफिकेशन सेंटर (Only Super Admin) */}
+              {userRole === 'Super Admin' && (
+                <Link
+                  to="/admin/notifications"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                    location.pathname === '/admin/notifications'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                      : 'text-gray-300 hover:bg-white/5'
+                  }`}
+                >
+                  <Bell className={`w-4 h-4 shrink-0 ${location.pathname === '/admin/notifications' ? 'text-black' : 'text-amber-400'}`} /> 
+                  नोटीफिकेशन सेंटर
+                </Link>
+              )}
 
             <Link
               to="/"

@@ -7,7 +7,7 @@ import { authService } from '../services/authService';
 import Swal from 'sweetalert2';
 import { 
   CheckCircle, XCircle, Search, Filter, RefreshCw, 
-  Phone, MessageSquare, ExternalLink, Shield, MapPin, X, ChevronRight, User, Trophy, Layers
+  Phone, MessageSquare, ExternalLink, Shield, MapPin, X, ChevronRight, User, Trophy, Layers, Lock
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -15,19 +15,21 @@ export default function AdminDashboard() {
   // #SECTION 2: STATE MANAGEMENT
   // ==========================================
   const [teams, setTeams] = useState([]);
-  const [competitions, setCompetitions] = useState([]); // 🏆 Competitions List State
+  const [competitions, setCompetitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
   // 🎯 FILTERS STATES
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [competitionFilter, setCompetitionFilter] = useState('ALL'); // 🏆 Competition Filter
-  const [categoryFilter, setCategoryFilter] = useState('ALL');       // 🤼 Category Filter
+  const [competitionFilter, setCompetitionFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
   
   const [selectedTeam, setSelectedTeam] = useState(null);
 
-  // User Authentication & Role States
-  const [userRole, setUserRole] = useState('Reviewer'); // Default fallback role
+  // User Authentication, Role & Department States
+  const [userRole, setUserRole] = useState('Reviewer');
+  const [userDepartment, setUserDepartment] = useState('MRDGA'); // 🏢 Default MRDGA
+  
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
 
@@ -46,7 +48,7 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const data = await dataService.getAllTeams();
-      setTeams(data);
+      setTeams(data || []);
     } catch (err) {
       console.error("Error loading teams:", err);
     } finally {
@@ -54,23 +56,13 @@ export default function AdminDashboard() {
     }
   };
 
-  // 🏆 Competitions & Teams Load Handler
-// 🎯 SECTION: Load Competitions & Teams with Debug Logs
   const loadCompetitionsAndTeams = async () => {
     setLoading(true);
-    console.log("==========================================");
-    console.log("🚀 [ADMIN DASHBOARD] Loading Teams and Competitions...");
-    
     try {
       const teamsData = await dataService.getAllTeams();
-      console.log("📊 [ADMIN DASHBOARD] Total Teams Loaded:", teamsData?.length || 0);
-
       let compsData = [];
       if (typeof dataService.getAllCompetitions === 'function') {
         compsData = await dataService.getAllCompetitions();
-        console.log("📊 [ADMIN DASHBOARD] Total Competitions Loaded:", compsData?.length || 0);
-      } else {
-        console.error("❌ [ADMIN DASHBOARD] 'dataService.getAllCompetitions' function is missing!");
       }
 
       setTeams(teamsData || []);
@@ -80,11 +72,8 @@ export default function AdminDashboard() {
       console.error("❌ [ADMIN DASHBOARD LOAD ERROR]:", err);
     } finally {
       setLoading(false);
-      console.log("==========================================");
     }
   };
-
-
 
   useEffect(() => {
     const unsubscribe = authService.getCurrentUser(async (user) => {
@@ -94,8 +83,10 @@ export default function AdminDashboard() {
 
         try {
           const userDoc = await authService.getUserRole(user.email);
-          if (userDoc && userDoc.role) {
-            setUserRole(userDoc.role);
+          if (userDoc) {
+            if (userDoc.role) setUserRole(userDoc.role);
+            // 🏢 डिपार्टमेंट फेच करा (नसल्यास Default 'MRDGA')
+            if (userDoc.department) setUserDepartment(userDoc.department);
           }
         } catch (e) {
           console.error("Role fetch error:", e);
@@ -109,7 +100,7 @@ export default function AdminDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // Update Status Handler (Only for Admins)
+  // Update Status Handler
   const handleStatusChange = async (regId, newStatus) => {
     try {
       await dataService.updateTeamStatus(regId, newStatus);
@@ -136,7 +127,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Add Internal Comment / Track Note Handler
+  // Add Comment Handler
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedTeam) return;
 
@@ -237,6 +228,26 @@ export default function AdminDashboard() {
   };
 
   // ==========================================
+  // 🔐 PERMISSION & ACCESS CHECKS
+  // ==========================================
+  // १. या डॅशबोर्डचा ॲक्सेस फक्त MRDGA विभाग किंवा Super Admin ला आहे
+  const hasMrdgaAccess = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA';
+
+  // २. Approve/Reject करण्याचे अधिकार फक्त Super Admin किंवा MRDGA चा Admin यांनाच
+  const canApproveReject = userRole === 'Super Admin' || (userRole === 'Admin' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER'));
+
+  // 🔒 जर युझरचा विभाग MRDGA नसेल तर ब्लॉक करा
+  if (!loading && !hasMrdgaAccess) {
+    return (
+      <div className="p-8 text-center space-y-3 font-sans">
+        <Lock className="w-10 h-10 text-rose-500 mx-auto" />
+        <h2 className="text-base font-bold text-white">तुम्हाला या डॅशबोर्डचा ॲक्सेस नाही.</h2>
+        <p className="text-xs text-gray-400">हे डॅशबोर्ड फक्त MRDGA असोसिएशन टीमसाठी राखीव आहे.</p>
+      </div>
+    );
+  }
+
+  // ==========================================
   // #SECTION 4: DYNAMIC FILTER & SEARCH LOGIC
   // ==========================================
   const filteredTeams = teams.filter(team => {
@@ -246,20 +257,14 @@ export default function AdminDashboard() {
     const captainName = team.captain?.name || team.contact1?.name || '';
     const managerName = team.manager?.name || team.contact2?.name || '';
 
-    // 1. टेक्स्ट सर्च (नाव, आयडी, जिल्हा, संपर्क व्यक्ती)
     const matchesSearch = teamName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           regId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           district.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           captainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           managerName.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // 2. 📄 स्टेटसनुसार (Pending, Approved, Rejected)
     const matchesStatus = statusFilter === 'ALL' || team.status === statusFilter;
-
-    // 3. 🏆 स्पर्धेनुसार (COMP-2026-01, COMP-2025-01)
     const matchesComp = competitionFilter === 'ALL' || team.competitionId === competitionFilter;
-
-    // 4. 🤼 गटानुसार (M7, M6, W...)
     const matchesCategory = categoryFilter === 'ALL' || team.category === categoryFilter;
 
     return matchesSearch && matchesStatus && matchesComp && matchesCategory;
@@ -280,7 +285,7 @@ export default function AdminDashboard() {
             <h2 className="text-sm sm:text-base font-black text-white leading-tight flex items-center gap-2">
               ॲडमिन <span className="text-amber-400">डॅशबोर्ड</span>
               <span className="text-[9px] px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-md font-extrabold uppercase">
-                {userRole}
+                {userRole} ({userDepartment})
               </span>
             </h2>
             <p className="text-[10px] text-gray-400 font-medium">
@@ -299,33 +304,8 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Form ON/OFF Toggle Switch Bar */}
-      {/* <div className="flex items-center justify-between bg-black/40 border border-amber-500/20 p-2.5 rounded-xl">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-gray-300">अर्ज नोंदणी:</span>
-          <span className="text-[10px] text-amber-400/80 font-mono">
-            ({competitionFilter === 'ALL' ? 'सामान्य फॉर्म' : competitionFilter})
-          </span>
-        </div>
-
-        <button
-          onClick={handleToggleFormStatus}
-          disabled={statusLoading}
-          className={`px-3 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-            isFormOpen 
-              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30' 
-              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30'
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${isFormOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
-          {isFormOpen ? 'सुरू (ONLINE)' : 'बंद (OFFLINE)'}
-        </button>
-        
-      </div> */}
-
       {/* Search & Dynamic Filter Inputs */}
       <div className="glass-panel p-2.5 rounded-2xl flex flex-col sm:flex-row gap-2">
-        {/* Search Field */}
         <div className="flex-1 relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-amber-400/60" />
           <input
@@ -337,11 +317,9 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* Filters Group */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
           <Filter className="w-3.5 h-3.5 text-amber-400/60 shrink-0 ml-1" />
           
-          {/* 🏆 1. Competition Filter Dropdown */}
           <select
             value={competitionFilter}
             onChange={(e) => setCompetitionFilter(e.target.value)}
@@ -355,7 +333,6 @@ export default function AdminDashboard() {
             ))}
           </select>
 
-          {/* 🤼 2. Category Filter Dropdown (M7, M6, Women) */}
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -367,7 +344,6 @@ export default function AdminDashboard() {
             <option value="W" className="bg-[#0c0d14]">महिला पथक (W)</option>
           </select>
 
-          {/* 📄 3. Status Filter Dropdown */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -475,16 +451,17 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                    <button onClick={() => setSelectedTeam(team)} className="text-[11px] font-bold text-amber-400 hover:underline flex items-center gap-1">
+                    <button onClick={() => setSelectedTeam(team)} className="text-[11px] font-bold text-amber-400 hover:underline flex items-center gap-1 cursor-pointer">
                       संपूर्ण माहिती व रिमार्क्स <ChevronRight className="w-3 h-3" />
                     </button>
 
-                    {['Super Admin', 'Admin'].includes(userRole) && (
+                    {/* 🟢 १. MOBILE CARD APPROVE / REJECT CHECK */}
+                    {canApproveReject && (
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => handleStatusChange(team.registrationId, 'Approved')} className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">
+                        <button onClick={() => handleStatusChange(team.registrationId, 'Approved')} className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer">
                           <CheckCircle className="w-3 h-3" /> Approve
                         </button>
-                        <button onClick={() => handleStatusChange(team.registrationId, 'Rejected')} className="px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">
+                        <button onClick={() => handleStatusChange(team.registrationId, 'Rejected')} className="px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer">
                           <XCircle className="w-3 h-3" /> Reject
                         </button>
                       </div>
@@ -583,29 +560,31 @@ export default function AdminDashboard() {
                             {team.status || 'Pending'}
                           </span>
                         </td>
+
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => setSelectedTeam(team)}
                               title="माहिती व रिमार्क्स पहा"
-                              className="p-1.5 bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/30 rounded-lg transition text-[10px] font-bold"
+                              className="p-1.5 bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-black border border-amber-500/30 rounded-lg transition text-[10px] font-bold cursor-pointer"
                             >
                               पहा
                             </button>
 
-                            {['Super Admin', 'Admin'].includes(userRole) && (
+                            {/* 🟢 २. DESKTOP TABLE APPROVE / REJECT CHECK */}
+                            {canApproveReject && (
                               <>
                                 <button
                                   onClick={() => handleStatusChange(team.registrationId, 'Approved')}
                                   title="Approve"
-                                  className="p-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 rounded-lg transition"
+                                  className="p-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 rounded-lg transition cursor-pointer"
                                 >
                                   <CheckCircle className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => handleStatusChange(team.registrationId, 'Rejected')}
                                   title="Reject"
-                                  className="p-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 rounded-lg transition"
+                                  className="p-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 rounded-lg transition cursor-pointer"
                                 >
                                   <XCircle className="w-3.5 h-3.5" />
                                 </button>
@@ -649,7 +628,7 @@ export default function AdminDashboard() {
 
               <button 
                 onClick={() => setSelectedTeam(null)}
-                className="p-1.5 bg-black/40 text-gray-400 hover:text-white rounded-xl border border-amber-500/20"
+                className="p-1.5 bg-black/40 text-gray-400 hover:text-white rounded-xl border border-amber-500/20 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -757,7 +736,7 @@ export default function AdminDashboard() {
                   <button
                     onClick={handleAddComment}
                     disabled={submittingComment || !newComment.trim()}
-                    className="px-3 py-1.5 bg-amber-500 text-black font-extrabold text-xs rounded-xl disabled:opacity-50 transition"
+                    className="px-3 py-1.5 bg-amber-500 text-black font-extrabold text-xs rounded-xl disabled:opacity-50 transition cursor-pointer"
                   >
                     {submittingComment ? '...' : 'जोडा'}
                   </button>
@@ -765,12 +744,13 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {['Super Admin', 'Admin'].includes(userRole) ? (
+            {/* 🟢 ३. POPUP MODAL APPROVE / REJECT CHECK */}
+            {canApproveReject ? (
               <div className="flex items-center gap-2 pt-2 border-t border-amber-500/20">
-                <button onClick={() => handleStatusChange(selectedTeam.registrationId, 'Approved')} className="flex-1 py-2.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 rounded-xl font-bold transition flex items-center justify-center gap-1.5">
+                <button onClick={() => handleStatusChange(selectedTeam.registrationId, 'Approved')} className="flex-1 py-2.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <CheckCircle className="w-4 h-4" /> Approve करा
                 </button>
-                <button onClick={() => handleStatusChange(selectedTeam.registrationId, 'Rejected')} className="flex-1 py-2.5 bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 rounded-xl font-bold transition flex items-center justify-center gap-1.5">
+                <button onClick={() => handleStatusChange(selectedTeam.registrationId, 'Rejected')} className="flex-1 py-2.5 bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
                   <XCircle className="w-4 h-4" /> Reject करा
                 </button>
               </div>

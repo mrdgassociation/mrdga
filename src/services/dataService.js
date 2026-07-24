@@ -299,17 +299,25 @@ export const dataService = {
     }
   },
 
+// 🎯 dataService.js मधील फंक्शन असे असावे:
   async createOrUpdateUser(userData) {
     try {
-      const userRef = doc(db, "users", userData.email.toLowerCase().trim());
-      await setDoc(userRef, {
-        email: userData.email.toLowerCase().trim(),
+      const emailLower = userData.email.toLowerCase().trim();
+      const userRef = doc(db, 'users', emailLower);
+
+      // 🛑 इथं आपण department समाविष्ट करत आहोत:
+      const payload = {
+        email: emailLower,
         name: userData.name || '',
         phone: userData.phone || '',
         role: userData.role || 'Reviewer',
-        isActive: userData.isActive !== undefined ? userData.isActive : true,
+        department: userData.department || 'MRDGA', // 👈 हे आधी मिसिंग होतं!
+        isActive: userData.isActive !== false,
+        status: userData.status || 'Active',
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+
+      await setDoc(userRef, payload, { merge: true });
       return true;
     } catch (error) {
       console.error("Error saving user:", error);
@@ -345,6 +353,39 @@ export const dataService = {
       throw error;
     }
   },
+
+  // 🎯 Page Configuration Get and Update Functions
+
+async getPageConfig() {
+  try {
+    const docRef = doc(db, 'site_config', 'modules');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+    // Default Fallback Config (जर डेटाबेसमध्ये नसेल तर)
+    return {
+      aboutPage: false,
+      insurancePage: false,
+      contactPage: false,
+      competitionPage: true
+    };
+  } catch (err) {
+    console.error("Page config fetch error:", err);
+    return { aboutPage: false, insurancePage: false, contactPage: false, competitionPage: true };
+  }
+},
+
+async updatePageConfig(newConfig) {
+  try {
+    const docRef = doc(db, 'site_config', 'modules');
+    await setDoc(docRef, newConfig, { merge: true });
+    return true;
+  } catch (err) {
+    console.error("Page config update error:", err);
+    throw err;
+  }
+},
 
   // Helper Functions Export
   getAllCompetitions,

@@ -10,7 +10,13 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: [
+        'favicon.ico', 
+        'apple-touch-icon.png', 
+        'pwa-192x192.png', 
+        'pwa-512x512.png', 
+        'mrdga-logo.png'
+      ],
       manifest: {
         name: 'MRDGA Official Portal',
         short_name: 'MRDGA',
@@ -29,10 +35,16 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable' // 📱 मोबाईल होम स्क्रीन आयकॉन शेप (Round/Adaptive) साठी अनिवार्य
           }
         ]
       }
     })
   ],
-  base: '/mrdga/', // तुझ्या GitHub Repository चे नाव
+  base: '/mrdga/', // GitHub Repository चे नाव
 })
