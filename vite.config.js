@@ -9,7 +9,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest', // 🎯 आपली स्वतःची firebase-messaging-sw.js वापरण्यासाठी हे आवश्यक आहे
+      srcDir: 'public',
+      filename: 'firebase-messaging-sw.js',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      devOptions: {
+        enabled: true // 🧪 Local Dev Mode वर PWA टेस्ट करण्यासाठी
+      },
       includeAssets: [
         'favicon.ico', 
         'apple-touch-icon.png', 
@@ -24,7 +31,8 @@ export default defineConfig({
         theme_color: '#030D26',
         background_color: '#030D26',
         display: 'standalone',
-        start_url: '/mrdga/',
+        start_url: '/mrdga/#/',
+        scope: '/mrdga/',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -40,7 +48,7 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable' // 📱 मोबाईल होम स्क्रीन आयकॉन शेप (Round/Adaptive) साठी अनिवार्य
+            purpose: 'any maskable'
           }
         ]
       }
