@@ -123,7 +123,7 @@ const [showSplash, setShowSplash] = useState(() => {
             <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0"><Trophy className="w-7 h-7" /></div>
             <div>
               <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">रजिस्ट्रेशन मुदत</p>
-              <p className="text-base font-black text-white">२५ जुलै पासून सुरु</p>
+              <p className="text-base font-black text-white"> जुलै पासून सुरु</p>
             </div>
           </div>
         </div>

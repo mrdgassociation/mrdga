@@ -8,14 +8,16 @@ import InsuranceInfo from './pages/InsuranceInfo';
 import Form from './pages/Form';
 import Login from './pages/Login';
 import Competitions from './pages/Competitions';
+import InsuranceDashboard from './pages/InsuranceDashboard';
 import MyTeamDashboard from './pages/MyTeamDashboard';
 import NotificationHub from './pages/NotificationHub';
+import TournamentManager from './pages/TournamentManager';
 
 // Admin Pages
 import AdminDashboard from './pages/AdminDashboard';
 import Reports from './pages/Reports';
 import UserManagement from './pages/UserManagement';
-import PageSettings from './pages/PageSettings'; // 👈 Page Visibility Toggle Control
+import PageSettings from './pages/PageSettings';
 import AdminLayout from './components/AdminLayout';
 
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -24,7 +26,7 @@ import Helpdesk from './pages/Helpdesk';
 
 // 🔒 Security & Feature Guards
 import ProtectedRoute from './components/ProtectedRoute';
-import ModuleGuard from './components/ModuleGuard'; // 👈 Toggle Check Guard
+import ModuleGuard from './components/ModuleGuard';
 
 export default function App() {
   const currentYear = new Date().getFullYear();
@@ -32,11 +34,11 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* 🌐 सार्वजनिक वेबसाईट राऊट्स (Home & Competitions नेहमी चालू) */}
+        {/* 🌐 सार्वजनिक वेबसाईट राऊट्स */}
         <Route path="/" element={<Home />} />
         <Route path="/competitions" element={<Competitions />} />
 
-        {/* 🔒 Dynamic Feature Toggled Routes (Super Admin ऑन/ऑफ करू शकतो) */}
+        {/* 🔒 Dynamic Feature Toggled Routes */}
         <Route 
           path="/about" 
           element={
@@ -76,9 +78,10 @@ export default function App() {
         <Route 
           path="/helpdesk" 
           element={
-          <ModuleGuard pageKey="contactPage">
-            <Helpdesk /> 
-            </ModuleGuard> } 
+            <ModuleGuard pageKey="contactPage">
+              <Helpdesk /> 
+            </ModuleGuard>
+          } 
         />
 
         {/* 🔐 1. Admin Dashboard (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
@@ -93,11 +96,23 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 2. Competition Reports (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        {/* 🛡️ 2. Insurance Dashboard (INSURANCE, MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        <Route 
+          path="/admin/insurance" 
+          element={
+            <ProtectedRoute allowedDepartments={['INSURANCE', 'MRDGA', 'SUPER']}>
+              <AdminLayout>
+                <InsuranceDashboard />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* 🔐 3. Reports & Export (INSURANCE, MRDGA आणि SUPER सर्व टीम्ससाठी) */}
         <Route 
           path="/admin/reports" 
           element={
-            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
+            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER', 'INSURANCE']}>
               <AdminLayout>
                 <Reports />
               </AdminLayout>
@@ -105,7 +120,21 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 3. User Management (फक्त Super Admin साठी) */}
+        // 2. Routes मध्ये (उदा. AdminDashboard च्या खाली):
+        {/* 🔐 दहीहंडी स्पर्धा व्यवस्थापन (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        <Route 
+          path="/admin/tournaments" 
+          element={
+            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
+              <AdminLayout>
+                <TournamentManager />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+
+        {/* 🔐 4. User Management (फक्त Super Admin साठी) */}
         <Route 
           path="/admin/users" 
           element={
@@ -117,7 +146,7 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 4. Website Page Visibility Settings (फक्त Super Admin साठी) */}
+        {/* 🔐 5. Website Page Visibility Settings (फक्त Super Admin साठी) */}
         <Route 
           path="/admin/settings" 
           element={
@@ -129,13 +158,14 @@ export default function App() {
           } 
         />
 
+        {/* 🔐 6. Notification Hub (फक्त Super Admin साठी) */}
         <Route 
           path="/admin/notifications" 
           element={
             <ProtectedRoute allowedRoles={['Super Admin']}>
               <AdminLayout>
-                <NotificationHub/>
-              </AdminLayout >
+                <NotificationHub />
+              </AdminLayout>
             </ProtectedRoute>
           } 
         />

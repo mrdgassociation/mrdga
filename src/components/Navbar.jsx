@@ -11,55 +11,76 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 
 import { useCompetitions } from '../hooks/useCompetitions';
 
-import('../services/notificationService.js').then(m => m.notificationService.requestPushPermission());
-
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null); // 'admin' | 'team' | 'guest'
   const [userDepartment, setUserDepartment] = useState('MRDGA'); // 🏢 Default MRDGA
+  const [hasTeamData, setHasTeamData] = useState(false); // 🎯 Admin युझरची स्वतःची पर्सनल टिम आहे का हे तपासण्यासाठी
+
   const navigate = useNavigate();
 
-  // 💡 अचूक रोल व विभाग चेकिंग (Email Key वर आधारित)
+  // 💡 अचूक रोल व विभाग चेकिंग (Users -> Teams -> Insurance)
   useEffect(() => {
+    console.log("🚀 [NAVBAR MOUNTED]: Navbar Component Load Zala!");
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser && currentUser.email) {
         try {
           const emailLower = currentUser.email.toLowerCase().trim();
 
-          // 1. 'users' कलेक्शनमध्ये EMAIL ID ने शोधणे
+          // 🎯 Step 2: ऑथेंटिकेट झालेल्या ई-मेलसह Push Permission & FCM Token Save ट्रिगर करा
+          import('../services/notificationService.js').then(m => {
+            console.log("📞 [CALLING STEP 1]: Invoking requestPushPermission...");
+            m.notificationService.requestPushPermission(emailLower);
+          });
+
+          // १. 'users' मध्ये Admin/Staff शोधणे
           const userDocRef = doc(db, 'users', emailLower);
           const userDocSnap = await getDoc(userDocRef);
 
+          let isAdminUser = false;
+
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
-            
-            // अकाऊंट Active आहे का तपासणे
             const isActive = userData.isActive !== false && userData.status !== 'Inactive';
 
             if (isActive && ['Super Admin', 'Admin', 'Reviewer'].includes(userData.role)) {
+              isAdminUser = true;
               setUserRole('admin');
               setUserDepartment(userData.department || 'MRDGA');
-              return;
             }
           }
 
-          // 2. जर 'users' मध्ये Admin नसेल, तरच 'teams' कलेक्शनमध्ये चेक करणे
-          const q = query(collection(db, 'teams'), where('email', '==', emailLower));
-          const teamSnap = await getDocs(q);
+          // २. 'teams' आणि 'insurance_requests_2026' मध्ये वैयक्तिक अर्ज शोधणे
+          const [teamSnap, insuranceSnap] = await Promise.all([
+            getDocs(query(collection(db, 'teams'), where('email', '==', emailLower))),
+            getDocs(query(collection(db, 'insurance_requests_2026'), where('email', '==', emailLower)))
+          ]);
 
-          if (!teamSnap.empty) {
-            setUserRole('team');
-          } else {
-            setUserRole('guest');
+          const hasPersonalReg = !teamSnap.empty || !insuranceSnap.empty;
+
+          if (!isAdminUser) {
+            if (hasPersonalReg) {
+              setUserRole('team');
+            } else {
+              setUserRole('guest');
+            }
           }
+
+          // 🎯 जर ॲडमिनने स्वतःच्या टिमचा अर्ज भरला असेल तर हा फ्लॅग true राहील
+          setHasTeamData(hasPersonalReg);
+
         } catch (err) {
           console.error("Role checking error:", err);
           setUserRole('guest');
+          setHasTeamData(false);
         }
       } else {
         setUserRole(null);
+        setHasTeamData(false);
+        // 💡 Note: गेस्ट युझरसाठी विना-ईमेलचा डुप्लिकेट FCM कॉल इथून काढून टाकला आहे.
       }
     });
     return () => unsubscribe();
@@ -85,9 +106,19 @@ export default function Navbar() {
       await signOut(auth);
       setIsOpen(false);
       setUserRole(null);
+      setHasTeamData(false);
       navigate('/');
     } catch (error) {
       console.error("Logout Error:", error);
+    }
+  };
+
+  // 🎯 Admin Dashboard कडे नेणारे स्मार्ट हँडलर
+  const handleAdminDashboardClick = () => {
+    if (userDepartment === 'INSURANCE') {
+      navigate('/admin/insurance'); // 🛡️ विमा युझर थेट विमा डॅशबोर्डवर जाईल
+    } else {
+      navigate('/admin'); // 🏆 बाकीचे नेहमीच्या स्पर्धा डॅशबोर्डवर जातील
     }
   };
 
@@ -134,7 +165,7 @@ export default function Navbar() {
           {/* 🎯 RIGHT SECTION: BELL ICON + PROFILE / LOGIN / MOBILE TOGGLE */}
           <div className="flex items-center gap-3">
             
-            {/* 🔔 NOTIFICATION BELL - Always Visible (Desktop & Mobile Top Bar) */}
+            {/* 🔔 NOTIFICATION BELL - Always Visible */}
             <div className="flex items-center">
               <NotificationBell />
             </div>
@@ -143,33 +174,27 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-2 border-l border-white/10 pl-3">
               {user ? (
                 <>
+                  {/* 👑 1. Admin Dashboard Button */}
                   {canSeeMrdgaDashboard && (
                     <button
-                      onClick={() => navigate('/admin')}
+                      onClick={handleAdminDashboardClick}
                       className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-black font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <LayoutDashboard className="w-4 h-4" /> Admin Dashboard
                     </button>
                   )}
 
-                  {userRole === 'team' && (
+                  {/* 🛡️ 2. My Status Button */}
+                  {(userRole === 'team' || userRole === 'guest' || hasTeamData) && (
                     <button
                       onClick={() => navigate('/my-status')}
                       className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                     >
-                      <Shield className="w-4 h-4" /> My Status / Portal
+                      <Shield className="w-4 h-4" /> My Status
                     </button>
                   )}
 
-                  {userRole === 'guest' && (
-                    <button
-                      onClick={() => navigate('/my-status')}
-                      className="px-3 py-1.5 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl hover:text-white transition cursor-pointer"
-                    >
-                      Portal
-                    </button>
-                  )}
-
+                  {/* Logout Button */}
                   <button
                     onClick={handleLogout}
                     className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition cursor-pointer"
@@ -225,19 +250,19 @@ export default function Navbar() {
             <div className="pt-2 border-t border-white/10 space-y-2">
               {canSeeMrdgaDashboard && (
                 <button
-                  onClick={() => { setIsOpen(false); navigate('/admin'); }}
+                  onClick={() => { setIsOpen(false); handleAdminDashboardClick(); }}
                   className="w-full py-2.5 px-4 bg-amber-500/20 border border-amber-500/30 text-amber-400 font-extrabold rounded-xl flex items-center gap-2 cursor-pointer text-xs"
                 >
                   <LayoutDashboard className="w-4 h-4" /> Admin Dashboard
                 </button>
               )}
 
-              {userRole === 'team' && (
+              {(userRole === 'team' || userRole === 'guest' || hasTeamData) && (
                 <button
                   onClick={() => { setIsOpen(false); navigate('/my-status'); }}
                   className="w-full py-2.5 px-4 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-extrabold rounded-xl flex items-center gap-2 cursor-pointer text-xs"
                 >
-                  <Shield className="w-4 h-4" /> My Status / Portal
+                  <Shield className="w-4 h-4" /> My Status
                 </button>
               )}
 

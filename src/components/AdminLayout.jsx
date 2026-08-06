@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Shield, LayoutDashboard, LogOut, ArrowLeft, Menu, X, User, FileText, UserCheck,Sliders,Bell } from 'lucide-react';
+import { 
+  Shield, ShieldCheck, LayoutDashboard, LogOut, ArrowLeft, Menu, X, 
+  User, FileText, UserCheck, Sliders, Bell, Trophy 
+} from 'lucide-react';
 import { authService } from '../services/authService';
+import { dataService } from '../services/dataService'; // 💡 PageSettings config साठी
 
 export default function AdminLayout({ children }) {
-  // 💡 User Role & Profile States
+  // 💡 User Role, Department & Profile States
   const [userRole, setUserRole] = useState('Reviewer');
+  const [userDepartment, setUserDepartment] = useState('MRDGA');
   const [currentUser, setCurrentUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pageConfig, setPageConfig] = useState({}); // 💡 PageSettings Data State
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -16,19 +22,32 @@ export default function AdminLayout({ children }) {
       if (user) {
         setCurrentUser(user);
         
-        // 💡 Fetch Role from Firestore
+        // 💡 Fetch Role & Department from Firestore
         try {
           const uDoc = await authService.getUserRole(user.email);
-          if (uDoc && uDoc.role) {
-            setUserRole(uDoc.role); // Sets 'Super Admin', 'Admin', or 'Reviewer'
+          if (uDoc) {
+            if (uDoc.role) setUserRole(uDoc.role);
+            if (uDoc.department) setUserDepartment(uDoc.department);
           }
         } catch (e) {
-          console.error("Error fetching role in layout:", e);
+          console.error("Error fetching role/department in layout:", e);
         }
       } else {
         navigate('/login');
       }
     });
+
+    // 💡 Fetch Page Settings config
+    const fetchConfig = async () => {
+      try {
+        const cfg = await dataService.getPageConfig();
+        if (cfg) setPageConfig(cfg);
+      } catch (err) {
+        console.error("Error fetching page config in layout:", err);
+      }
+    };
+    fetchConfig();
+
     return () => unsubscribe();
   }, [navigate]);
 
@@ -37,25 +56,28 @@ export default function AdminLayout({ children }) {
     navigate('/');
   };
 
+  // 🏢 डिपार्टमेंटनुसार कोणती लिंक्स दाखवायची याचे चेक्स
+  const canSeeCompetition = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA';
+  const canSeeInsurance = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'INSURANCE' || userDepartment === 'MRDGA';
+
   return (
     <div className="min-h-screen bg-[#08090d] text-white flex flex-col md:flex-row font-sans">
       
       {/* 🔹 Mobile Top Navbar */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0c0d14] border-b border-amber-500/20 sticky top-0 z-40">
-      <div className="flex items-center gap-2.5">
-  <img 
-    src="./mrdga-logo.png" 
-    alt="MRDGA Logo" 
-    className="w-8 h-8 object-contain rounded-lg shrink-0"
-    onError={(e) => {
-      // फॉलबॅक जर फाईल सापडली नाही तर
-      console.error("Logo failed to load from ./mrdga-logo.png");
-    }}
-  />
-  <span className="font-black text-sm text-white">
-    MRDGA <span className="text-amber-400">Admin</span>
-  </span>
-</div>
+        <div className="flex items-center gap-2.5">
+          <img 
+            src="./mrdga-logo.png" 
+            alt="MRDGA Logo" 
+            className="w-8 h-8 object-contain rounded-lg shrink-0"
+            onError={(e) => {
+              console.error("Logo failed to load from ./mrdga-logo.png");
+            }}
+          />
+          <span className="font-black text-sm text-white">
+            MRDGA <span className="text-amber-400">Admin</span>
+          </span>
+        </div>
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -85,37 +107,74 @@ export default function AdminLayout({ children }) {
             />
             <div>
               <h1 className="font-black text-sm text-white leading-tight">MRDGA Admin</h1>
-              <p className="text-[10px] text-amber-400 font-medium">कंट्रोल पॅनेल</p>
+              <p className="text-[10px] text-amber-400 font-medium">कंट्रोल पॅनेल ({userDepartment})</p>
             </div>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (Order Same As Provided) */}
           <nav className="space-y-1.5">
-            <Link
-              to="/admin"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
-                location.pathname === '/admin'
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
-                  : 'text-gray-300 hover:bg-white/5'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" /> डॅशबोर्ड (अर्ज यादी)
-            </Link>
 
-            <Link
-              to="/admin/reports"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
-                location.pathname === '/admin/reports'
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
-                  : 'text-gray-300 hover:bg-white/5'
-              }`}
-            >
-              <FileText className="w-4 h-4" /> रिपोर्ट्स & एक्सपोर्ट
-            </Link>
+            {/* 🛡️ ३. गोविंदा विमा अर्ज (INSURANCE, MRDGA किंवा SUPER साठी) */}
+            {canSeeInsurance && pageConfig.showInsuranceMenu !== false && (
+              <Link
+                to="/admin/insurance"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/insurance'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" /> गोविंदा विमा अर्ज (Insurance)
+              </Link>
+            )}
 
-            {/* 🔒 User Access Menu (Only for Super Admin) */}
+            {/* 🏆 २. स्पर्धा अर्ज (फक्त MRDGA किंवा SUPER साठी) */}
+            {canSeeCompetition && pageConfig.showCompetitionsMenu !== false && (
+              <Link
+                to="/admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" /> स्पर्धा अर्ज (Competitions)
+              </Link>
+            )}
+
+            {/* 🚩 १. दहीहंडी स्पर्धा व्यवस्थापन (MRDGA आणि SUPER साठी) */}
+            {canSeeCompetition && pageConfig.showDahiHandiScoringMenu !== false && (
+              <Link
+                to="/admin/tournaments"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/tournaments'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-amber-400 hover:bg-white/5 border border-amber-500/20'
+                }`}
+              >
+                <Trophy className="w-4 h-4 shrink-0 text-amber-400" /> दहीहंडी स्पर्धा (Scoring)
+              </Link>
+            )}
+
+            {/* 📊 ४. रिपोर्ट्स & एक्सपोर्ट (सर्व टीम्ससाठी) */}
+            {pageConfig.showReportsMenu !== false && (
+              <Link
+                to="/admin/reports"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/reports'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <FileText className="w-4 h-4" /> रिपोर्ट्स & एक्सपोर्ट
+              </Link>
+            )}
+
+            {/* 🔒 ५. युझर मॅनेजमेंट (Only for Super Admin) */}
             {userRole === 'Super Admin' && (
               <Link
                 to="/admin/users"
@@ -130,7 +189,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-             {userRole === 'Super Admin' && (
+            {/* ⚙️ ६. पेजेस ऑन/ऑफ (Settings - Only for Super Admin) */}
+            {userRole === 'Super Admin' && (
               <Link
                 to="/admin/settings"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -144,22 +204,23 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🔒 5. नोटिफिकेशन सेंटर (Only Super Admin) */}
-              {userRole === 'Super Admin' && (
-                <Link
-                  to="/admin/notifications"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
-                    location.pathname === '/admin/notifications'
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
-                      : 'text-gray-300 hover:bg-white/5'
-                  }`}
-                >
-                  <Bell className={`w-4 h-4 shrink-0 ${location.pathname === '/admin/notifications' ? 'text-black' : 'text-amber-400'}`} /> 
-                  नोटीफिकेशन सेंटर
-                </Link>
-              )}
+            {/* 🔔 ७. नोटीफिकेशन सेंटर (Only for Super Admin) */}
+            {userRole === 'Super Admin' && (
+              <Link
+                to="/admin/notifications"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/notifications'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <Bell className={`w-4 h-4 shrink-0 ${location.pathname === '/admin/notifications' ? 'text-black' : 'text-amber-400'}`} /> 
+                नोटीफिकेशन सेंटर
+              </Link>
+            )}
 
+            {/* 🏠 ८. मुख्य वेबसाईटवर जा */}
             <Link
               to="/"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -189,7 +250,7 @@ export default function AdminLayout({ children }) {
 
             <button
               onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
-              className="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
+              className="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" /> बाहेर पडा (Logout)
             </button>

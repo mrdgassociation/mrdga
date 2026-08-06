@@ -17,6 +17,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+console.log("🔑 [VAPID CHECK]:", VAPID_KEY ? "Loaded Successfully!" : "MISSING/UNDEFINED!");
 const app = initializeApp(firebaseConfig);
 
 //  OFFLINE PERSISTENCE ENGINE ENABLED
@@ -39,4 +41,5 @@ export const getMessagingInstance = async () => {
   return null;
 };
 
-export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+// export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+// console.log("🔑 [VAPID CHECK]:", VAPID_KEY ? "Loaded Successfully!" : "MISSING/UNDEFINED!");

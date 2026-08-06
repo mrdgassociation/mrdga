@@ -15,10 +15,10 @@ export default defineConfig({
       injectRegister: 'auto',
       registerType: 'autoUpdate',
       injectManifest: {
-        injectionPoint: undefined // 🎯 Custom Firebase SW असल्यास Manifest Injection Warning Bypass करण्यासाठी
+        injectionPoint: undefined
       },
       devOptions: {
-        enabled: true
+        enabled: false
       },
       includeAssets: [
         'favicon.ico', 

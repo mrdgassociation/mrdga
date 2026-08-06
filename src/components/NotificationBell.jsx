@@ -1,56 +1,73 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, X, ExternalLink, CheckCheck, Sparkles } from 'lucide-react';
 import { notificationService, NOTIFICATION_CONFIG } from '../services/notificationService';
-import { authService } from '../services/authService'; // 🎯 तुझी मूळ authService फाईल
+import { authService } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [userInfo, setUserInfo] = useState({ role: 'Public', department: 'Public' });
+  const [userInfo, setUserInfo] = useState({ email: '', role: 'Public', department: 'Public' });
   const navigate = useNavigate();
 
   useEffect(() => {
-
-    // 🚀 ऑटोमॅटिक Push Service Worker रजिस्टर करा
-  notificationService.requestPushPermission();
-  
-    // 🔑 १. authService वरून लॉगिन युझरचे Exact Details (Role & Dept) मिळवा
+    // 🔑 ऑथ माहिती मिळवून फक्त UI साठी नोटीफिकेशन्स लोड करणे
     const unsubscribe = authService.getCurrentUser(async (user) => {
       if (user && user.email) {
-        const roleData = await authService.getUserRole(user.email);
-        if (roleData) {
-          setUserInfo({
-            role: roleData.role || 'Public',
-            department: roleData.department || 'Public'
-          });
-        }
+        const userEmail = user.email.toLowerCase().trim();
+        console.log("✅ [NotificationBell]: User loaded:", userEmail);
+
+        const roleData = await authService.getUserRole(userEmail);
+        const info = {
+          email: userEmail,
+          role: roleData?.role || 'Public',
+          department: roleData?.department || 'Public'
+        };
+        setUserInfo(info);
+        fetchNotifications(info);
+      } else {
+        console.log("ℹ️ [NotificationBell]: Guest mode active.");
+        const info = { email: '', role: 'Public', department: 'Public' };
+        setUserInfo(info);
+        fetchNotifications(info);
       }
-      fetchNotifications();
     });
 
     return () => unsubscribe();
   }, []);
 
-  const fetchNotifications = async () => {
-    const data = await notificationService.getNotificationHistory(15);
-    
-    // 🎯 २. तुझ्या authService मधील Role आणि Dept नुसार Filter
-    const filtered = data.filter((item) => {
-      if (item.targetGroup === 'ALL') return true;
-      if (item.targetGroup === 'MRDGA_MEMBERS' && userInfo.role !== 'Public') return true;
-      if (item.targetGroup === `DEPT_${userInfo.department}`) return true;
-      if (item.targetGroup === `ROLE_${userInfo.role}`) return true;
-      return false;
-    });
+  const fetchNotifications = async (currentUserInfo = userInfo) => {
+    try {
+      const data = await notificationService.getNotificationHistory(25);
+      const loggedInEmail = currentUserInfo.email?.toLowerCase().trim();
 
-    setNotifications(filtered);
-    
-    // Unread count tracking
-    const readIds = JSON.parse(localStorage.getItem('mrdga_read_notifications') || '[]');
-    const unread = filtered.filter(n => !readIds.includes(n.id)).length;
-    setUnreadCount(unread);
+      // 🎯 Role, Department आणि Personal Email नुसार Filter
+      const filtered = data.filter((item) => {
+        const notifUserEmail = item.userEmail?.toLowerCase().trim();
+
+        // अ) वैयक्तिक नोटीफिकेशन असेल तर ईमेल मॅच करा
+        if (notifUserEmail) {
+          return notifUserEmail === loggedInEmail;
+        }
+
+        // ब) Target Groups चेकिंग
+        if (item.targetGroup === 'ALL') return true;
+        if (item.targetGroup === 'MRDGA_MEMBERS' && currentUserInfo.role !== 'Public') return true;
+        if (item.targetGroup === `DEPT_${currentUserInfo.department}`) return true;
+        if (item.targetGroup === `ROLE_${currentUserInfo.role}`) return true;
+
+        return false;
+      });
+
+      setNotifications(filtered);
+
+      const readIds = JSON.parse(localStorage.getItem('mrdga_read_notifications') || '[]');
+      const unread = filtered.filter(n => !readIds.includes(n.id)).length;
+      setUnreadCount(unread);
+    } catch (err) {
+      console.error("Fetch Notifications Error:", err);
+    }
   };
 
   const markAllAsRead = () => {
@@ -67,9 +84,13 @@ export default function NotificationBell() {
       setUnreadCount(prev => Math.max(0, prev - 1));
     }
 
-    if (item.actionUrl) {
+    const targetUrl = item.actionUrl || item.targetPath || (
+      item.type?.includes('INSURANCE') ? '/my-status' : null
+    );
+
+    if (targetUrl) {
       setIsOpen(false);
-      navigate(item.actionUrl);
+      navigate(targetUrl);
     }
   };
 
@@ -94,14 +115,14 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* 📱 Slide-over Drawer */}
+      {/* 📱 Notification Drawer */}
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs" onClick={() => setIsOpen(false)} />
 
           <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-slate-950 border border-amber-500/30 rounded-2xl shadow-2xl z-50 overflow-hidden font-sans text-white">
             
-            {/* Drawer Header */}
+            {/* Header */}
             <div className="p-3.5 bg-slate-900 border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-400" />
@@ -110,18 +131,18 @@ export default function NotificationBell() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={markAllAsRead}
-                  className="text-[10px] text-gray-400 hover:text-amber-400 flex items-center gap-1 transition"
+                  className="text-[10px] text-gray-400 hover:text-amber-400 flex items-center gap-1 transition cursor-pointer"
                   title="सर्व वाचले म्हणून चिन्हांकित करा"
                 >
                   <CheckCheck className="w-3 h-3" /> सर्व वाचले
                 </button>
-                <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white p-1">
+                <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white p-1 cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Notification List */}
+            {/* List */}
             <div className="max-h-80 overflow-y-auto divide-y divide-white/5 p-2 space-y-1">
               {notifications.length === 0 ? (
                 <div className="py-8 text-center text-xs text-gray-500">
@@ -131,6 +152,7 @@ export default function NotificationBell() {
                 notifications.map((item) => {
                   const readIds = JSON.parse(localStorage.getItem('mrdga_read_notifications') || '[]');
                   const isRead = readIds.includes(item.id);
+                  const redirectPath = item.actionUrl || item.targetPath || (item.type?.includes('INSURANCE') ? '/my-status' : null);
 
                   return (
                     <div
@@ -144,16 +166,16 @@ export default function NotificationBell() {
                       <div className="flex-1">
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 border border-white/10">
-                            {NOTIFICATION_CONFIG.categories.find(c => c.id === item.category)?.label || item.category}
+                            {NOTIFICATION_CONFIG.categories.find(c => c.id === item.category)?.label || item.category || 'सूचना'}
                           </span>
                           <span className="text-[9px] text-gray-500">
                             {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString('mr-IN') : 'आत्ताच'}
                           </span>
                         </div>
                         <h4 className="text-xs font-bold text-white mb-0.5">{item.title}</h4>
-                        <p className="text-[11px] text-gray-300 leading-snug line-clamp-2">{item.body}</p>
+                        <p className="text-[11px] text-gray-300 leading-snug line-clamp-2">{item.message || item.body}</p>
                         
-                        {item.actionUrl && (
+                        {redirectPath && (
                           <div className="mt-1.5 text-[10px] text-amber-400 font-bold flex items-center gap-1">
                             पाहण्यासाठी इथे क्लिक करा <ExternalLink className="w-2.5 h-2.5" />
                           </div>

@@ -1,89 +1,49 @@
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
+/* eslint-disable no-undef */
+importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-// 📦 Workbox Precache Manifest Injection Site
+// 📦 Workbox Precache Manifest Injection Site (PWA साठी आवश्यक)
 self.__WB_MANIFEST;
 
-let messaging = null;
+// 🎯 FIXED: Service Worker मध्ये थेट Firebase Static Init करणे (जर तुमच्याकडे Vite env नसेल, तर डायरेक्ट व्हॅल्यूज ठेवा)
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
-// 1️⃣ Install Event - नवीन सर्व्हिस वर्कर लगेच लोड करण्यासाठी
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+const messaging = firebase.messaging();
+
+// Background Notification Listener थेट सुरुवातीलाच चालू ठेवणे
+messaging.onBackgroundMessage((payload) => {
+  console.log('[SW] Background FCM Notification Received:', payload);
+  showNotification(
+    payload.notification?.title || payload.data?.title || 'MRDGA Update',
+    payload.notification?.body || payload.data?.body || payload.data?.message,
+    payload.data?.actionUrl || payload.data?.targetPath
+  );
+});
+
+// 1️⃣ Install Event
 self.addEventListener('install', (event) => {
   console.log('📦 [SW] Service Worker Installing...');
-  self.skipWaiting(); // जुन्या वर्करची वाट न बघता तात्काळ ॲक्टिव्हेट व्हा
+  self.skipWaiting();
 });
 
-// 2️⃣ Activate Event - तात्काळ पेजेसचा ताबा (Control) घेण्यासाठी
+// 2️⃣ Activate Event
 self.addEventListener('activate', (event) => {
   console.log('⚡ [SW] Service Worker Activated & Claiming Clients!');
-  event.waitUntil(clients.claim());
+  event.waitUntil(self.clients.claim());
 });
 
-// 3️⃣ Message Event (React Front-end कडून येणारे मेसेजेस)
-self.addEventListener('message', (event) => {
-  console.log('📩 [SW Message Event] Data received from App:', event.data);
-
-  if (!event.data) return;
-
-  // A. Firebase Config Set करणे
-  if (event.data.type === 'SET_FIREBASE_CONFIG') {
-    const firebaseConfig = event.data.config;
-
-    if (!firebase.apps.length) {
-      try {
-        firebase.initializeApp(firebaseConfig);
-        messaging = firebase.messaging();
-
-        messaging.onBackgroundMessage((payload) => {
-          console.log('[SW] Background FCM Notification Received:', payload);
-          showNotification(
-            payload.notification?.title || 'MRDGA Update',
-            payload.notification?.body,
-            payload.data?.actionUrl
-          );
-        });
-
-        console.log('✅ [SW] Firebase Messaging Initialized via PostMessage.');
-      } catch (err) {
-        console.error('❌ [SW] Firebase Init Error:', err);
-      }
-    }
-  }
-
-  // B. Local Admin Push Test Trigger (Notification Hub)
-  if (event.data.type === 'TEST_PUSH') {
-    console.log('🔔 [SW] TEST_PUSH Triggered with Payload:', event.data.payload);
-
-    const title = event.data.payload?.title || 'MRDGA Update 🔔';
-    const body = event.data.payload?.body || 'नवीन अपडेट उपलब्ध आहे.';
-    const url = event.data.payload?.url || '/mrdga/';
-
-    event.waitUntil(showNotification(title, body, url));
-  }
-});
-
-// 4️⃣ Direct Push Event (DevTools किंवा FCM Direct Push)
-self.addEventListener('push', (event) => {
-  console.log('🚀 [SW Push Event] Triggered!', event);
-
-  let title = 'MRDGA Test Notification 🔔';
-  let body = 'हे DevTools / FCM कडून आलेले Push Notification आहे!';
-  let url = '/mrdga/';
-
-  if (event.data) {
-    try {
-      const data = event.data.json();
-      title = data.notification?.title || title;
-      body = data.notification?.body || body;
-      url = data.data?.actionUrl || url;
-    } catch (e) {
-      body = event.data.text() || body;
-    }
-  }
-
-  event.waitUntil(showNotification(title, body, url));
-});
-
-// 🛠️ Helper Function: System Notification Pop-up दाखवण्यासाठी
+// 🛠️ Helper Function: System Notification Pop-up
 function showNotification(title, body, url) {
   console.log(`📢 [SW ShowNotification] Triggering: "${title}"`);
 
@@ -92,7 +52,7 @@ function showNotification(title, body, url) {
     icon: '/mrdga-logo.png',
     badge: '/mrdga-logo.png',
     data: { url: url || '/mrdga/' },
-    requireInteraction: true // पॉप-अप स्क्रीनवर राहून अटेंशन घेईल
+    requireInteraction: true
   };
 
   return self.registration.showNotification(title, options)
@@ -100,7 +60,29 @@ function showNotification(title, body, url) {
     .catch((err) => console.error('❌ [SW] ShowNotification Error:', err));
 }
 
-// 5️⃣ Notification Click Event
+// 3️⃣ Direct Push Event
+self.addEventListener('push', (event) => {
+  console.log('🚀 [SW Push Event] Triggered!', event);
+
+  let title = 'MRDGA Update 🔔';
+  let body = 'नवीन सूचना उपलब्ध आहे.';
+  let url = '/mrdga/';
+
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      title = data.notification?.title || data.data?.title || title;
+      body = data.notification?.body || data.data?.body || data.data?.message || body;
+      url = data.data?.actionUrl || data.data?.targetPath || url;
+    } catch (e) {
+      body = event.data.text() || body;
+    }
+  }
+
+  event.waitUntil(showNotification(title, body, url));
+});
+
+// 4️⃣ Notification Click Event
 self.addEventListener('notificationclick', (event) => {
   console.log('🖱️ [SW Click] Notification clicked:', event);
   event.notification.close();
@@ -116,4 +98,21 @@ self.addEventListener('notificationclick', (event) => {
       if (clients.openWindow) return clients.openWindow(urlToOpen);
     })
   );
+});
+
+// 5️⃣ Message Event (React Front-end कडून येणारे मेसेजेस)
+self.addEventListener('message', (event) => {
+  console.log('📩 [SW Message Event] Data received from App:', event.data);
+
+  if (!event.data) return;
+
+  if (event.data.type === 'TEST_PUSH') {
+    console.log('🔔 [SW] TEST_PUSH Triggered with Payload:', event.data.payload);
+
+    const title = event.data.payload?.title || 'MRDGA Update 🔔';
+    const body = event.data.payload?.body || 'नवीन अपडेट उपलब्ध आहे.';
+    const url = event.data.payload?.url || '/mrdga/';
+
+    event.waitUntil(showNotification(title, body, url));
+  }
 });
