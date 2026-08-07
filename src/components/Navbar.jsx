@@ -153,13 +153,13 @@ export default function Navbar() {
             <Link to="/insurance-info" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Insurance Info</Link>
             <Link to="/contact" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Contact</Link>
             
-            {/* 🎯 Register Team Button */}
+            {/* 🎯 Register Team Button 
             <button 
               onClick={handleNavRegister} 
               className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm rounded-xl shadow-lg shadow-amber-500/20 hover:opacity-90 transition cursor-pointer"
             >
               Register Team
-            </button>
+            </button>*/}
           </div>
 
           {/* 🎯 RIGHT SECTION: BELL ICON + PROFILE / LOGIN / MOBILE TOGGLE */}
@@ -238,12 +238,12 @@ export default function Navbar() {
           <Link to="/insurance-info" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Insurance Info</Link>
           <Link to="/contact" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Contact</Link>
           
-          <button 
+          {/* <button 
             onClick={() => { setIsOpen(false); handleNavRegister(); }} 
             className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm rounded-xl shadow-lg shadow-amber-500/20 hover:opacity-90 transition cursor-pointer"
           >
             Register Team
-          </button>
+          </button> */}
 
           {/* MOBILE: LOGGED-IN STATE */}
           {user ? (

@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
-  Shield, ShieldCheck, LayoutDashboard, LogOut, ArrowLeft, Menu, X, 
-  User, FileText, UserCheck, Sliders, Bell, Trophy 
+  ShieldCheck, LayoutDashboard, LogOut, ArrowLeft, Menu, X, 
+  User, FileText, UserCheck, Sliders, Bell, Trophy, Lock
 } from 'lucide-react';
 import { authService } from '../services/authService';
-import { dataService } from '../services/dataService'; // 💡 PageSettings config साठी
+import { dataService } from '../services/dataService';
 
 export default function AdminLayout({ children }) {
-  // 💡 User Role, Department & Profile States
   const [userRole, setUserRole] = useState('Reviewer');
   const [userDepartment, setUserDepartment] = useState('MRDGA');
   const [currentUser, setCurrentUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [pageConfig, setPageConfig] = useState({}); // 💡 PageSettings Data State
+  const [pageConfig, setPageConfig] = useState({});
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -21,8 +22,6 @@ export default function AdminLayout({ children }) {
     const unsubscribe = authService.getCurrentUser(async (user) => {
       if (user) {
         setCurrentUser(user);
-        
-        // 💡 Fetch Role & Department from Firestore
         try {
           const uDoc = await authService.getUserRole(user.email);
           if (uDoc) {
@@ -37,13 +36,14 @@ export default function AdminLayout({ children }) {
       }
     });
 
-    // 💡 Fetch Page Settings config
     const fetchConfig = async () => {
       try {
         const cfg = await dataService.getPageConfig();
         if (cfg) setPageConfig(cfg);
       } catch (err) {
         console.error("Error fetching page config in layout:", err);
+      } finally {
+        setLoadingConfig(false);
       }
     };
     fetchConfig();
@@ -51,14 +51,67 @@ export default function AdminLayout({ children }) {
     return () => unsubscribe();
   }, [navigate]);
 
+  // 🔐 नियम ७: Super Admin Check (Department: SUPER and Role: Super Admin)
+  const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin';
+
+  // 🔒 नियम ४ व ५: Department-wise Menus Access
+  const canSeeCompetition = (userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA') && userDepartment !== 'INSURANCE';
+  const canSeeInsurance = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'INSURANCE' || userDepartment === 'MRDGA';
+
+  // 🎯 स्मार्ट ऑटो-रिडायरेक्शन लॉजिक (नियमांनुसार)
+  useEffect(() => {
+    if (loadingConfig || !currentUser) return;
+
+    // नियम ४: Insurance Team ला फक्त Insurance चाच ॲक्सेस असेल
+    if (userDepartment === 'INSURANCE' && location.pathname !== '/admin/insurance') {
+      navigate('/admin/insurance', { replace: true });
+      return;
+    }
+
+    // नियम १, २ व ३: /admin वर आल्यावर सक्रिय असलेला पहिला मेन्यू शोधणे
+    if (location.pathname === '/admin') {
+      const isCompOn = pageConfig.showCompetitionsMenu !== false;
+      const isInsOn = pageConfig.showInsuranceMenu !== false;
+
+      // जर स्पर्धा फॉर्म बंद असेल आणि विमा चालू असेल, तर थेट विम्यावर पाठवा
+      if (!isCompOn && canSeeInsurance && isInsOn) {
+        navigate('/admin/insurance', { replace: true });
+      }
+    }
+  }, [location.pathname, pageConfig, userDepartment, loadingConfig, currentUser, navigate]);
+
   const handleLogout = async () => {
     await authService.logout();
     navigate('/');
   };
 
-  // 🏢 डिपार्टमेंटनुसार कोणती लिंक्स दाखवायची याचे चेक्स
-  const canSeeCompetition = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA';
-  const canSeeInsurance = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'INSURANCE' || userDepartment === 'MRDGA';
+  // नियम १: जर सर्व मेन्यू बंद असतील तर डॅशबोर्ड उघडू नका
+  const areAllMenusDisabled = 
+    pageConfig.showCompetitionsMenu === false &&
+    pageConfig.showInsuranceMenu === false &&
+    pageConfig.showDahiHandiScoringMenu === false &&
+    pageConfig.showReportsMenu === false &&
+    !isSuperAdminUser;
+
+  if (!loadingConfig && areAllMenusDisabled) {
+    return (
+      <div className="min-h-screen bg-[#08090d] text-white flex items-center justify-center p-6 text-center font-sans">
+        <div className="bg-[#0c0d14] border border-rose-500/30 p-8 rounded-3xl max-w-md space-y-4 shadow-2xl">
+          <Lock className="w-12 h-12 text-rose-500 mx-auto animate-bounce" />
+          <h2 className="text-lg font-black text-white">ॲडमिन डॅशबोर्ड सध्या बंद आहे</h2>
+          <p className="text-xs text-gray-400">
+            सध्या सर्व ॲडमिन मेन्यू बंद (OFF) ठेवण्यात आले आहेत. अधिक माहितीसाठी मुख्य ॲडमिनशी संपर्क साधा.
+          </p>
+          <button 
+            onClick={handleLogout}
+            className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+          >
+            बाहेर पडा (Logout)
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#08090d] text-white flex flex-col md:flex-row font-sans">
@@ -70,9 +123,7 @@ export default function AdminLayout({ children }) {
             src="./mrdga-logo.png" 
             alt="MRDGA Logo" 
             className="w-8 h-8 object-contain rounded-lg shrink-0"
-            onError={(e) => {
-              console.error("Logo failed to load from ./mrdga-logo.png");
-            }}
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
           <span className="font-black text-sm text-white">
             MRDGA <span className="text-amber-400">Admin</span>
@@ -104,6 +155,7 @@ export default function AdminLayout({ children }) {
               src="./mrdga-logo.png" 
               alt="MRDGA Logo" 
               className="w-9 h-9 object-contain rounded-lg shrink-0"
+              onError={(e) => { e.target.style.display = 'none'; }}
             />
             <div>
               <h1 className="font-black text-sm text-white leading-tight">MRDGA Admin</h1>
@@ -111,10 +163,10 @@ export default function AdminLayout({ children }) {
             </div>
           </div>
 
-          {/* Navigation Links (Order Same As Provided) */}
+          {/* Navigation Links */}
           <nav className="space-y-1.5">
 
-            {/* 🛡️ ३. गोविंदा विमा अर्ज (INSURANCE, MRDGA किंवा SUPER साठी) */}
+            {/* 🛡️ गोविंदा विमा अर्ज (Insurance, MRDGA, SUPER) */}
             {canSeeInsurance && pageConfig.showInsuranceMenu !== false && (
               <Link
                 to="/admin/insurance"
@@ -129,7 +181,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🏆 २. स्पर्धा अर्ज (फक्त MRDGA किंवा SUPER साठी) */}
+            {/* 🏆 स्पर्धा अर्ज (MRDGA व SUPER साठी, Insurance साठी नाही) */}
             {canSeeCompetition && pageConfig.showCompetitionsMenu !== false && (
               <Link
                 to="/admin"
@@ -144,7 +196,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🚩 १. दहीहंडी स्पर्धा व्यवस्थापन (MRDGA आणि SUPER साठी) */}
+            {/* 🚩 दहीहंडी स्पर्धा व्यवस्थापन (MRDGA व SUPER साठी) */}
             {canSeeCompetition && pageConfig.showDahiHandiScoringMenu !== false && (
               <Link
                 to="/admin/tournaments"
@@ -159,8 +211,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 📊 ४. रिपोर्ट्स & एक्सपोर्ट (सर्व टीम्ससाठी) */}
-            {pageConfig.showReportsMenu !== false && (
+            {/* 📊 रिपोर्ट्स & एक्सपोर्ट */}
+            {userDepartment !== 'INSURANCE' && pageConfig.showReportsMenu !== false && (
               <Link
                 to="/admin/reports"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -174,8 +226,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🔒 ५. युझर मॅनेजमेंट (Only for Super Admin) */}
-            {userRole === 'Super Admin' && (
+            {/* 🔒 नियम ७: युझर मॅनेजमेंट (Only for SUPER Dept + Super Admin Role) */}
+            {isSuperAdminUser && (
               <Link
                 to="/admin/users"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -189,8 +241,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* ⚙️ ६. पेजेस ऑन/ऑफ (Settings - Only for Super Admin) */}
-            {userRole === 'Super Admin' && (
+            {/* ⚙️ नियम ७: पेजेस ऑन/ऑफ (Settings - Only for SUPER Dept + Super Admin Role) */}
+            {isSuperAdminUser && (
               <Link
                 to="/admin/settings"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -204,8 +256,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🔔 ७. नोटीफिकेशन सेंटर (Only for Super Admin) */}
-            {userRole === 'Super Admin' && (
+            {/* 🔔 नियम ७: नोटीफिकेशन सेंटर (Only for SUPER Dept + Super Admin Role) */}
+            {isSuperAdminUser && (
               <Link
                 to="/admin/notifications"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -220,7 +272,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🏠 ८. मुख्य वेबसाईटवर जा */}
+            {/* 🏠 मुख्य वेबसाईटवर जा */}
             <Link
               to="/"
               onClick={() => setIsMobileMenuOpen(false)}

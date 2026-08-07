@@ -230,19 +230,19 @@ export default function AdminDashboard() {
   // ==========================================
   // 🔐 PERMISSION & ACCESS CHECKS
   // ==========================================
-  // १. या डॅशबोर्डचा ॲक्सेस फक्त MRDGA विभाग किंवा Super Admin ला आहे
-  const hasMrdgaAccess = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA';
+  // १. या डॅशबोर्डचा ॲक्सेस फक्त MRDGA विभाग, SUPER विभाग किंवा Super Admin ला आहे (INSURANCE ला नाही)
+  const hasMrdgaAccess = (userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA') && userDepartment !== 'INSURANCE';
 
-  // २. Approve/Reject करण्याचे अधिकार फक्त Super Admin किंवा MRDGA चा Admin यांनाच
+  // २. Approve/Reject करण्याचे अधिकार फक्त Super Admin किंवा MRDGA/SUPER चा Admin यांनाच
   const canApproveReject = userRole === 'Super Admin' || (userRole === 'Admin' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER'));
 
-  // 🔒 जर युझरचा विभाग MRDGA नसेल तर ब्लॉक करा
+  // 🔒 जर युझरचा विभाग MRDGA/SUPER नसेल किंवा INSURANCE असेल तर ब्लॉक करा
   if (!loading && !hasMrdgaAccess) {
     return (
       <div className="p-8 text-center space-y-3 font-sans">
         <Lock className="w-10 h-10 text-rose-500 mx-auto" />
         <h2 className="text-base font-bold text-white">तुम्हाला या डॅशबोर्डचा ॲक्सेस नाही.</h2>
-        <p className="text-xs text-gray-400">हे डॅशबोर्ड फक्त MRDGA असोसिएशन टीमसाठी राखीव आहे.</p>
+        <p className="text-xs text-gray-400">हे डॅशबोर्ड फक्त स्पर्धा व्यवस्थापन टीमसाठी राखीव आहे.</p>
       </div>
     );
   }
@@ -283,7 +283,7 @@ export default function AdminDashboard() {
           </div>
           <div>
             <h2 className="text-sm sm:text-base font-black text-white leading-tight flex items-center gap-2">
-              ॲडमिन <span className="text-amber-400">डॅशबोर्ड</span>
+              ॲडमिन <span className="text-amber-400">डॅशबोर्ड (स्पर्धा अर्ज)</span>
               <span className="text-[9px] px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-md font-extrabold uppercase">
                 {userRole} ({userDepartment})
               </span>

@@ -7,7 +7,7 @@ import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
@@ -41,6 +41,7 @@ export default function InsuranceDashboard() {
   // Review / Approve Modal States
   const [selectedReq, setSelectedReq] = useState(null);
   const [policyNo, setPolicyNo] = useState('');
+  const [editableGovindaCount, setEditableGovindaCount] = useState(''); // 🚩 गोविंदा संख्या Edit स्टेट
   const [policyCopyFile, setPolicyCopyFile] = useState(null);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -51,8 +52,9 @@ export default function InsuranceDashboard() {
   const [customReason, setCustomReason] = useState('');
   const [duplicateRefId, setDuplicateRefId] = useState('');
 
-  // PDF Viewer Modal & Zoom States
+  // PDF / Image Viewer Modal & Zoom States
   const [viewPdfUrl, setViewPdfUrl] = useState(null);
+  const [viewPdfTitle, setViewPdfTitle] = useState('मंडळाची अपलोड केलेली लेटरहेड PDF यादी');
   const [zoomLevel, setZoomLevel] = useState(100);
 
   // User Profile States
@@ -107,6 +109,14 @@ export default function InsuranceDashboard() {
 
   const hasInsuranceAccess = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'INSURANCE' || userDepartment === 'MRDGA';
 
+  // 🔒 परमिशन चेकिंग: फक्त INSURANCE डिपार्टमेंट मधील युझर्सनाच Approve/Reject चा अधिकार असेल
+ // 🔒 सुधारित अचूक परमिशन लॉजिक
+const canApproveOrReject = 
+  userDepartment === 'INSURANCE' || 
+  (userDepartment === 'SUPER' && userRole === 'Super Admin') || 
+  (userDepartment === 'MRDGA' && userRole === 'Super Admin') || 
+  (userDepartment === 'MRDGA' && userRole === 'Admin');
+
   // ==========================================
   // 📌 SECTION 4: HELPER FUNCTIONS (PDF & ZOOM)
   // ==========================================
@@ -114,8 +124,45 @@ export default function InsuranceDashboard() {
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 25, 75));
   const handleResetZoom = () => setZoomLevel(100);
 
+  // 🗜️ Auto-Compressor Function
   const convertFileToBase64 = async (file) => {
-    console.log(`🗜️ [LOG]: Converting/Compressing PDF file '${file.name}' (${file.size} bytes)...`);
+    if (file.type.startsWith('image/')) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            const MAX_DIMENSION = 1600;
+            if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+              if (width > height) {
+                height = Math.round((height * MAX_DIMENSION) / width);
+                width = MAX_DIMENSION;
+              } else {
+                width = Math.round((width * MAX_DIMENSION) / height);
+                height = MAX_DIMENSION;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.65);
+            resolve(compressedBase64);
+          };
+          img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+      });
+    }
+
     const TWO_MB_BYTES = 2 * 1024 * 1024;
     if (file.size <= TWO_MB_BYTES) {
       return new Promise((resolve, reject) => {
@@ -140,7 +187,6 @@ export default function InsuranceDashboard() {
           reader.onerror = (err) => reject(err);
         });
       } catch (pdfErr) {
-        console.warn("⚠️ [LOG]: PDF Compression failed, using original file base64.", pdfErr);
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.readAsDataURL(file);
@@ -151,7 +197,6 @@ export default function InsuranceDashboard() {
     }
   };
 
-  // Status Badge Display Mapping
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Approved':
@@ -171,8 +216,13 @@ export default function InsuranceDashboard() {
   // 📌 SECTION 5: ACTION HANDLERS (REJECT & APPROVE)
   // ==========================================
 
-  // 🛑 REJECT HANDLER (Clean DB Status: 'Rejected')
+  // 🛑 REJECT HANDLER
   const handleConfirmReject = async () => {
+    if (!canApproveOrReject) {
+      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग (Insurance Department) मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
+      return;
+    }
+
     if (!rejectModalReq) return;
 
     let finalReason = selectedReason === "इतर कारण (कस्टम टाईप करा)" 
@@ -188,13 +238,11 @@ export default function InsuranceDashboard() {
       return;
     }
 
-    console.log(`🛑 [LOG]: Rejecting Application ID '${rejectModalReq.appId}' for reason: '${finalReason}'`);
     setSubmitting(true);
 
     try {
       const docRef = doc(db, "insurance_requests_2026", rejectModalReq.id);
       
-      // 🗄️ Save Clean Status 'Rejected' in DB
       await updateDoc(docRef, {
         status: 'Rejected',
         rejectReason: finalReason,
@@ -208,9 +256,6 @@ export default function InsuranceDashboard() {
         })
       });
 
-      console.log("✅ [LOG]: Firestore document status updated to 'Rejected'. Triggering notification...");
-
-      // 🔔 TRIGGER FCM & IN-APP NOTIFICATION
       try {
         await notificationService.sendNotification({
           title: "🛑 गोविंदा विमा अर्ज नामंजूर",
@@ -221,9 +266,8 @@ export default function InsuranceDashboard() {
           appId: rejectModalReq.appId,
           type: "INSURANCE_REJECTED"
         });
-        console.log("🔔 [LOG]: Notification sent successfully!");
       } catch (notifErr) {
-        console.error("❌ [ERROR]: Notification trigger failed:", notifErr);
+        console.error("Notification trigger failed:", notifErr);
       }
 
       Swal.fire({
@@ -242,41 +286,61 @@ export default function InsuranceDashboard() {
       loadInsuranceRequests();
 
     } catch (err) {
-      console.error("❌ [ERROR]: Reject action failed:", err);
+      console.error("Reject action failed:", err);
       Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्टेटस बदलता आला नाही.' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // 🟢 APPROVE / UPDATE HANDLER (Clean DB Status: 'Approved' / 'Pending')
+  // 🟢 APPROVE / UPDATE HANDLER
   const handleUpdateInsurance = async (rawStatusInput) => {
     if (!selectedReq) return;
 
-    // 🗄️ Convert raw input to Clean DB Strings ('Approved' or 'Pending')
     const cleanStatus = (rawStatusInput.includes('Approved') || rawStatusInput.includes('मंजूर')) 
       ? 'Approved' 
       : 'Pending';
 
-    console.log(`🟢 [LOG]: Updating Insurance Request ID '${selectedReq.appId}' to Clean Status '${cleanStatus}'...`);
+    // 🔒 परमिशन गार्ड
+    if (cleanStatus === 'Approved' && !canApproveOrReject) {
+      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग (Insurance Department) मधील अधिकारीच अर्ज Approve करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
+      return;
+    }
+
+    // 🚩 पॉलिसी नंबर Mandatory चेक
+    const finalPolicyNo = policyNo.trim() || selectedReq.policyNumber || '';
+    if (cleanStatus === 'Approved' && !finalPolicyNo) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'पॉलिसी नंबर आवश्यक आहे!',
+        text: 'अर्ज मंजूर करण्यासाठी कृपया विमा पॉलिसी / सर्टिफिकेट नंबर टाका.',
+        confirmButtonColor: '#f59e0b',
+        background: '#0c0d14',
+        color: '#fff'
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       let uploadedCertificateUrl = selectedReq.certificateUrl || '';
 
-      // Upload Policy Certificate PDF if selected
       if (policyCopyFile) {
-        console.log("📄 [LOG]: Uploading policy certificate PDF file...");
         const base64File = await convertFileToBase64(policyCopyFile);
         const gasUrl = import.meta.env.VITE_GOOGLE_APP_SCRIPT_URL;
+
+        const fileExt = policyCopyFile.name.split('.').pop() || 'jpg';
+        const customFileName = `${selectedReq.teamName}_Policy_${finalPolicyNo}.${fileExt}`;
 
         const response = await fetch(gasUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
-            fileName: `${selectedReq.teamName}_PolicyCertificate.pdf`,
+            fileName: customFileName,
             fileType: policyCopyFile.type,
-            fileData: base64File
+            fileData: base64File,
+            uploadType: 'policy_certificate'
           })
         });
 
@@ -285,10 +349,9 @@ export default function InsuranceDashboard() {
           const resData = JSON.parse(rawText);
           if (resData.status === 'success') {
             uploadedCertificateUrl = resData.fileUrl;
-            console.log("✅ [LOG]: Certificate PDF uploaded at:", uploadedCertificateUrl);
           }
         } catch (parseErr) {
-          console.warn("⚠️ [LOG]: GAS Response JSON parsing issue:", parseErr);
+          console.warn("GAS Response JSON parsing issue:", parseErr);
         }
       }
 
@@ -296,7 +359,8 @@ export default function InsuranceDashboard() {
       
       const updateData = {
         status: cleanStatus,
-        policyNumber: policyNo.trim() || selectedReq.policyNumber || '',
+        policyNumber: finalPolicyNo,
+        govindaCount: Number(editableGovindaCount) || selectedReq.govindaCount || 0, // 🚩 एडिट केलेली नवीन गोविंदा संख्या सेव्ह करा
         certificateUrl: uploadedCertificateUrl
       };
 
@@ -312,23 +376,20 @@ export default function InsuranceDashboard() {
       }
 
       await updateDoc(docRef, updateData);
-      console.log("✅ [LOG]: Firestore document updated successfully.");
 
-      // 🔔 TRIGGER NOTIFICATION ON APPROVAL
       if (cleanStatus === 'Approved') {
         try {
           await notificationService.sendNotification({
             title: "🎉 गोविंदा विमा अर्ज मंजूर!",
-            message: `${selectedReq.teamName} चा विमा अर्ज मंजूर झाला आहे. पॉलिसी क्र: ${policyNo.trim() || 'प्रक्रियेत'}.`,
+            message: `${selectedReq.teamName} चा विमा अर्ज मंजूर झाला आहे. सुधारित गोविंदा संख्या: ${updateData.govindaCount}, पॉलिसी क्र: ${finalPolicyNo}.`,
             category: "REGISTRATION",
             targetGroup: "ALL",
             userEmail: selectedReq.email,
             appId: selectedReq.appId,
             type: "INSURANCE_APPROVED"
           });
-          console.log("🔔 [LOG]: Approval notification dispatched.");
         } catch (notifErr) {
-          console.error("❌ [ERROR]: Approval notification failed:", notifErr);
+          console.error("Approval notification failed:", notifErr);
         }
       }
 
@@ -347,14 +408,13 @@ export default function InsuranceDashboard() {
       loadInsuranceRequests();
 
     } catch (err) {
-      console.error("❌ [ERROR]: Update Insurance action failed:", err);
+      console.error("Update Insurance action failed:", err);
       Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'डेटा सेव्ह झाला नाही.', background: '#0c0d14', color: '#fff' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Security Access Guard Render
   if (!loading && !hasInsuranceAccess) {
     return (
       <div className="p-8 text-center space-y-3 font-sans">
@@ -365,7 +425,6 @@ export default function InsuranceDashboard() {
     );
   }
 
-  // Search and Status Filtering Logic
   const filteredRequests = requests.filter(item => {
     const tName = item.teamName || '';
     const appId = item.appId || '';
@@ -386,13 +445,10 @@ export default function InsuranceDashboard() {
     return matchesSearch && matchesStatus;
   });
 
-  // ==========================================
-  // 📌 SECTION 6: MAIN RENDER (UI & CARDS)
-  // ==========================================
   return (
     <div className="space-y-3 max-w-7xl mx-auto px-1 py-1 font-sans">
       
-      {/* 🔹 Header Banner */}
+      {/* Header Banner */}
       <div className="flex justify-between items-center bg-black/50 border border-amber-500/20 p-3 rounded-2xl backdrop-blur-md">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
@@ -402,7 +458,7 @@ export default function InsuranceDashboard() {
             <h2 className="text-xs sm:text-sm font-black text-white leading-tight flex items-center gap-1.5">
               गोविंदा विमा <span className="text-amber-400">व्यवस्थापन</span>
               <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded font-extrabold uppercase">
-                {userRole}
+                {userDepartment} ({userRole})
               </span>
             </h2>
             <p className="text-[10px] text-gray-400">
@@ -421,7 +477,7 @@ export default function InsuranceDashboard() {
         </button>
       </div>
 
-      {/* 🔹 Search & Filters */}
+      {/* Search & Filters */}
       <div className="glass-panel p-2 rounded-2xl flex flex-col sm:flex-row gap-2 bg-black/40 border border-slate-800">
         <div className="flex-1 relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-400/60" />
@@ -449,136 +505,167 @@ export default function InsuranceDashboard() {
         </div>
       </div>
 
-      {/* 📱 CARDS GRID LIST */}
+      {/* Cards List */}
       {loading ? (
         <p className="p-8 text-center text-amber-400 font-semibold text-xs animate-pulse">डेटा लोड होत आहे...</p>
       ) : filteredRequests.length === 0 ? (
         <p className="p-8 text-center text-gray-400 text-xs font-medium">कोणताही विमा अर्ज सापडला नाही.</p>
       ) : (
         <div className="space-y-2.5">
-          {filteredRequests.map((item) => (
-            <div 
-              key={item.id}
-              className="glass-panel p-3 rounded-2xl border border-amber-500/20 bg-black/40 hover:border-amber-500/40 transition shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3"
-            >
-              {/* Left Details */}
-              <div className="space-y-1 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                    #{item.appId}
-                  </span>
-                  
-                  {getStatusBadge(item.status)}
+          {filteredRequests.map((item) => {
+            const isApproved = item.status === 'Approved' || item.status === 'मंजूर' || item.status?.includes('मंजूर');
+            const hasCertificate = !!item.certificateUrl;
 
-                  {item.policyNumber && (
-                    <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                      पॉलिसी: {item.policyNumber}
+            return (
+              <div 
+                key={item.id}
+                className="glass-panel p-3 rounded-2xl border border-amber-500/20 bg-black/40 hover:border-amber-500/40 transition shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3"
+              >
+                {/* Left Details */}
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      #{item.appId}
                     </span>
-                  )}
+                    
+                    {getStatusBadge(item.status)}
+
+                    {item.policyNumber && (
+                      <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        पॉलिसी: {item.policyNumber}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="font-extrabold text-xs sm:text-sm text-white leading-tight">{item.teamName}</h3>
+
+                  <div className="flex items-center gap-3 text-[11px] text-gray-300 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-amber-400 shrink-0" /> {item.district} ({item.pincode || '-'})
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-amber-400 shrink-0" /> {item.category || 'Mens'}
+                    </span>
+                    <span className="flex items-center gap-1 text-amber-300 font-bold font-mono">
+                      <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" /> {item.govindaCount} गोविंदा ({item.pyramidCapacity})
+                    </span>
+                  </div>
                 </div>
 
-                <h3 className="font-extrabold text-xs sm:text-sm text-white leading-tight">{item.teamName}</h3>
+                {/* Middle Contact & File Actions */}
+                <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
+                  <div className="text-left md:text-right pr-2">
+                    <p className="text-[10px] text-gray-400">संपर्क व्यक्ती:</p>
+                    <p className="font-bold text-xs text-white leading-none">{item.contactPerson}</p>
+                    <p className="font-mono text-[10px] text-gray-400 mt-0.5">{item.whatsappNumber}</p>
+                  </div>
 
-                <div className="flex items-center gap-3 text-[11px] text-gray-300 flex-wrap">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-amber-400 shrink-0" /> {item.district} ({item.pincode || '-'})
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-amber-400 shrink-0" /> {item.category || 'Mens'}
-                  </span>
-                  <span className="flex items-center gap-1 text-amber-300 font-bold font-mono">
-                    <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" /> {item.govindaCount} गोविंदा ({item.pyramidCapacity})
-                  </span>
-                </div>
-              </div>
-
-              {/* Middle Contact & File Actions */}
-              <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
-                <div className="text-left md:text-right pr-2">
-                  <p className="text-[10px] text-gray-400">संपर्क व्यक्ती:</p>
-                  <p className="font-bold text-xs text-white leading-none">{item.contactPerson}</p>
-                  <p className="font-mono text-[10px] text-gray-400 mt-0.5">{item.whatsappNumber}</p>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <a 
-                    href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition"
-                    title="WhatsApp मेसेज पाठवा"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </a>
-
-                  <a 
-                    href={`tel:${item.whatsappNumber}`} 
-                    className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition"
-                    title="मुख्य नंबरवर कॉल करा"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                  </a>
-
-                  {item.alternateNumber && (
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <a 
-                      href={`tel:${item.alternateNumber}`} 
-                      className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/30 hover:bg-indigo-500 hover:text-white transition"
-                      title="पर्यायी नंबरवर कॉल करा"
+                      href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition"
+                      title="WhatsApp मेसेज पाठवा"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                    </a>
+
+                    <a 
+                      href={`tel:${item.whatsappNumber}`} 
+                      className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition"
+                      title="मुख्य नंबरवर कॉल करा"
                     >
                       <Phone className="w-3.5 h-3.5" />
                     </a>
-                  )}
 
-                  {item.fileUrl && (
-                    <button 
-                      onClick={() => { console.log("👁️ [LOG]: Opening PDF preview for:", item.fileUrl); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
-                      className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg border border-amber-500/30 hover:bg-amber-500 hover:text-black transition cursor-pointer" 
-                      title="अपलोड केलेली PDF यादी पहा"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                    {item.alternateNumber && (
+                      <a 
+                        href={`tel:${item.alternateNumber}`} 
+                        className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/30 hover:bg-indigo-500 hover:text-white transition"
+                        title="पर्यायी नंबरवर कॉल करा"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+
+                    {item.fileUrl && (
+                      <button 
+                        onClick={() => { setViewPdfTitle('मंडळाची अपलोड केलेली लेटरहेड PDF यादी'); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
+                        className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg border border-amber-500/30 hover:bg-amber-500 hover:text-black transition cursor-pointer" 
+                        title="अपलोड केलेली PDF यादी पहा"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Right Approve/Reject Trigger */}
-              <div className="flex items-center justify-between md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
-                <button 
-                  onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); }} 
-                  className="px-2.5 py-1 bg-slate-800 text-amber-400 hover:text-white border border-slate-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shrink-0"
-                >
-                  रिमार्क्स <ChevronRight className="w-3 h-3" />
-                </button>
-
-                <div className="flex items-center gap-1 shrink-0">
+                {/* Right Action Buttons */}
+                <div className="flex items-center justify-between md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
+                  
+                  {/* रिमार्क्स बटण */}
                   <button 
-                    onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); }} 
-                    className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-emerald-500 hover:text-black transition"
+                    onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+                    className="px-2.5 py-1 bg-slate-800 text-amber-400 hover:text-white border border-slate-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shrink-0"
                   >
-                    <CheckCircle className="w-3.5 h-3.5" /> Approve / Review
+                    रिमार्क्स <ChevronRight className="w-3 h-3" />
                   </button>
 
-                  <button 
-                    onClick={() => setRejectModalReq(item)} 
-                    className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-rose-500 hover:text-white transition"
-                  >
-                    <XCircle className="w-3 h-3" /> Reject
-                  </button>
-                </div>
-              </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    
+                    {isApproved ? (
+                      hasCertificate ? (
+                        <button 
+                          onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
+                          className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500 hover:text-black rounded-lg text-[10px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-md"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>जोडलेली पॉलिसी कॉपी पहा</span>
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+                          className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500 hover:text-black rounded-lg text-[10px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-md"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-amber-400" />
+                          <span>पॉलिसी फोटो / PDF अपलोड करा</span>
+                        </button>
+                      )
+                    ) : (
+                      /* 🔒 परमिशन लॉक: फक्त Insurance Dept चा युझर असेल तरच Approve/Reject दिसेल */
+                      canApproveOrReject && (
+                        <>
+                          <button 
+                            onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+                            className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-emerald-500 hover:text-black transition"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" /> Approve
+                          </button>
 
-            </div>
-          ))}
+                          <button 
+                            onClick={() => setRejectModalReq(item)} 
+                            className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-rose-500 hover:text-white transition"
+                          >
+                            <XCircle className="w-3 h-3" /> Reject
+                          </button>
+                        </>
+                      )
+                    )}
+
+                  </div>
+                </div>
+
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* ==========================================
-          📌 SECTION 7: REJECT REASON MODAL
-         ========================================== */}
-      {rejectModalReq && (
+      {/* Reject Modal */}
+      {rejectModalReq && canApproveOrReject && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#0c0d14] border border-rose-500/40 rounded-3xl w-full max-w-md p-5 space-y-4 text-white shadow-2xl">
-            
             <div className="flex justify-between items-center border-b border-slate-800 pb-2.5">
               <h3 className="text-sm font-black text-rose-400 flex items-center gap-2">
                 <XCircle className="w-4 h-4" /> विमा अर्ज नाकारण्याचे कारण
@@ -610,9 +697,7 @@ export default function InsuranceDashboard() {
 
               {selectedReason.includes("Duplicate Entry") && (
                 <div>
-                  <label className="text-[11px] font-bold text-amber-400 block mb-1">
-                    पहिल्या मूळ अर्जाचा App ID (Reference ID) टाका *
-                  </label>
+                  <label className="text-[11px] font-bold text-amber-400 block mb-1">पहिल्या मूळ अर्जाचा App ID *</label>
                   <input
                     type="text"
                     placeholder="उदा. MRDGA-INS-2026-8899"
@@ -659,9 +744,7 @@ export default function InsuranceDashboard() {
         </div>
       )}
 
-      {/* ==========================================
-          📌 SECTION 8: APPROVE / REVIEW MODAL
-         ========================================== */}
+      {/* Approve / Review Modal */}
       {selectedReq && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#0c0d14] border border-amber-500/30 rounded-3xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto text-white relative shadow-2xl">
@@ -693,36 +776,54 @@ export default function InsuranceDashboard() {
                   <p className="text-[10px] text-gray-400">जिल्हा & पिनकोड</p>
                   <p className="font-bold text-white">{selectedReq.district} ({selectedReq.pincode || '-'})</p>
                 </div>
-                <div className="mt-2">
-                  <p className="text-[10px] text-gray-400">विमा गोविंदा संख्या</p>
-                  <p className="font-bold text-amber-400 font-mono">{selectedReq.govindaCount} गोविंदा</p>
+                
+                {/* 🚩 एडिट करण्यायोग्य गोविंदा संख्या (Editable Govinda Count) */}
+                <div className="mt-2 bg-amber-500/10 p-2 rounded-xl border border-amber-500/30 col-span-2">
+                  <label className="text-[11px] font-bold text-amber-400 block mb-1 flex items-center gap-1">
+                    <Edit3 className="w-3.5 h-3.5" /> विमा गोविंदा संख्या (यादीनुसार तपासून सुधारा) *
+                  </label>
+                  <input
+                    type="number"
+                    value={editableGovindaCount}
+                    onChange={(e) => setEditableGovindaCount(e.target.value)}
+                    className="w-full bg-black border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-amber-400"
+                    placeholder="उदा. 100"
+                  />
+                  <p className="text-[9px] text-gray-400 mt-1">
+                    * युझरने टाकलेली संख्या: <b>{selectedReq.govindaCount}</b> (यादीत संख्या वेगळी असल्यास इथे बदला).
+                  </p>
                 </div>
               </div>
 
-              {/* Policy Number */}
+              {/* Policy Number (Mandatory) */}
               <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-bold text-amber-400 block">विमा पॉलिसी / सर्टिफिकेट नंबर (Policy No.):</label>
+                <label className="text-[11px] font-bold text-amber-400 block">
+                  विमा पॉलिसी / सर्टिफिकेट नंबर (Policy No.) *
+                </label>
                 <input
                   type="text"
                   placeholder="उदा. POL-2026-987654"
                   value={policyNo}
                   onChange={(e) => setPolicyNo(e.target.value)}
-                  className="w-full bg-black border border-amber-500/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                  className="w-full bg-black border border-amber-500/30 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  required
                 />
               </div>
 
               {/* Policy Certificate Upload */}
               <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-bold text-amber-400 block">विमा प्रमाणपत्र / पॉलिसी कॉपी PDF अपलोड करा (Optional):</label>
+                <label className="text-[11px] font-bold text-amber-400 block">
+                  पॉलिसी कॉपी (PDF / Image/Photo) अपलोड करा:
+                </label>
                 <input 
                   type="file" 
-                  accept="application/pdf"
+                  accept="application/pdf,image/*"
                   onChange={(e) => setPolicyCopyFile(e.target.files[0])}
                   className="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-black cursor-pointer w-full"
                 />
                 {selectedReq.certificateUrl && (
                   <p className="text-[10px] text-emerald-400 font-bold mt-1">
-                    ✓ पॉलिसी कॉपी आधीच जोडलेली आहे.
+                    ✓ पॉलिसी कॉपी आधीच जोडलेली आहे. (नवीन निवडल्यास अपडेट होईल)
                   </p>
                 )}
               </div>
@@ -762,14 +863,25 @@ export default function InsuranceDashboard() {
 
               {/* Submit Approval */}
               <div className="flex gap-2 pt-2 border-t border-slate-800">
-                <button
-                  onClick={() => handleUpdateInsurance('Approved')}
-                  disabled={submitting}
-                  className="flex-1 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 font-black border border-emerald-500/30 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
-                  मंजूर करा व नोटीफिकेशन पाठवा
-                </button>
+                {canApproveOrReject ? (
+                  <button
+                    onClick={() => handleUpdateInsurance('Approved')}
+                    disabled={submitting}
+                    className="flex-1 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 font-black border border-emerald-500/30 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
+                    {selectedReq.status === 'Approved' || selectedReq.status === 'मंजूर' ? 'अपडेट करा' : 'मंजूर करा व नोटीफिकेशन पाठवा'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleUpdateInsurance('Pending')}
+                    disabled={submitting}
+                    className="flex-1 py-2.5 bg-amber-500 text-black hover:bg-amber-400 font-black border border-amber-500/30 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
+                    रिमार्क / पॉलिसी कॉपी अपडेट करा
+                  </button>
+                )}
               </div>
 
             </div>
@@ -778,9 +890,7 @@ export default function InsuranceDashboard() {
         </div>
       )}
 
-      {/* ==========================================
-          📌 SECTION 9: INLINE PDF PREVIEW MODAL
-         ========================================== */}
+      {/* PDF View Modal */}
       {viewPdfUrl && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
           <div className="bg-[#0c0d14] border border-amber-500/40 w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
@@ -788,7 +898,7 @@ export default function InsuranceDashboard() {
             {/* Header Controls */}
             <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-xs sm:text-sm">
-                <FileText className="w-4 h-4" /> मंडळाची अपलोड केलेली लेटरहेड PDF यादी
+                <FileText className="w-4 h-4" /> {viewPdfTitle}
               </div>
 
               {/* Zoom Controls */}
@@ -827,7 +937,7 @@ export default function InsuranceDashboard() {
                       ? `https://drive.google.com/file/d/${viewPdfUrl.match(/[-\w]{25,}/)?.[0]}/preview`
                       : `https://docs.google.com/gview?url=${encodeURIComponent(viewPdfUrl)}&embedded=true`
                   }
-                  title="Insurance Letterhead PDF"
+                  title="Policy Document Viewer"
                   className="w-full h-full rounded-xl border border-slate-800"
                 />
               </div>

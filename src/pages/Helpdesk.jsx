@@ -59,30 +59,30 @@ export default function Helpdesk() {
   const [newCatTitle, setNewCatTitle] = useState("");
   const [showNewCatInput, setShowNewCatInput] = useState(false);
 
-// 🔐 1. AUTH SERVICE INTEGRATION (फक्त Super Admin चेकिंग)
-useEffect(() => {
-  const unsubscribe = authService.getCurrentUser(async (firebaseUser) => {
-    if (firebaseUser && firebaseUser.email) {
-      try {
-        const userData = await authService.getUserRole(firebaseUser.email);
-        
-        // 🛑 फक्त आणि फक्त 'Super Admin' लाच ॲक्सेस द्या
-        if (userData && userData.role === 'Super Admin') {
-          setIsSuperAdmin(true);
-        } else {
+  // 🔐 1. AUTH SERVICE INTEGRATION (फक्त Super Admin चेकिंग)
+  useEffect(() => {
+    const unsubscribe = authService.getCurrentUser(async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        try {
+          const userData = await authService.getUserRole(firebaseUser.email);
+          
+          // 🛑 फक्त आणि फक्त 'Super Admin' लाच ॲक्सेस द्या
+          if (userData && userData.role === 'Super Admin') {
+            setIsSuperAdmin(true);
+          } else {
+            setIsSuperAdmin(false);
+          }
+        } catch (err) {
+          console.error("User role check error:", err);
           setIsSuperAdmin(false);
         }
-      } catch (err) {
-        console.error("User role check error:", err);
+      } else {
         setIsSuperAdmin(false);
       }
-    } else {
-      setIsSuperAdmin(false);
-    }
-  });
+    });
 
-  return () => unsubscribe();
-}, []);
+    return () => unsubscribe();
+  }, []);
 
   // 🔄 2. READ OPTIMIZED FETCH (0 to 1 Read Strategy)
   useEffect(() => {
@@ -201,19 +201,19 @@ useEffect(() => {
         {/* 👑 HEADER BAR */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-amber-400 flex items-center gap-2">
-              <HelpCircle className="w-6 h-6 text-amber-400" /> मदत केंद्र व अधिकृत संपर्क (Helpdesk & Support)
+            <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+              <HelpCircle className="w-6 h-6 text-amber-400" /> मदत केंद्र व अधिकृत संपर्क <span className="text-slate-400 text-sm font-normal">(Helpdesk & Support)</span>
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
               MRDGA असोसिएशन, अपघात विमा व स्पर्धा मार्गदर्शनासाठी विभागवार संपर्क प्रतिनिधी
             </p>
           </div>
 
-          {/* 🟧 Admin " Add Category" Button (फक्त Super Admin लॉग इन असताना दिसेल) */}
+          {/* 🟧 Admin "Add Category" Button (फक्त Super Admin लॉग इन असताना दिसेल) */}
           {isSuperAdmin && !showNewCatInput && (
             <button
               onClick={() => setShowNewCatInput(true)}
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              className="px-4 py-2 bg-[#161822] hover:bg-[#1f2233] text-amber-400 border border-amber-500/30 font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
             >
               <Plus className="w-4 h-4" /> + कॅटेगरी जोडा (Admin)
             </button>
@@ -222,7 +222,7 @@ useEffect(() => {
 
         {/* ➕ NEW CATEGORY INPUT (झटपट नवी कॅटेगरी जोडण्यासाठी) */}
         {isSuperAdmin && showNewCatInput && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="p-4 rounded-2xl bg-[#0c0d14] border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
             <span className="text-xs font-bold text-amber-400">
               🛠️ Admin Panel: नवीन विभाग किंवा जिल्हा कॅटेगरीचे नाव टाका
             </span>
@@ -247,9 +247,9 @@ useEffect(() => {
             <section key={group.id} className="space-y-3">
               
               {/* Category Header */}
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <div>
-                  <h2 className="text-sm sm:text-base font-extrabold text-amber-400 tracking-wide flex items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-extrabold text-white tracking-wide flex items-center gap-2">
                     {group.categoryTitle}
                   </h2>
                   <p className="text-[11px] text-slate-400">{group.categoryDesc}</p>
@@ -283,29 +283,29 @@ useEffect(() => {
                   group.contacts.map((contact) => (
                     <div 
                       key={contact.id} 
-                      className="bg-[#0c0d14] p-4 rounded-2xl border border-slate-800/80 hover:border-amber-500/30 transition space-y-3 flex flex-col justify-between relative group"
+                      className="bg-[#0c0d14] p-4 rounded-2xl border border-slate-800 hover:border-slate-700 transition space-y-3 flex flex-col justify-between relative group shadow-md"
                     >
                       {/* Contact Details */}
                       <div className="space-y-1">
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5">
+                          <h3 className="font-bold text-slate-100 text-xs sm:text-sm flex items-center gap-1.5">
                             <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             {contact.name}
                           </h3>
                           {contact.district && (
-                            <span className="px-2 py-0.5 bg-slate-900 border border-slate-800 text-slate-400 text-[10px] rounded-md shrink-0 flex items-center gap-1">
+                            <span className="px-2 py-0.5 bg-slate-900 border border-slate-800 text-slate-300 text-[10px] rounded-md shrink-0 flex items-center gap-1 font-medium">
                               <MapPin className="w-2.5 h-2.5 text-amber-400" /> {contact.district}
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-amber-400/90 font-medium">{contact.role}</p>
+                        <p className="text-[11px] text-slate-400 font-medium">{contact.role}</p>
                       </div>
 
                       {/* Action Buttons: Call & WhatsApp */}
-                      <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2">
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
                         <a 
                           href={`tel:${contact.phone}`}
-                          className="flex-1 py-1.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-extrabold text-[11px] rounded-xl border border-amber-500/30 transition text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] rounded-xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                         >
                           <Phone className="w-3.5 h-3.5" /> कॉल
                         </a>
@@ -314,7 +314,7 @@ useEffect(() => {
                           href={`https://wa.me/${contact.whatsapp || contact.phone}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex-1 py-1.5 px-3 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 font-extrabold text-[11px] rounded-xl border border-emerald-500/30 transition text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-xl transition text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                         >
                           <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
                         </a>
@@ -324,7 +324,7 @@ useEffect(() => {
                           <div className="flex items-center gap-1 pl-1">
                             <button
                               onClick={() => openContactModal(group.id, contact)}
-                              className="p-1.5 bg-slate-800 text-amber-400 rounded-lg hover:bg-amber-500/20 transition cursor-pointer"
+                              className="p-1.5 bg-slate-800 text-slate-300 rounded-lg hover:text-white transition cursor-pointer"
                               title="एडिट करा"
                             >
                               <Edit className="w-3.5 h-3.5" />

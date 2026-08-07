@@ -36,7 +36,15 @@ export default function App() {
       <Routes>
         {/* 🌐 सार्वजनिक वेबसाईट राऊट्स */}
         <Route path="/" element={<Home />} />
-        <Route path="/competitions" element={<Competitions />} />
+        {/* 🚩 BUG FIXED: Competitions वर ModuleGuard जोडला आहे */}
+      <Route 
+        path="/competitions" 
+        element={
+          <ModuleGuard pageKey="competitionPage">
+            <Competitions />
+          </ModuleGuard>
+        } 
+      />
 
         {/* 🔒 Dynamic Feature Toggled Routes */}
         <Route 
