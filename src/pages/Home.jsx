@@ -13,10 +13,9 @@ import {
 } from 'lucide-react';
 
 export default function Home() {
-  //const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
 
-const [showSplash, setShowSplash] = useState(() => {
+  const [showSplash, setShowSplash] = useState(() => {
     const hasSeenSplash = sessionStorage.getItem('hasSeenSplash');
     return !hasSeenSplash;
   });
@@ -27,7 +26,8 @@ const [showSplash, setShowSplash] = useState(() => {
   };
 
   const { competitions } = useCompetitions();
-  // 💡 सर्वात लेटेस्ट किंवा LIVE असलेली स्पर्धा शोधणे
+
+  // 💡 सर्वात लेटेस्ट किंवा LIVE असलेली स्पर्धा शोधणे (मूळ लॉजिक जसेच्या तसे)
   const getActiveCompId = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     
@@ -48,15 +48,15 @@ const [showSplash, setShowSplash] = useState(() => {
     return '2026';
   };
 
+  // 🎯 मूळ handleRegisterClick लॉजिक (कोणताही बदल न करता तसाच सुरक्षित ठेवला आहे)
   const handleRegisterClick = () => {
     const activeCompId = getActiveCompId();
     navigate(`/form/${activeCompId}`);
   };
 
-
   return (
     <>
-{showSplash && <SplashScreen onFinish={handleSplashFinish} season="2026" />}
+      {showSplash && <SplashScreen onFinish={handleSplashFinish} season="2026" />}
 
       <div className="min-h-screen flex flex-col bg-[#08090d] text-white">
         <Navbar />
@@ -78,18 +78,18 @@ const [showSplash, setShowSplash] = useState(() => {
 
             <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto font-medium leading-relaxed">
               परंपरा, संस्कृती, सुरक्षितता आणि भव्यतेचा संगम! आपले मनःपूर्वक स्वागत!
-असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विविध उपक्रम, महत्त्वाच्या सूचना आणि ताज्या अपडेट्सशी सतत जोडलेले रहा..
+              असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विविध उपक्रम, महत्त्वाच्या सूचना आणि ताज्या अपडेट्सशी सतत जोडलेले रहा..
             </p>
 
             {/* CTA Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center items-center">
-            {/* 🎯 2. Updated Registration Button */}
-                <button
-                  onClick={handleRegisterClick}
-                  className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  ऑनलाइन नोंदणी करा <ChevronRight className="w-5 h-5" />
-                </button>
+              {/* 🎯 अपडेट केलेले विमा अर्ज बटण */}
+              <button
+                onClick={() => navigate('/insurance-info')}
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                ऑनलाइन विमा अर्ज करा <ChevronRight className="w-5 h-5" />
+              </button>
 
               <Link
                 to="/about"
@@ -123,7 +123,7 @@ const [showSplash, setShowSplash] = useState(() => {
             <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0"><Trophy className="w-7 h-7" /></div>
             <div>
               <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">रजिस्ट्रेशन मुदत</p>
-              <p className="text-base font-black text-white"> जुलै पासून सुरु</p>
+              <p className="text-base font-black text-amber-400">लवकरच जाहीर केली जाईल</p>
             </div>
           </div>
         </div>
@@ -221,7 +221,7 @@ const [showSplash, setShowSplash] = useState(() => {
         </div>
 
         <Footer />
-          <InstallPWAButton />
+        <InstallPWAButton />
 
       </div>
     </>
