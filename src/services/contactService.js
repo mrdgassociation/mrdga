@@ -10,7 +10,7 @@ export const contactService = {
     // A. आधी कॅश (Cache) मधून डेटा तपासा
     const cachedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (cachedData) {
-      console.log("⚡ [CONTACTS] Loaded from LocalCache (0 Reads)");
+      //console.log("⚡ [CONTACTS] Loaded from LocalCache (0 Reads)");
       // बॅकग्राउंडला किंवा कॅशमधील डेटा लगेच रिटर्न करा
     }
 

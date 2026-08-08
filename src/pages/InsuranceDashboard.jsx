@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase/config';
 import { collection, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { authService } from '../services/authService';
-import { notificationService } from '../services/notificationService'; // 🔔 Notification Integration
 import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
@@ -41,7 +40,7 @@ export default function InsuranceDashboard() {
   // Review / Approve Modal States
   const [selectedReq, setSelectedReq] = useState(null);
   const [policyNo, setPolicyNo] = useState('');
-  const [editableGovindaCount, setEditableGovindaCount] = useState(''); // 🚩 गोविंदा संख्या Edit स्टेट
+  const [editableGovindaCount, setEditableGovindaCount] = useState('');
   const [policyCopyFile, setPolicyCopyFile] = useState(null);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -67,12 +66,10 @@ export default function InsuranceDashboard() {
   // 📌 SECTION 3: DATA FETCHING & AUTH LIFECYCLE
   // ==========================================
   const loadInsuranceRequests = async () => {
-    console.log("🔍 [LOG]: Fetching insurance requests from Firestore collection 'insurance_requests_2026'...");
     setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
       const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log(`✅ [LOG]: Successfully loaded ${list.length} insurance records.`);
       setInsurances(list || []);
     } catch (err) {
       console.error("❌ [ERROR]: Error fetching insurance data:", err);
@@ -82,16 +79,13 @@ export default function InsuranceDashboard() {
   };
 
   useEffect(() => {
-    console.log("🚀 [LOG]: Subscribing to Auth State Listener...");
     const unsubscribe = authService.getCurrentUser(async (user) => {
       if (user) {
-        console.log("👤 [LOG]: Current Admin Email:", user.email);
         setUserEmail(user.email || '');
         setUserName(user.displayName || user.email.split('@')[0]);
         try {
           const userDoc = await authService.getUserRole(user.email);
           if (userDoc) {
-            console.log("🔑 [LOG]: Fetched Role/Dept:", userDoc.role, userDoc.department);
             if (userDoc.role) setUserRole(userDoc.role);
             if (userDoc.department) setUserDepartment(userDoc.department);
           }
@@ -100,7 +94,6 @@ export default function InsuranceDashboard() {
         }
         loadInsuranceRequests();
       } else {
-        console.warn("⚠️ [LOG]: No authenticated admin found. Stopping loader.");
         setLoading(false);
       }
     });
@@ -109,13 +102,11 @@ export default function InsuranceDashboard() {
 
   const hasInsuranceAccess = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'INSURANCE' || userDepartment === 'MRDGA';
 
-  // 🔒 परमिशन चेकिंग: फक्त INSURANCE डिपार्टमेंट मधील युझर्सनाच Approve/Reject चा अधिकार असेल
- // 🔒 सुधारित अचूक परमिशन लॉजिक
-const canApproveOrReject = 
-  userDepartment === 'INSURANCE' || 
-  (userDepartment === 'SUPER' && userRole === 'Super Admin') || 
-  (userDepartment === 'MRDGA' && userRole === 'Super Admin') || 
-  (userDepartment === 'MRDGA' && userRole === 'Admin');
+  const canApproveOrReject = 
+    userDepartment === 'INSURANCE' || 
+    (userDepartment === 'SUPER' && userRole === 'Super Admin') || 
+    (userDepartment === 'MRDGA' && userRole === 'Super Admin') || 
+    (userDepartment === 'MRDGA' && userRole === 'Admin');
 
   // ==========================================
   // 📌 SECTION 4: HELPER FUNCTIONS (PDF & ZOOM)
@@ -124,7 +115,6 @@ const canApproveOrReject =
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 25, 75));
   const handleResetZoom = () => setZoomLevel(100);
 
-  // 🗜️ Auto-Compressor Function
   const convertFileToBase64 = async (file) => {
     if (file.type.startsWith('image/')) {
       return new Promise((resolve, reject) => {
@@ -202,21 +192,21 @@ const canApproveOrReject =
       case 'Approved':
       case 'मंजूर':
       case 'मंजूर (Approved)':
-        return <span className="px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border-emerald-500/30">मंजूर (Approved)</span>;
+        return <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-600/40">मंजूर (Approved)</span>;
       case 'Rejected':
       case 'नामंजूर':
       case 'नामंजूर (Rejected)':
-        return <span className="px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider bg-rose-500/10 text-rose-400 border-rose-500/30">नामंजूर (Rejected)</span>;
+        return <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-rose-950/80 text-rose-400 border border-rose-600/40">नामंजूर (Rejected)</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider bg-amber-500/10 text-amber-400 border-amber-500/30">प्रलंबित (Pending)</span>;
+        return <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-amber-950/80 text-amber-300 border border-amber-600/40">प्रलंबित (Pending)</span>;
     }
   };
 
   // ==========================================
-  // 📌 SECTION 5: ACTION HANDLERS (REJECT & APPROVE)
+  // 📌 SECTION 5: ACTION HANDLERS (NO NOTIFICATIONS)
   // ==========================================
 
-  // 🛑 REJECT HANDLER
+  // 🛑 REJECT HANDLER (Notification Logic Completely Removed)
   const handleConfirmReject = async () => {
     if (!canApproveOrReject) {
       Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग (Insurance Department) मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
@@ -256,23 +246,9 @@ const canApproveOrReject =
         })
       });
 
-      try {
-        await notificationService.sendNotification({
-          title: "🛑 गोविंदा विमा अर्ज नामंजूर",
-          message: `${rejectModalReq.teamName} चा विमा अर्ज नामंजूर झाला आहे. कारण: ${finalReason}. कृपया My Status वर जाऊन सुधारित फाईल अपलोड करा.`,
-          category: "REGISTRATION",
-          targetGroup: "ALL",
-          userEmail: rejectModalReq.email,
-          appId: rejectModalReq.appId,
-          type: "INSURANCE_REJECTED"
-        });
-      } catch (notifErr) {
-        console.error("Notification trigger failed:", notifErr);
-      }
-
       Swal.fire({
         icon: 'success',
-        title: 'अर्ज नाकारण्यात आला व नोटीफिकेशन पाठवले!',
+        title: 'अर्ज नाकारण्यात आला!',
         timer: 1500,
         showConfirmButton: false,
         background: '#0c0d14',
@@ -293,7 +269,7 @@ const canApproveOrReject =
     }
   };
 
-  // 🟢 APPROVE / UPDATE HANDLER
+  // 🟢 APPROVE / UPDATE HANDLER (Notification Logic Completely Removed)
   const handleUpdateInsurance = async (rawStatusInput) => {
     if (!selectedReq) return;
 
@@ -301,13 +277,11 @@ const canApproveOrReject =
       ? 'Approved' 
       : 'Pending';
 
-    // 🔒 परमिशन गार्ड
     if (cleanStatus === 'Approved' && !canApproveOrReject) {
       Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग (Insurance Department) मधील अधिकारीच अर्ज Approve करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
       return;
     }
 
-    // 🚩 पॉलिसी नंबर Mandatory चेक
     const finalPolicyNo = policyNo.trim() || selectedReq.policyNumber || '';
     if (cleanStatus === 'Approved' && !finalPolicyNo) {
       Swal.fire({
@@ -360,7 +334,7 @@ const canApproveOrReject =
       const updateData = {
         status: cleanStatus,
         policyNumber: finalPolicyNo,
-        govindaCount: Number(editableGovindaCount) || selectedReq.govindaCount || 0, // 🚩 एडिट केलेली नवीन गोविंदा संख्या सेव्ह करा
+        govindaCount: Number(editableGovindaCount) || selectedReq.govindaCount || 0,
         certificateUrl: uploadedCertificateUrl
       };
 
@@ -376,22 +350,6 @@ const canApproveOrReject =
       }
 
       await updateDoc(docRef, updateData);
-
-      if (cleanStatus === 'Approved') {
-        try {
-          await notificationService.sendNotification({
-            title: "🎉 गोविंदा विमा अर्ज मंजूर!",
-            message: `${selectedReq.teamName} चा विमा अर्ज मंजूर झाला आहे. सुधारित गोविंदा संख्या: ${updateData.govindaCount}, पॉलिसी क्र: ${finalPolicyNo}.`,
-            category: "REGISTRATION",
-            targetGroup: "ALL",
-            userEmail: selectedReq.email,
-            appId: selectedReq.appId,
-            type: "INSURANCE_APPROVED"
-          });
-        } catch (notifErr) {
-          console.error("Approval notification failed:", notifErr);
-        }
-      }
 
       Swal.fire({
         icon: 'success',
@@ -420,7 +378,7 @@ const canApproveOrReject =
       <div className="p-8 text-center space-y-3 font-sans">
         <Lock className="w-10 h-10 text-rose-500 mx-auto" />
         <h2 className="text-base font-bold text-white">तुम्हाला या डॅशबोर्डचा ॲक्सेस नाही.</h2>
-        <p className="text-xs text-gray-400">हे डॅशबोर्ड फक्त विमा व्यवस्थापन टीमसाठी आहे.</p>
+        <p className="text-xs text-slate-400">हे डॅशबोर्ड फक्त विमा व्यवस्थापन टीमसाठी आहे.</p>
       </div>
     );
   }
@@ -446,23 +404,23 @@ const canApproveOrReject =
   });
 
   return (
-    <div className="space-y-3 max-w-7xl mx-auto px-1 py-1 font-sans">
+    <div className="space-y-4 max-w-7xl mx-auto px-2 py-2 font-sans text-slate-100">
       
-      {/* Header Banner */}
-      <div className="flex justify-between items-center bg-black/50 border border-amber-500/20 p-3 rounded-2xl backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
-            <ShieldCheck className="w-4 h-4" />
+      {/* Header Banner - High Contrast Clean */}
+      <div className="flex justify-between items-center bg-slate-900 border border-slate-700/80 p-3.5 rounded-2xl shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xs sm:text-sm font-black text-white leading-tight flex items-center gap-1.5">
+            <h2 className="text-sm sm:text-base font-bold text-white leading-tight flex items-center gap-2">
               गोविंदा विमा <span className="text-amber-400">व्यवस्थापन</span>
-              <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded font-extrabold uppercase">
+              <span className="text-[10px] px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-300 rounded font-semibold uppercase">
                 {userDepartment} ({userRole})
               </span>
             </h2>
-            <p className="text-[10px] text-gray-400">
-              एकूण अर्ज: <b className="text-amber-400 font-bold">{requests.length}</b> 
+            <p className="text-xs text-slate-300 mt-0.5">
+              एकूण अर्ज: <b className="text-white font-bold">{requests.length}</b> 
               {statusFilter !== 'ALL' && ` • फिल्टर केलेले: ${filteredRequests.length}`}
             </p>
           </div>
@@ -470,32 +428,32 @@ const canApproveOrReject =
 
         <button 
           onClick={loadInsuranceRequests} 
-          className="p-1.5 sm:px-3 sm:py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-xs rounded-xl flex items-center gap-1 transition cursor-pointer"
+          className="p-2 sm:px-3.5 sm:py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline">रिफ्रेश</span>
         </button>
       </div>
 
       {/* Search & Filters */}
-      <div className="glass-panel p-2 rounded-2xl flex flex-col sm:flex-row gap-2 bg-black/40 border border-slate-800">
+      <div className="p-2.5 rounded-2xl flex flex-col sm:flex-row gap-2.5 bg-slate-900 border border-slate-800">
         <div className="flex-1 relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-400/60" />
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
           <input
             type="text"
             placeholder="मंडळाचे नाव, App ID किंवा फोन नंबरने शोधा..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-black/60 border border-amber-500/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-amber-400/50"
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
           />
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Filter className="w-3.5 h-3.5 text-amber-400/60 shrink-0 ml-1" />
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-auto bg-black/60 border border-amber-500/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400/50"
+            className="w-full sm:w-auto bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400"
           >
             <option value="ALL" className="bg-[#0c0d14]">सर्व अर्ज (Status)</option>
             <option value="Pending" className="bg-[#0c0d14]">प्रलंबित (Pending)</option>
@@ -505,13 +463,13 @@ const canApproveOrReject =
         </div>
       </div>
 
-      {/* Cards List */}
+      {/* Cards List - High Legibility Dark UI */}
       {loading ? (
         <p className="p-8 text-center text-amber-400 font-semibold text-xs animate-pulse">डेटा लोड होत आहे...</p>
       ) : filteredRequests.length === 0 ? (
-        <p className="p-8 text-center text-gray-400 text-xs font-medium">कोणताही विमा अर्ज सापडला नाही.</p>
+        <p className="p-8 text-center text-slate-400 text-xs font-medium">कोणताही विमा अर्ज सापडला नाही.</p>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {filteredRequests.map((item) => {
             const isApproved = item.status === 'Approved' || item.status === 'मंजूर' || item.status?.includes('मंजूर');
             const hasCertificate = !!item.certificateUrl;
@@ -519,140 +477,138 @@ const canApproveOrReject =
             return (
               <div 
                 key={item.id}
-                className="glass-panel p-3 rounded-2xl border border-amber-500/20 bg-black/40 hover:border-amber-500/40 transition shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3"
+                className="p-4 rounded-2xl border border-slate-800 bg-[#0e1017] hover:border-slate-700 transition shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3.5"
               >
                 {/* Left Details */}
-                <div className="space-y-1 flex-1">
+                <div className="space-y-1.5 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    <span className="text-xs font-mono font-semibold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-700/40">
                       #{item.appId}
                     </span>
                     
                     {getStatusBadge(item.status)}
 
                     {item.policyNumber && (
-                      <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                      <span className="text-xs font-mono font-semibold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/40">
                         पॉलिसी: {item.policyNumber}
                       </span>
                     )}
                   </div>
 
-                  <h3 className="font-extrabold text-xs sm:text-sm text-white leading-tight">{item.teamName}</h3>
+                  {/* स्पष्ट आणि ठळक मंडळाचे नाव */}
+                  <h3 className="font-extrabold text-sm sm:text-base text-white tracking-wide leading-snug">
+                    {item.teamName}
+                  </h3>
 
-                  <div className="flex items-center gap-3 text-[11px] text-gray-300 flex-wrap">
+                  <div className="flex items-center gap-3 text-xs text-slate-300 flex-wrap">
                     <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-amber-400 shrink-0" /> {item.district} ({item.pincode || '-'})
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {item.district} ({item.pincode || '-'})
                     </span>
                     <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3 text-amber-400 shrink-0" /> {item.category || 'Mens'}
+                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {item.category || 'Mens'}
                     </span>
-                    <span className="flex items-center gap-1 text-amber-300 font-bold font-mono">
-                      <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" /> {item.govindaCount} गोविंदा ({item.pyramidCapacity})
+                    <span className="flex items-center gap-1 text-amber-300 font-semibold font-mono">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {item.govindaCount} गोविंदा ({item.pyramidCapacity})
                     </span>
                   </div>
                 </div>
 
                 {/* Middle Contact & File Actions */}
-                <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
+                <div className="flex items-center justify-between md:justify-end gap-3 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800">
                   <div className="text-left md:text-right pr-2">
-                    <p className="text-[10px] text-gray-400">संपर्क व्यक्ती:</p>
-                    <p className="font-bold text-xs text-white leading-none">{item.contactPerson}</p>
-                    <p className="font-mono text-[10px] text-gray-400 mt-0.5">{item.whatsappNumber}</p>
+                    <p className="text-[11px] text-slate-400 font-medium">संपर्क व्यक्ती:</p>
+                    <p className="font-bold text-xs sm:text-sm text-white">{item.contactPerson}</p>
+                    <p className="font-mono text-xs text-slate-300 mt-0.5">{item.whatsappNumber}</p>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <a 
                       href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
                       target="_blank" 
                       rel="noreferrer" 
-                      className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition"
+                      className="p-2 bg-slate-800 text-emerald-400 rounded-xl border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
                       title="WhatsApp मेसेज पाठवा"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
+                      <MessageSquare className="w-4 h-4" />
                     </a>
 
                     <a 
                       href={`tel:${item.whatsappNumber}`} 
-                      className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition"
+                      className="p-2 bg-slate-800 text-blue-400 rounded-xl border border-slate-700 hover:bg-blue-600 hover:text-white transition"
                       title="मुख्य नंबरवर कॉल करा"
                     >
-                      <Phone className="w-3.5 h-3.5" />
+                      <Phone className="w-4 h-4" />
                     </a>
 
                     {item.alternateNumber && (
                       <a 
                         href={`tel:${item.alternateNumber}`} 
-                        className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/30 hover:bg-indigo-500 hover:text-white transition"
+                        className="p-2 bg-slate-800 text-indigo-400 rounded-xl border border-slate-700 hover:bg-indigo-600 hover:text-white transition"
                         title="पर्यायी नंबरवर कॉल करा"
                       >
-                        <Phone className="w-3.5 h-3.5" />
+                        <Phone className="w-4 h-4" />
                       </a>
                     )}
 
                     {item.fileUrl && (
                       <button 
                         onClick={() => { setViewPdfTitle('मंडळाची अपलोड केलेली लेटरहेड PDF यादी'); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
-                        className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg border border-amber-500/30 hover:bg-amber-500 hover:text-black transition cursor-pointer" 
+                        className="p-2 bg-slate-800 text-amber-300 rounded-xl border border-slate-700 hover:bg-amber-500 hover:text-black transition cursor-pointer" 
                         title="अपलोड केलेली PDF यादी पहा"
                       >
-                        <FileText className="w-3.5 h-3.5" />
+                        <FileText className="w-4 h-4" />
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Right Action Buttons */}
-                <div className="flex items-center justify-between md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
-                  
-                  {/* रिमार्क्स बटण */}
+                <div className="flex items-center justify-between md:justify-end gap-2 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800">
                   <button 
                     onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                    className="px-2.5 py-1 bg-slate-800 text-amber-400 hover:text-white border border-slate-700 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shrink-0"
+                    className="px-3 py-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer shrink-0"
                   >
-                    रिमार्क्स <ChevronRight className="w-3 h-3" />
+                    रिमार्क्स <ChevronRight className="w-3.5 h-3.5" />
                   </button>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {isApproved ? (
                       hasCertificate ? (
                         <button 
                           onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
-                          className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500 hover:text-black rounded-lg text-[10px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-md"
+                          className="px-3 py-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
                         >
-                          <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>जोडलेली पॉलिसी कॉपी पहा</span>
+                          <Eye className="w-4 h-4 text-emerald-400" />
+                          <span>पॉलिसी कॉपी पहा</span>
                         </button>
                       ) : (
                         <button 
                           onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                          className="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500 hover:text-black rounded-lg text-[10px] font-extrabold flex items-center gap-1.5 cursor-pointer transition shadow-md"
+                          className="px-3 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
                         >
-                          <Camera className="w-3.5 h-3.5 text-amber-400" />
-                          <span>पॉलिसी फोटो / PDF अपलोड करा</span>
+                          <Camera className="w-4 h-4 text-amber-400" />
+                          <span>पॉलिसी अपलोड करा</span>
                         </button>
                       )
                     ) : (
-                      /* 🔒 परमिशन लॉक: फक्त Insurance Dept चा युझर असेल तरच Approve/Reject दिसेल */
                       canApproveOrReject && (
                         <>
                           <button 
                             onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                            className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-emerald-500 hover:text-black transition"
+                            className="px-3 py-1.5 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition"
                           >
-                            <CheckCircle className="w-3.5 h-3.5" /> Approve
+                            <CheckCircle className="w-4 h-4" /> Approve
                           </button>
 
                           <button 
                             onClick={() => setRejectModalReq(item)} 
-                            className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-rose-500 hover:text-white transition"
+                            className="px-2.5 py-1.5 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition"
                           >
-                            <XCircle className="w-3 h-3" /> Reject
+                            <XCircle className="w-3.5 h-3.5" /> Reject
                           </button>
                         </>
                       )
                     )}
-
                   </div>
                 </div>
 
@@ -665,9 +621,9 @@ const canApproveOrReject =
       {/* Reject Modal */}
       {rejectModalReq && canApproveOrReject && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#0c0d14] border border-rose-500/40 rounded-3xl w-full max-w-md p-5 space-y-4 text-white shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2.5">
-              <h3 className="text-sm font-black text-rose-400 flex items-center gap-2">
+          <div className="bg-[#0c0d14] border border-slate-700 rounded-3xl w-full max-w-md p-5 space-y-4 text-white shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2">
                 <XCircle className="w-4 h-4" /> विमा अर्ज नाकारण्याचे कारण
               </h3>
               <button onClick={() => { setRejectModalReq(null); setDuplicateRefId(''); }} className="p-1 text-slate-400 hover:text-white cursor-pointer">
@@ -675,17 +631,17 @@ const canApproveOrReject =
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <p className="text-slate-300">
-                मंडळ: <strong className="text-white">{rejectModalReq.teamName}</strong> (App ID: <span className="font-mono text-amber-400">{rejectModalReq.appId}</span>)
+            <div className="space-y-3 text-xs sm:text-sm">
+              <p className="text-slate-200">
+                मंडळ: <strong className="text-white font-bold">{rejectModalReq.teamName}</strong> (App ID: <span className="font-mono text-amber-300">{rejectModalReq.appId}</span>)
               </p>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-300 block mb-1">कारण निवडा (Select Reason) *</label>
+                <label className="text-xs font-bold text-slate-300 block mb-1">कारण निवडा (Select Reason) *</label>
                 <select
                   value={selectedReason}
                   onChange={(e) => setSelectedReason(e.target.value)}
-                  className="w-full bg-black border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500"
                 >
                   {PREDEFINED_REJECT_REASONS.map((reason, idx) => (
                     <option key={idx} value={reason} className="bg-[#0c0d14]">
@@ -697,26 +653,26 @@ const canApproveOrReject =
 
               {selectedReason.includes("Duplicate Entry") && (
                 <div>
-                  <label className="text-[11px] font-bold text-amber-400 block mb-1">पहिल्या मूळ अर्जाचा App ID *</label>
+                  <label className="text-xs font-bold text-amber-300 block mb-1">पहिल्या मूळ अर्जाचा App ID *</label>
                   <input
                     type="text"
                     placeholder="उदा. MRDGA-INS-2026-8899"
                     value={duplicateRefId}
                     onChange={(e) => setDuplicateRefId(e.target.value)}
-                    className="w-full bg-black border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-amber-400"
                   />
                 </div>
               )}
 
               {selectedReason === "इतर कारण (कस्टम टाईप करा)" && (
                 <div>
-                  <label className="text-[11px] font-bold text-slate-300 block mb-1">विशिष्ट कारण टाईप करा *</label>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">विशिष्ट कारण टाईप करा *</label>
                   <textarea
                     rows={2}
                     placeholder="उदा. फोटो अस्पष्ट आहे, सही जुळत नाही..."
                     value={customReason}
                     onChange={(e) => setCustomReason(e.target.value)}
-                    className="w-full bg-black border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500"
                   />
                 </div>
               )}
@@ -726,7 +682,7 @@ const canApproveOrReject =
               <button
                 type="button"
                 onClick={() => { setRejectModalReq(null); setDuplicateRefId(''); }}
-                className="flex-1 py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                className="flex-1 py-2 bg-slate-800 text-slate-300 font-semibold text-xs sm:text-sm rounded-xl cursor-pointer"
               >
                 रद्द करा
               </button>
@@ -734,7 +690,7 @@ const canApproveOrReject =
                 type="button"
                 disabled={submitting}
                 onClick={handleConfirmReject}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm rounded-xl transition cursor-pointer"
               >
                 {submitting ? 'सबमिट होत आहे...' : 'खात्री करा व Reject करा'}
               </button>
@@ -747,57 +703,56 @@ const canApproveOrReject =
       {/* Approve / Review Modal */}
       {selectedReq && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#0c0d14] border border-amber-500/30 rounded-3xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto text-white relative shadow-2xl">
+          <div className="bg-[#0c0d14] border border-slate-700 rounded-3xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto text-white relative shadow-2xl">
             
             <div className="flex justify-between items-start border-b border-slate-800 pb-3">
               <div>
-                <span className="text-[10px] font-mono text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                <span className="text-xs font-mono text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-700/40">
                   #{selectedReq.appId}
                 </span>
-                <h3 className="text-base font-black text-white mt-1">{selectedReq.teamName}</h3>
+                <h3 className="text-base font-extrabold text-white mt-1">{selectedReq.teamName}</h3>
               </div>
-              <button onClick={() => setSelectedReq(null)} className="p-1.5 bg-slate-800 text-gray-400 hover:text-white rounded-xl cursor-pointer">
+              <button onClick={() => setSelectedReq(null)} className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 grid grid-cols-2 gap-2">
+            <div className="space-y-3 text-xs sm:text-sm">
+              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-gray-400">संपर्क व्यक्ती</p>
+                  <p className="text-xs text-slate-400">संपर्क व्यक्ती</p>
                   <p className="font-bold text-white">{selectedReq.contactPerson}</p>
-                  <p className="font-mono text-gray-400">{selectedReq.whatsappNumber}</p>
+                  <p className="font-mono text-slate-300">{selectedReq.whatsappNumber}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-400">पर्यायी नंबर</p>
+                  <p className="text-xs text-slate-400">पर्यायी नंबर</p>
                   <p className="font-bold text-white">{selectedReq.alternateNumber || '-'}</p>
                 </div>
                 <div className="mt-2">
-                  <p className="text-[10px] text-gray-400">जिल्हा & पिनकोड</p>
+                  <p className="text-xs text-slate-400">जिल्हा & पिनकोड</p>
                   <p className="font-bold text-white">{selectedReq.district} ({selectedReq.pincode || '-'})</p>
                 </div>
                 
-                {/* 🚩 एडिट करण्यायोग्य गोविंदा संख्या (Editable Govinda Count) */}
-                <div className="mt-2 bg-amber-500/10 p-2 rounded-xl border border-amber-500/30 col-span-2">
-                  <label className="text-[11px] font-bold text-amber-400 block mb-1 flex items-center gap-1">
-                    <Edit3 className="w-3.5 h-3.5" /> विमा गोविंदा संख्या (यादीनुसार तपासून सुधारा) *
+                <div className="mt-2 bg-slate-950 p-2.5 rounded-xl border border-slate-700 col-span-2">
+                  <label className="text-xs font-bold text-amber-300 block mb-1 flex items-center gap-1">
+                    <Edit3 className="w-4 h-4" /> विमा गोविंदा संख्या (यादीनुसार तपासून सुधारा) *
                   </label>
                   <input
                     type="number"
                     value={editableGovindaCount}
                     onChange={(e) => setEditableGovindaCount(e.target.value)}
-                    className="w-full bg-black border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono font-bold focus:outline-none focus:border-amber-400"
                     placeholder="उदा. 100"
                   />
-                  <p className="text-[9px] text-gray-400 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1">
                     * युझरने टाकलेली संख्या: <b>{selectedReq.govindaCount}</b> (यादीत संख्या वेगळी असल्यास इथे बदला).
                   </p>
                 </div>
               </div>
 
               {/* Policy Number (Mandatory) */}
-              <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-bold text-amber-400 block">
+              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-1.5">
+                <label className="text-xs font-bold text-amber-300 block">
                   विमा पॉलिसी / सर्टिफिकेट नंबर (Policy No.) *
                 </label>
                 <input
@@ -805,48 +760,48 @@ const canApproveOrReject =
                   placeholder="उदा. POL-2026-987654"
                   value={policyNo}
                   onChange={(e) => setPolicyNo(e.target.value)}
-                  className="w-full bg-black border border-amber-500/30 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400 font-mono"
                   required
                 />
               </div>
 
               {/* Policy Certificate Upload */}
-              <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-bold text-amber-400 block">
+              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-1.5">
+                <label className="text-xs font-bold text-amber-300 block">
                   पॉलिसी कॉपी (PDF / Image/Photo) अपलोड करा:
                 </label>
                 <input 
                   type="file" 
                   accept="application/pdf,image/*"
                   onChange={(e) => setPolicyCopyFile(e.target.files[0])}
-                  className="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-black cursor-pointer w-full"
+                  className="text-xs text-slate-300 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-black cursor-pointer w-full"
                 />
                 {selectedReq.certificateUrl && (
-                  <p className="text-[10px] text-emerald-400 font-bold mt-1">
+                  <p className="text-xs text-emerald-400 font-bold mt-1">
                     ✓ पॉलिसी कॉपी आधीच जोडलेली आहे. (नवीन निवडल्यास अपडेट होईल)
                   </p>
                 )}
               </div>
 
               {/* Officer Remarks */}
-              <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 space-y-2">
-                <p className="text-[11px] font-bold text-amber-400 border-b border-slate-800 pb-1">
+              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-2">
+                <p className="text-xs font-bold text-amber-300 border-b border-slate-800 pb-1">
                   अधिकारी ट्रॅकिंग नोट्स / रिमार्क्स ({selectedReq.comments?.length || 0})
                 </p>
 
                 <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
                   {selectedReq.comments && selectedReq.comments.length > 0 ? (
                     selectedReq.comments.map((c, i) => (
-                      <div key={c.id || i} className="bg-black/60 p-2 rounded-xl border border-white/5 text-[11px]">
-                        <div className="flex justify-between items-center text-[9px] text-gray-400">
-                          <span className="font-bold text-amber-400">{c.byName} ({c.role})</span>
+                      <div key={c.id || i} className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs">
+                        <div className="flex justify-between items-center text-[10px] text-slate-400">
+                          <span className="font-bold text-amber-300">{c.byName} ({c.role})</span>
                           <span>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('mr-IN') : ''}</span>
                         </div>
-                        <p className="text-gray-200 mt-0.5">{c.text}</p>
+                        <p className="text-slate-200 mt-0.5">{c.text}</p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-[10px] text-gray-500 italic">अद्याप कोणताही रिमार्क जोडलेला नाही.</p>
+                    <p className="text-xs text-slate-500 italic">अद्याप कोणताही रिमार्क जोडलेला नाही.</p>
                   )}
                 </div>
 
@@ -856,7 +811,7 @@ const canApproveOrReject =
                     placeholder="उदा. प्रिमियम भरला, पॉलिसी जनरेट झाली..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    className="flex-1 bg-black border border-amber-500/20 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400"
                   />
                 </div>
               </div>
@@ -867,16 +822,16 @@ const canApproveOrReject =
                   <button
                     onClick={() => handleUpdateInsurance('Approved')}
                     disabled={submitting}
-                    className="flex-1 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 font-black border border-emerald-500/30 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
-                    {selectedReq.status === 'Approved' || selectedReq.status === 'मंजूर' ? 'अपडेट करा' : 'मंजूर करा व नोटीफिकेशन पाठवा'}
+                    {selectedReq.status === 'Approved' || selectedReq.status === 'मंजूर' ? 'अपडेट करा' : 'मंजूर करा'}
                   </button>
                 ) : (
                   <button
                     onClick={() => handleUpdateInsurance('Pending')}
                     disabled={submitting}
-                    className="flex-1 py-2.5 bg-amber-500 text-black hover:bg-amber-400 font-black border border-amber-500/30 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2.5 bg-amber-500 text-black hover:bg-amber-400 font-extrabold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
                     रिमार्क / पॉलिसी कॉपी अपडेट करा
@@ -893,20 +848,20 @@ const canApproveOrReject =
       {/* PDF View Modal */}
       {viewPdfUrl && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-[#0c0d14] border border-amber-500/40 w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+          <div className="bg-[#0c0d14] border border-slate-700 w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
             
             {/* Header Controls */}
             <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs sm:text-sm">
-                <FileText className="w-4 h-4" /> {viewPdfTitle}
+              <div className="flex items-center gap-2 text-slate-200 font-bold text-xs sm:text-sm">
+                <FileText className="w-4 h-4 text-amber-400" /> {viewPdfTitle}
               </div>
 
               {/* Zoom Controls */}
-              <div className="flex items-center gap-1.5 bg-black/60 border border-slate-800 rounded-xl px-2 py-1">
+              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1">
                 <button onClick={handleZoomOut} title="Zoom Out" className="p-1 text-slate-300 hover:text-amber-400 transition cursor-pointer">
                   <ZoomOut className="w-4 h-4" />
                 </button>
-                <span className="font-mono text-xs text-amber-400 font-bold px-1 min-w-[45px] text-center">
+                <span className="font-mono text-xs text-amber-300 font-bold px-1 min-w-[45px] text-center">
                   {zoomLevel}%
                 </span>
                 <button onClick={handleZoomIn} title="Zoom In" className="p-1 text-slate-300 hover:text-amber-400 transition cursor-pointer">

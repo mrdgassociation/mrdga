@@ -44,7 +44,7 @@ export async function uploadToImgBB(file) {
     const data = await response.json();
 
     if (data.success) {
-      console.log("📸 ImgBB Direct Image Link:", data.data.url);
+    //  console.log("📸 ImgBB Direct Image Link:", data.data.url);
       return data.data.url;
     } else {
       console.warn("⚠️ ImgBB Error! Fallback to Base64:", data.error?.message);
@@ -58,12 +58,12 @@ export async function uploadToImgBB(file) {
 
 // 🎯 Fetch Single Competition Details
 export const getCompetitionDetails = async (compId) => {
-  console.log("==========================================");
-  console.log("🔍 [FETCH COMP DETAIL] Target ID:", compId);
+  //console.log("==========================================");
+  //console.log("🔍 [FETCH COMP DETAIL] Target ID:", compId);
 
   try {
     if (!compId || compId === '2026' || compId === '2025' || compId === '2027') {
-      console.log("ℹ️ [FETCH COMP DETAIL] General Year Form Detected:", compId);
+      //console.log("ℹ️ [FETCH COMP DETAIL] General Year Form Detected:", compId);
       return {
         title: "महाराष्ट्र राज्य दहीहंडी असोसिएशन अधिकृत नोंदणी",
         season: compId || "2026",
@@ -75,17 +75,17 @@ export const getCompetitionDetails = async (compId) => {
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      console.log("✅ [FETCH COMP DETAIL] Found by Doc ID:", docSnap.data());
+      //console.log("✅ [FETCH COMP DETAIL] Found by Doc ID:", docSnap.data());
       return docSnap.data();
     }
 
-    console.log("🔎 [FETCH COMP DETAIL] Querying by competitionId field...");
+    //console.log("🔎 [FETCH COMP DETAIL] Querying by competitionId field...");
     const q = query(collection(db, 'competitions'), where('competitionId', '==', compId));
     const querySnap = await getDocs(q);
 
     if (!querySnap.empty) {
       const foundData = querySnap.docs[0].data();
-      console.log("✅ [FETCH COMP DETAIL] Found by competitionId Query:", foundData);
+      //console.log("✅ [FETCH COMP DETAIL] Found by competitionId Query:", foundData);
       return foundData;
     }
 
@@ -104,8 +104,8 @@ export const getCompetitionDetails = async (compId) => {
 
 // 🎯 SECTION: Fetch All Competitions List (Latest First)
 export const getAllCompetitions = async () => {
-  console.log("==========================================");
-  console.log("🔍 [getAllCompetitions] Fetching all competitions from Firestore...");
+  //console.log("==========================================");
+  //console.log("🔍 [getAllCompetitions] Fetching all competitions from Firestore...");
   try {
     const querySnapshot = await getDocs(collection(db, 'competitions'));
     const list = [];
@@ -116,7 +116,7 @@ export const getAllCompetitions = async () => {
     // 💡 Latest Competitions Top ला दाखवण्यासाठी Sorting
     list.sort((a, b) => (b.startDate || b.competitionId || '').localeCompare(a.startDate || a.competitionId || ''));
 
-    console.log("📊 [getAllCompetitions] Sorted List:", list);
+   // console.log("📊 [getAllCompetitions] Sorted List:", list);
     return list;
   } catch (err) {
     console.error("❌ [getAllCompetitions ERROR]:", err);
@@ -127,8 +127,8 @@ export const getAllCompetitions = async () => {
 // 🎯 SECTION: Update Competition Wise Form Status
 // 🎯 SECTION: Smart Competition Form Status Update (dataService.js)
 export const updateCompetitionFormStatus = async (compId, isFormOpen) => {
-  console.log(`==========================================`);
-  console.log(`⏳ [UPDATE COMP FORM] Target ID: ${compId} | New Status: ${isFormOpen}`);
+  //console.log(`==========================================`);
+ // console.log(`⏳ [UPDATE COMP FORM] Target ID: ${compId} | New Status: ${isFormOpen}`);
 
   try {
     // 1️⃣ आधी Direct Document ID ने अपडेट करण्याचा प्रयत्न करा
@@ -140,12 +140,12 @@ export const updateCompetitionFormStatus = async (compId, isFormOpen) => {
         isFormOpen,
         updatedAt: new Date().toISOString()
       });
-      console.log(`✅ [UPDATE COMP FORM] Updated directly by Doc ID: ${compId}`);
+     // console.log(`✅ [UPDATE COMP FORM] Updated directly by Doc ID: ${compId}`);
       return true;
     }
 
     // 2️⃣ जर Doc ID ने नसेल सापडला, तर 'competitionId' Field वरून Query करा
-    console.log(`🔎 [UPDATE COMP FORM] Searching by competitionId field...`);
+    //console.log(`🔎 [UPDATE COMP FORM] Searching by competitionId field...`);
     const q = query(collection(db, "competitions"), where("competitionId", "==", compId));
     const querySnap = await getDocs(q);
 
@@ -156,7 +156,7 @@ export const updateCompetitionFormStatus = async (compId, isFormOpen) => {
         isFormOpen,
         updatedAt: new Date().toISOString()
       });
-      console.log(`✅ [UPDATE COMP FORM] Updated via Query Doc ID: ${targetDocId}`);
+      //console.log(`✅ [UPDATE COMP FORM] Updated via Query Doc ID: ${targetDocId}`);
       return true;
     }
 
@@ -168,7 +168,7 @@ export const updateCompetitionFormStatus = async (compId, isFormOpen) => {
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
-    console.log(`✅ [UPDATE COMP FORM] Created/Merged successfully for: ${compId}`);
+    //console.log(`✅ [UPDATE COMP FORM] Created/Merged successfully for: ${compId}`);
     return true;
 
   } catch (error) {
@@ -216,7 +216,7 @@ export const dataService = {
   // Save or Update Team
   async saveTeam(teamData, files = {}) {
     const uploadedUrls = {};
-    console.log("⏳ Uploading images to ImgBB...");
+    //console.log("⏳ Uploading images to ImgBB...");
 
     for (const [key, file] of Object.entries(files)) {
       if (file && typeof file !== 'string') {

@@ -16,7 +16,7 @@ export default function NotificationBell() {
     const unsubscribe = authService.getCurrentUser(async (user) => {
       if (user && user.email) {
         const userEmail = user.email.toLowerCase().trim();
-        console.log("✅ [NotificationBell]: User loaded:", userEmail);
+       // console.log("✅ [NotificationBell]: User loaded:", userEmail);
 
         const roleData = await authService.getUserRole(userEmail);
         const info = {
@@ -27,7 +27,7 @@ export default function NotificationBell() {
         setUserInfo(info);
         fetchNotifications(info);
       } else {
-        console.log("ℹ️ [NotificationBell]: Guest mode active.");
+     //   console.log("ℹ️ [NotificationBell]: Guest mode active.");
         const info = { email: '', role: 'Public', department: 'Public' };
         setUserInfo(info);
         fetchNotifications(info);

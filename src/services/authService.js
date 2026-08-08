@@ -6,22 +6,22 @@ import { notificationService } from './notificationService'; // 🔔 Step 1: Not
 export const authService = {
   // 🔑 Google Sign-In with Multi-Role Checking (Users -> Teams -> Insurance)
   async loginWithGoogle() {
-    console.log("🔐 Starting Google Popup Authentication...");
+   // console.log("🔐 Starting Google Popup Authentication...");
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      console.log("✅ Google Auth Successful for Email:", user.email);
+    //  console.log("✅ Google Auth Successful for Email:", user.email);
 
       const emailLower = user.email.toLowerCase();
 
       // 🔍 १. आधी 'users' कलेक्शनमध्ये चेक करा (Staff / Admin)
-      console.log("🔍 Checking 'users' collection for:", emailLower);
+    //  console.log("🔍 Checking 'users' collection for:", emailLower);
       const userDocRef = doc(db, "users", emailLower);
       const userDoc = await getDoc(userDocRef);
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        console.log("📄 User Data from 'users' Firestore:", userData);
+      //  console.log("📄 User Data from 'users' Firestore:", userData);
 
         // 💡 `isActive === false` किंवा `status === "Inactive"` असेल तर ब्लॉक करा
         const isUserActive = userData.isActive !== false && userData.status !== "Inactive";
@@ -32,7 +32,7 @@ export const authService = {
           throw new Error("ACCOUNT_INACTIVE");
         }
 
-        console.log(`🎉 Staff/Admin Access Granted! Role: [${userData.role}]`);
+       // console.log(`🎉 Staff/Admin Access Granted! Role: [${userData.role}]`);
 
         // 📲 🎯 Step 1 Trigger: लॉगिन यशस्वी झाल्यामुळे टोकन मिळवून सेव्ह करा
         try {
@@ -50,12 +50,12 @@ export const authService = {
 
       // 🏆 २. जर Staff नसेल, तर 'teams' (स्पर्धा फॉर्म) चेक करा
       try {
-        console.log("🔍 Checking 'teams' collection for:", emailLower);
+       // console.log("🔍 Checking 'teams' collection for:", emailLower);
         const qTeams = query(collection(db, "teams"), where("email", "==", emailLower));
         const teamSnap = await getDocs(qTeams);
 
         if (!teamSnap.empty) {
-          console.log(`🎉 Team Access Granted! Found competition user.`);
+         // console.log(`🎉 Team Access Granted! Found competition user.`);
 
           // 📲 🎯 Step 1 Trigger: स्पर्धा युझरसाठी टोकन सेव्ह करा
           try {
@@ -76,12 +76,12 @@ export const authService = {
 
       // 🛡️ ३. जर 'teams' मध्ये नसेल, तर 'insurance_requests_2026' (विमा फॉर्म) चेक करा
       try {
-        console.log("🔍 Checking 'insurance_requests_2026' collection for:", emailLower);
+       // console.log("🔍 Checking 'insurance_requests_2026' collection for:", emailLower);
         const qInsurance = query(collection(db, "insurance_requests_2026"), where("email", "==", emailLower));
         const insuranceSnap = await getDocs(qInsurance);
 
         if (!insuranceSnap.empty) {
-          console.log(`🎉 Insurance User Access Granted! Found insurance request.`);
+         // console.log(`🎉 Insurance User Access Granted! Found insurance request.`);
 
           // 📲 🎯 Step 1 Trigger: विमा युझरसाठी टोकन सेव्ह करा
           try {
@@ -113,10 +113,10 @@ export const authService = {
 
   // 🚪 Logout
   async logout() {
-    console.log("🚪 Logging out user...");
+   // console.log("🚪 Logging out user...");
     try {
       await signOut(auth);
-      console.log("✅ Logout successful.");
+    //  console.log("✅ Logout successful.");
     } catch (error) {
       console.error("❌ Logout Error:", error);
     }

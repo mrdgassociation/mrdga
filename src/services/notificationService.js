@@ -45,12 +45,12 @@ export const notificationService = {
   // 1️⃣ Firestore मध्ये नोटीफिकेशन सेव्ह करणे
   async sendNotification(notificationData) {
     try {
-      console.log("📤 [FCM-LOG 1]: Saving notification record to Firestore...", notificationData);
+    //  console.log("📤 [FCM-LOG 1]: Saving notification record to Firestore...", notificationData);
       const docRef = await addDoc(collection(db, 'notifications'), {
         ...notificationData,
         createdAt: serverTimestamp()
       });
-      console.log("✅ [FCM-LOG 1.1]: Notification saved successfully with ID:", docRef.id);
+    //  console.log("✅ [FCM-LOG 1.1]: Notification saved successfully with ID:", docRef.id);
       return { success: true, id: docRef.id };
     } catch (error) {
       console.error("❌ [FCM-ERROR 1]: Failed to save notification:", error);
@@ -76,7 +76,7 @@ export const notificationService = {
 
   // 3️⃣ 💾 FIRESTORE TOKEN SAVE FUNCTION
   async saveUserFcmToken(email, tokenOrSubscription) {
-    console.log(`🚀 [FCM-LOG 3]: Initiating Token Save for Email: '${email}'`);
+  //  console.log(`🚀 [FCM-LOG 3]: Initiating Token Save for Email: '${email}'`);
     if (!email || !tokenOrSubscription) {
       console.warn("⚠️ [FCM-LOG 3.1]: Missing Email or Token. Aborting save.");
       return;
@@ -105,7 +105,7 @@ export const notificationService = {
       }
     }
 
-    console.log(`🔑 [FCM-LOG 3.2]: Normalized Email: '${emailLower}' | Clean Token Snippet: '${cleanToken.substring(0, 20)}...'`);
+    //console.log(`🔑 [FCM-LOG 3.2]: Normalized Email: '${emailLower}' | Clean Token Snippet: '${cleanToken.substring(0, 20)}...'`);
 
     const payloadToSave = {
       fcmToken: cleanToken,
@@ -121,10 +121,10 @@ export const notificationService = {
         const userSnap = await getDoc(userDocRef);
         if (userSnap.exists()) {
           await updateDoc(userDocRef, payloadToSave);
-          console.log("✅ [FCM-LOG 3.4]: Token successfully updated in 'users' collection!");
+         // console.log("✅ [FCM-LOG 3.4]: Token successfully updated in 'users' collection!");
         }
       } catch (userErr) {
-        console.log("ℹ️ [FCM-LOG 3.5b]: 'users' check safely bypassed.");
+        //console.log("ℹ️ [FCM-LOG 3.5b]: 'users' check safely bypassed.");
       }
 
       // 🛡️ B. Update in 'insurance_requests_2026' collection
@@ -134,7 +134,7 @@ export const notificationService = {
         insSnap.forEach(async (d) => {
           await updateDoc(doc(db, 'insurance_requests_2026', d.id), { fcmToken: cleanToken });
         });
-        console.log(`✅ [FCM-LOG 3.7]: Token updated in ${insSnap.size} insurance records.`);
+        //console.log(`✅ [FCM-LOG 3.7]: Token updated in ${insSnap.size} insurance records.`);
       }
 
       // 🏆 C. Update in 'teams' collection
@@ -144,7 +144,7 @@ export const notificationService = {
         teamsSnap.forEach(async (d) => {
           await updateDoc(doc(db, 'teams', d.id), { fcmToken: cleanToken });
         });
-        console.log(`✅ [FCM-LOG 3.10]: Token updated in ${teamsSnap.size} team records.`);
+       // console.log(`✅ [FCM-LOG 3.10]: Token updated in ${teamsSnap.size} team records.`);
       }
 
     } catch (err) {
@@ -154,8 +154,8 @@ export const notificationService = {
 
   // 🎯 RELIABLE PUSH PERMISSION (Fallback Fixed)
   async requestPushPermission(userEmail = null) {
-    console.log("--------------------------------------------------");
-    console.log("🚀 [PUSH PROCESS START]: Requesting Permission for:", userEmail);
+    //console.log("--------------------------------------------------");
+    //console.log("🚀 [PUSH PROCESS START]: Requesting Permission for:", userEmail);
 
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
       console.warn("⚠️ या ब्राउझरमध्ये Push Notification सपोर्ट नाही.");
@@ -167,19 +167,19 @@ export const notificationService = {
       console.warn("⚠️ Permission denied.");
       return null;
     }
-    console.log("✅ [STEP 1 SUCCESS]: Permission Granted!");
+   // console.log("✅ [STEP 1 SUCCESS]: Permission Granted!");
 
     try {
       const swPath = `${import.meta.env.BASE_URL}firebase-messaging-sw.js`;
       await navigator.serviceWorker.register(swPath, { scope: import.meta.env.BASE_URL });
       const activeRegistration = await navigator.serviceWorker.ready;
-      console.log("✅ [STEP 2 SUCCESS]: Service Worker Active!", activeRegistration);
+     // console.log("✅ [STEP 2 SUCCESS]: Service Worker Active!", activeRegistration);
 
       let finalTokenOrSub = null;
 
       // 📌 STEP 3: SDK Direct Method First (Fast & Reliable)
       try {
-        console.log("🔑 [STEP 3]: Requesting FCM Token via Firebase Messaging SDK...");
+      //  console.log("🔑 [STEP 3]: Requesting FCM Token via Firebase Messaging SDK...");
         const messaging = getMessaging();
         
         finalTokenOrSub = await getToken(messaging, {
@@ -188,7 +188,7 @@ export const notificationService = {
         });
 
         if (finalTokenOrSub) {
-          console.log("📲 [STEP 3 SUCCESS]: FCM Token Received directly via SDK!", finalTokenOrSub);
+        //  console.log("📲 [STEP 3 SUCCESS]: FCM Token Received directly via SDK!", finalTokenOrSub);
         }
       } catch (sdkErr) {
         console.warn("⚠️ Firebase Messaging SDK failed, trying PushManager fallback:", sdkErr.message);
@@ -196,7 +196,7 @@ export const notificationService = {
 
       // 📌 PushManager Native Fallback (जर SDK फेल झाला तर)
       if (!finalTokenOrSub) {
-        console.log("🔑 [STEP 3 FALLBACK]: Trying Native PushManager...");
+        //console.log("🔑 [STEP 3 FALLBACK]: Trying Native PushManager...");
         const convertedVapidKey = urlBase64ToUint8Array(VAPID_KEY);
         
         if (convertedVapidKey) {
@@ -214,7 +214,7 @@ export const notificationService = {
       // 📌 STEP 4: Firestore Save
       if (finalTokenOrSub) {
         if (userEmail) {
-          console.log("👉 [STEP 4 TRIGGER]: Saving token for email:", userEmail);
+        //  console.log("👉 [STEP 4 TRIGGER]: Saving token for email:", userEmail);
           await this.saveUserFcmToken(userEmail, finalTokenOrSub);
         }
         return finalTokenOrSub;

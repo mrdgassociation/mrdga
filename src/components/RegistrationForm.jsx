@@ -46,7 +46,7 @@ export default function RegistrationForm({ competitionId }) {
       try {
         const targetId = competitionId || '2026';
         const details = await getCompetitionDetails(targetId);
-        console.log("📊 [REG FORM] Setting Competition Details in State:", details);
+        //console.log("📊 [REG FORM] Setting Competition Details in State:", details);
 
         // 🛡️ SECURITY CHECK 1: जर स्पर्धा आयडी डेटाबेसमध्ये नसेल किंवा Fallback डेटा आला असेल
         if (
@@ -305,7 +305,7 @@ export default function RegistrationForm({ competitionId }) {
 
             <div>
               <label className="block text-sm text-slate-300 mb-1">संघाचे नाव (Team Name) *</label>
-              <input {...register("teamName")} placeholder="उदा. जय भवानी गोविंद पथक" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+              <input {...register("teamName")} placeholder="eg. Nav Maharashtra Mandal" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
               {errors.teamName && <p className="text-red-400 text-xs mt-1">{errors.teamName.message}</p>}
             </div>
 
@@ -323,7 +323,7 @@ export default function RegistrationForm({ competitionId }) {
 
               <div>
                 <label className="block text-sm text-slate-300 mb-1">एकूण खेळाडू संख्या *</label>
-                <input type="number" {...register("playerCount")} placeholder="उदा. 15" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input type="number" {...register("playerCount")} placeholder="Eg. 80" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.playerCount && <p className="text-red-400 text-xs mt-1">{errors.playerCount.message}</p>}
               </div>
             </div>
@@ -341,14 +341,14 @@ export default function RegistrationForm({ competitionId }) {
 
               <div>
                 <label className="block text-sm text-slate-300 mb-1">विभाग / तालुका (Vibhag) *</label>
-                <input {...register("vibhag")} placeholder="उदा. दादर / कल्याण पूर्व" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("vibhag")} placeholder="Eg. Jogeshwari/Dadar" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.vibhag && <p className="text-red-400 text-xs mt-1">{errors.vibhag.message}</p>}
               </div>
             </div>
 
             <div>
               <label className="block text-sm text-slate-300 mb-1">पिनकोड (Pincode) - ऐच्छिक</label>
-              <input {...register("pincode")} placeholder="उदा. 400028" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+              <input {...register("pincode")} placeholder="Eg. 400060" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
             </div>
           </div>
         )}
@@ -362,13 +362,13 @@ export default function RegistrationForm({ competitionId }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-slate-300 mb-1">कॅप्टन / कोचचे नाव *</label>
-                <input {...register("captainName")} placeholder="नाव व आडनाव" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("captainName")} placeholder="Name and Surname" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.captainName && <p className="text-red-400 text-xs mt-1">{errors.captainName.message}</p>}
               </div>
 
               <div>
                 <label className="block text-sm text-slate-300 mb-1">कॅप्टन मोबाईल नंबर *</label>
-                <input {...register("captainPhone")} placeholder="9876040010" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("captainPhone")} placeholder="9800040010" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.captainPhone && <p className="text-red-400 text-xs mt-1">{errors.captainPhone.message}</p>}
               </div>
             </div>
@@ -376,22 +376,33 @@ export default function RegistrationForm({ competitionId }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-slate-300 mb-1">टीम मॅनेजरचे नाव *</label>
-                <input {...register("managerName")} placeholder="नाव व आडनाव" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("managerName")} placeholder="Name and Surname" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.managerName && <p className="text-red-400 text-xs mt-1">{errors.managerName.message}</p>}
               </div>
 
               <div>
                 <label className="block text-sm text-slate-300 mb-1">मॅनेजर मोबाईल नंबर *</label>
-                <input {...register("managerPhone")} placeholder="9876011010" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
+                <input {...register("managerPhone")} placeholder="9800001010" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
                 {errors.managerPhone && <p className="text-red-400 text-xs mt-1">{errors.managerPhone.message}</p>}
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm text-slate-300 mb-1">अधिकृत ईमेल आयडी (Email) *</label>
-              <input {...register("email")} placeholder="team@gmail.com" className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" />
-              {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
-            </div>
+           <div>
+            <label className="block text-sm text-slate-300 mb-1">अधिकृत ईमेल आयडी (Email) *</label>
+            <input 
+              {...register("email")} 
+              type="email"
+              placeholder="team@gmail.com" 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none" 
+            />
+            
+            {/* 💡 युझरसाठी लॉगिन व स्टेटस गाइड मेसेज */}
+            <p className="text-[11px] text-amber-400 font-medium mt-1.5 flex items-center gap-1">
+              💡 <span>कृपया अचूक ई-मेल आयडी टाका. याच ई-मेलने पुढे लॉगिन करून अर्जाची स्थिती (Status) पाहता येईल.</span>
+            </p>
+
+            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+          </div>
           </div>
         )}
 

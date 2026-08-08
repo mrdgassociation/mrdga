@@ -22,7 +22,7 @@ export default function Navbar() {
 
   // 💡 अचूक रोल व विभाग चेकिंग (Users -> Teams -> Insurance)
   useEffect(() => {
-    console.log("🚀 [NAVBAR MOUNTED]: Navbar Component Load Zala!");
+    //console.log("🚀 [NAVBAR MOUNTED]: Navbar Component Load Zala!");
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -32,7 +32,7 @@ export default function Navbar() {
 
           // 🎯 Step 2: ऑथेंटिकेट झालेल्या ई-मेलसह Push Permission & FCM Token Save ट्रिगर करा
           import('../services/notificationService.js').then(m => {
-            console.log("📞 [CALLING STEP 1]: Invoking requestPushPermission...");
+           // console.log("📞 [CALLING STEP 1]: Invoking requestPushPermission...");
             m.notificationService.requestPushPermission(emailLower);
           });
 

@@ -23,7 +23,7 @@ const messaging = firebase.messaging();
 
 // Background Notification Listener थेट सुरुवातीलाच चालू ठेवणे
 messaging.onBackgroundMessage((payload) => {
-  console.log('[SW] Background FCM Notification Received:', payload);
+  //('[SW] Background FCM Notification Received:', payload);
   showNotification(
     payload.notification?.title || payload.data?.title || 'MRDGA Update',
     payload.notification?.body || payload.data?.body || payload.data?.message,
@@ -33,19 +33,19 @@ messaging.onBackgroundMessage((payload) => {
 
 // 1️⃣ Install Event
 self.addEventListener('install', (event) => {
-  console.log('📦 [SW] Service Worker Installing...');
+ // console.log('📦 [SW] Service Worker Installing...');
   self.skipWaiting();
 });
 
 // 2️⃣ Activate Event
 self.addEventListener('activate', (event) => {
-  console.log('⚡ [SW] Service Worker Activated & Claiming Clients!');
+ // console.log('⚡ [SW] Service Worker Activated & Claiming Clients!');
   event.waitUntil(self.clients.claim());
 });
 
 // 🛠️ Helper Function: System Notification Pop-up
 function showNotification(title, body, url) {
-  console.log(`📢 [SW ShowNotification] Triggering: "${title}"`);
+  //console.log(`📢 [SW ShowNotification] Triggering: "${title}"`);
 
   const options = {
     body: body || 'नवीन अपडेट उपलब्ध आहे.',
@@ -62,7 +62,7 @@ function showNotification(title, body, url) {
 
 // 3️⃣ Direct Push Event
 self.addEventListener('push', (event) => {
-  console.log('🚀 [SW Push Event] Triggered!', event);
+ // console.log('🚀 [SW Push Event] Triggered!', event);
 
   let title = 'MRDGA Update 🔔';
   let body = 'नवीन सूचना उपलब्ध आहे.';
@@ -84,7 +84,7 @@ self.addEventListener('push', (event) => {
 
 // 4️⃣ Notification Click Event
 self.addEventListener('notificationclick', (event) => {
-  console.log('🖱️ [SW Click] Notification clicked:', event);
+  //console.log('🖱️ [SW Click] Notification clicked:', event);
   event.notification.close();
   const urlToOpen = event.notification.data?.url || '/mrdga/';
 
@@ -102,12 +102,11 @@ self.addEventListener('notificationclick', (event) => {
 
 // 5️⃣ Message Event (React Front-end कडून येणारे मेसेजेस)
 self.addEventListener('message', (event) => {
-  console.log('📩 [SW Message Event] Data received from App:', event.data);
 
   if (!event.data) return;
 
   if (event.data.type === 'TEST_PUSH') {
-    console.log('🔔 [SW] TEST_PUSH Triggered with Payload:', event.data.payload);
+    //console.log('🔔 [SW] TEST_PUSH Triggered with Payload:', event.data.payload);
 
     const title = event.data.payload?.title || 'MRDGA Update 🔔';
     const body = event.data.payload?.body || 'नवीन अपडेट उपलब्ध आहे.';

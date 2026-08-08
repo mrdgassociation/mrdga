@@ -7,7 +7,7 @@ import RegistrationForm from '../components/RegistrationForm';
 
 export default function Form() {
   const { compId } = useParams();
-  console.log("📌 [FORM WRAPPER] URL Parameter compId:", compId);
+ // console.log("📌 [FORM WRAPPER] URL Parameter compId:", compId);
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-dark text-white">
