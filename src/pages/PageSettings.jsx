@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/dataService';
 import Swal from 'sweetalert2';
-import { ToggleLeft, ToggleRight, Shield, Save, LayoutDashboard, Trophy } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Shield, Save, LayoutDashboard, Trophy, FileText } from 'lucide-react';
 
 export default function PageSettings() {
   const [config, setConfig] = useState({
-    // Public Pages
+    // Public Pages Visibility
     aboutPage: false,
     insurancePage: false,
     contactPage: false,
     competitionPage: true,
 
+    // 🎯 📝 Form Acceptance Toggles (फॉर्म ऑन/ऑफ सेटिंग्ज)
+    insuranceForm: true, // 👈 गोविंदा विमा अर्ज स्वीकृती (ON/OFF)
+
     // 🔒 Admin Menu Visibility Toggles
-    showDahiHandiScoringMenu: true, // 🚩 नवीन Scoring Toggle
+    showDahiHandiScoringMenu: true,
     showCompetitionsMenu: true,
     showInsuranceMenu: true,
     showReportsMenu: true
@@ -40,8 +43,8 @@ export default function PageSettings() {
       await dataService.updatePageConfig(config);
       Swal.fire({
         icon: 'success',
-        title: 'पेज परवानग्या अपडेट झाल्या!',
-        text: 'वेबसाईट आणि ॲडमिन पॅनेलवर त्वरित बदल लागू झाले आहेत.',
+        title: 'सेटिंग्ज सेव्ह झाल्या!',
+        text: 'वेबसाईट आणि ॲडमिन पॅनेलवर नवीन बदल लागू झाले आहेत.',
         timer: 1500,
         showConfirmButton: false,
         background: '#0c0d14',
@@ -76,7 +79,27 @@ export default function PageSettings() {
         </button>
       </div>
 
-      {/* 🌐 1. Public Pages Control */}
+      {/* 📝 1. Form Acceptance Controls (नवीन फॉर्म स्वीकृती विभाग) */}
+      <div className="bg-black/40 border border-amber-500/15 rounded-2xl p-4 space-y-3">
+        <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <FileText className="w-4 h-4" /> अर्ज स्वीकृती कंट्रोल (Form Submissions)
+        </h3>
+
+        {/* Insurance Form Acceptance Toggle */}
+        <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-amber-500/30">
+          <div>
+            <h4 className="text-xs font-bold text-amber-400">गोविंदा विमा अर्ज स्वीकृती (Insurance Form)</h4>
+            <p className="text-[10px] text-gray-400">
+              {config.insuranceForm !== false ? 'अर्ज स्वीकृती सुरु आहे (Form Active)' : 'अर्ज स्वीकृती बंद (Form Closed)'}
+            </p>
+          </div>
+          <button onClick={() => handleToggle('insuranceForm')} className="text-amber-400 cursor-pointer">
+            {config.insuranceForm !== false ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
+          </button>
+        </div>
+      </div>
+
+      {/* 🌐 2. Public Pages Control */}
       <div className="bg-black/40 border border-amber-500/15 rounded-2xl p-4 space-y-3">
         <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-2">🌐 सार्वजनिक वेबसाईट पेजेस</h3>
 
@@ -91,17 +114,6 @@ export default function PageSettings() {
           </button>
         </div>
 
-        {/* About Page */}
-        <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
-          <div>
-            <h4 className="text-xs font-bold text-white">About Page (आमच्याबद्दल)</h4>
-            <p className="text-[10px] text-gray-400">{config.aboutPage ? 'सुरळीत चालू आहे' : 'बंद (Coming Soon दिसेल)'}</p>
-          </div>
-          <button onClick={() => handleToggle('aboutPage')} className="text-amber-400 cursor-pointer">
-            {config.aboutPage ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
-          </button>
-        </div>
-
         {/* Insurance Info Page */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
           <div>
@@ -110,6 +122,17 @@ export default function PageSettings() {
           </div>
           <button onClick={() => handleToggle('insurancePage')} className="text-amber-400 cursor-pointer">
             {config.insurancePage ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
+          </button>
+        </div>
+
+        {/* About Page */}
+        <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
+          <div>
+            <h4 className="text-xs font-bold text-white">About Page (आमच्याबद्दल)</h4>
+            <p className="text-[10px] text-gray-400">{config.aboutPage ? 'सुरळीत चालू आहे' : 'बंद (Coming Soon दिसेल)'}</p>
+          </div>
+          <button onClick={() => handleToggle('aboutPage')} className="text-amber-400 cursor-pointer">
+            {config.aboutPage ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
           </button>
         </div>
 
@@ -125,13 +148,13 @@ export default function PageSettings() {
         </div>
       </div>
 
-      {/* 🔒 2. Admin Dashboard Sidebar Menus Control */}
+      {/* 🔒 3. Admin Dashboard Sidebar Menus Control */}
       <div className="bg-black/40 border border-amber-500/15 rounded-2xl p-4 space-y-3">
         <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <LayoutDashboard className="w-4 h-4" /> ॲडमिन मेन्यू कंट्रोल (Sidebar Menus)
         </h3>
 
-        {/* 🚩 1. Dahi Handi Scoring Manager Menu (नवी जोडलेली लिंक) */}
+        {/* Dahi Handi Scoring Manager Menu */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-amber-500/30">
           <div>
             <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
@@ -146,7 +169,7 @@ export default function PageSettings() {
           </button>
         </div>
 
-        {/* 2. Competition Form Applications */}
+        {/* Competition Form Applications */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
           <div>
             <h4 className="text-xs font-bold text-white">स्पर्धा अर्ज मेन्यू (Competitions)</h4>
@@ -157,7 +180,7 @@ export default function PageSettings() {
           </button>
         </div>
 
-        {/* 3. Govinda Insurance Applications */}
+        {/* Govinda Insurance Applications */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
           <div>
             <h4 className="text-xs font-bold text-white">गोविंदा विमा अर्ज मेन्यू (Insurance)</h4>
@@ -168,7 +191,7 @@ export default function PageSettings() {
           </button>
         </div>
 
-        {/* 4. Reports & Export */}
+        {/* Reports & Export */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
           <div>
             <h4 className="text-xs font-bold text-white">रिपोर्ट्स & एक्सपोर्ट मेन्यू (Reports)</h4>

@@ -30,7 +30,7 @@ export default function RegistrationForm({ competitionId }) {
 
   // 🔒 Security & Lock States
   const [isFormOpen, setIsFormOpen] = useState(true);
-  const [isValidComp, setIsValidComp] = useState(true); // 🛡️ नवीन चेक: स्पर्धा वैध आहे की नाही
+  const [isValidComp, setIsValidComp] = useState(true);
   const [statusLoading, setStatusLoading] = useState(true);
 
   const [step, setStep] = useState(1);
@@ -38,54 +38,50 @@ export default function RegistrationForm({ competitionId }) {
   const [teamLogo, setTeamLogo] = useState(null);
   const [captainPhoto, setCaptainPhoto] = useState(null);
 
+  // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे (With Security Check)
+  useEffect(() => {
+    const loadCompInfo = async () => {
+      setCompLoading(true);
+      setStatusLoading(true);
+      try {
+        const targetId = competitionId || '2026';
+        const details = await getCompetitionDetails(targetId);
+        console.log("📊 [REG FORM] Setting Competition Details in State:", details);
 
- // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे (With Security Check)
-  
-    // 🎯 १. कॉम्पिटिशनचे नाव, Season आणि On/Off Status फेच करणे (With Security Check)
-useEffect(() => {
-  const loadCompInfo = async () => {
-    setCompLoading(true);
-    setStatusLoading(true);
-    try {
-      const targetId = competitionId || '2026';
-      const details = await getCompetitionDetails(targetId);
-      console.log("📊 [REG FORM] Setting Competition Details in State:", details);
-
-      // 🛡️ SECURITY CHECK 1: जर स्पर्धा आयडी डेटाबेसमध्ये नसेल किंवा Fallback डेटा आला असेल
-      // (जर details नसेल किंवा details.isGeneral === true असेल किंवा details मधील id/competitionId जुळत नसेल)
-      if (
-        !details || 
-        details.isGeneral === true || 
-        details.isFallback === true ||
-        (!details.id && !details.competitionId)
-      ) {
-        console.warn("⚠️ [REG FORM] Competition ID is Invalid/Fallback:", targetId);
-        setIsValidComp(false);
-        setCompDetails(null);
-      } else {
-        setIsValidComp(true);
-        setCompDetails(details);
-
-        // 🔒 SECURITY CHECK 2: कॉम्पिटिशनचा isFormOpen === false असेल तर फॉर्म ब्लॉक करा
-        if (details && details.isFormOpen === false) {
-          setIsFormOpen(false);
+        // 🛡️ SECURITY CHECK 1: जर स्पर्धा आयडी डेटाबेसमध्ये नसेल किंवा Fallback डेटा आला असेल
+        if (
+          !details || 
+          details.isGeneral === true || 
+          details.isFallback === true ||
+          (!details.id && !details.competitionId)
+        ) {
+          console.warn("⚠️ [REG FORM] Competition ID is Invalid/Fallback:", targetId);
+          setIsValidComp(false);
+          setCompDetails(null);
         } else {
-          // ग्लोबल फॉर्म स्टेटस चेक
-          const status = await dataService.getFormStatus(targetId);
-          setIsFormOpen(status?.isOpen !== false);
-        }
-      }
-    } catch (err) {
-      console.error("❌ [REG FORM] Error fetching details/status:", err);
-      setIsValidComp(false);
-    } finally {
-      setCompLoading(false);
-      setStatusLoading(false);
-    }
-  };
+          setIsValidComp(true);
+          setCompDetails(details);
 
-  loadCompInfo();
-}, [competitionId]);
+          // 🔒 SECURITY CHECK 2: कॉम्पिटिशनचा isFormOpen === false असेल तर फॉर्म ब्लॉक करा
+          if (details && details.isFormOpen === false) {
+            setIsFormOpen(false);
+          } else {
+            // ग्लोबल फॉर्म स्टेटस चेक
+            const status = await dataService.getFormStatus(targetId);
+            setIsFormOpen(status?.isOpen !== false);
+          }
+        }
+      } catch (err) {
+        console.error("❌ [REG FORM] Error fetching details/status:", err);
+        setIsValidComp(false);
+      } finally {
+        setCompLoading(false);
+        setStatusLoading(false);
+      }
+    };
+
+    loadCompInfo();
+  }, [competitionId]);
 
   const { register, handleSubmit, trigger, formState: { errors } } = useForm({
     resolver: zodResolver(formSchema)
@@ -105,8 +101,8 @@ useEffect(() => {
     if (!isValidComp || !isFormOpen) {
       Swal.fire({
         icon: 'error',
-        title: 'अर्जाची मुदत संपली किंवा अवैध स्पर्धा!',
-        text: 'या स्पर्धेची नोंदणी उपलब्ध नाही किंवा असोसिएशनतर्फे बंद करण्यात आली आहे.',
+        title: 'अर्जाची मुदत संपली किंवा नोंदणी बंद आहे!',
+        text: 'या स्पर्धेची नोंदणी उपलब्ध नाही. कृपया MRDGA प्रतिनिधींशी संपर्क साधा.',
         confirmButtonColor: '#ef4444',
         background: '#0c0d14',
         color: '#fff'
@@ -183,12 +179,11 @@ useEffect(() => {
     return <div className="min-h-screen bg-[#08090d] text-amber-400 flex items-center justify-center text-xs animate-pulse font-bold">माहिती लोड होत आहे...</div>;
   }
 
-  // 🛑 🔒 SECURITY SCREEN 1: जर स्पर्धा आयडी चुकीचा असेल (उदा. COMP-2026-08)
+  // 🛑 🔒 SECURITY SCREEN 1: जर स्पर्धा आयडी चुकीचा असेल
   if (!isValidComp) {
     return (
       <div className="max-w-2xl mx-auto my-12 px-4 font-sans">
         <div className="p-6 sm:p-10 bg-[#0c0d14] border border-rose-500/30 rounded-3xl text-center space-y-4 shadow-2xl">
-          
           <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black shadow-lg">
             ⚠️
           </div>
@@ -209,29 +204,34 @@ useEffect(() => {
               ← अधिकृत स्पर्धांची यादी पहा
             </a>
           </div>
-
         </div>
       </div>
     );
   }
 
-  // 🚫 🔒 SECURITY SCREEN 2: जर फॉर्म बंद असेल तर हा स्क्रीन दिसेल
+  // 🚫 🔒 SECURITY SCREEN 2: जर फॉर्म बंद किंवा अजून सुरू झाला नसेल (सोपा आणि स्पष्ट मेसेज)
   if (!isFormOpen) {
     return (
       <div className="max-w-2xl mx-auto my-12 px-4 font-sans">
-        <div className="p-6 sm:p-10 bg-[#0c0d14] border border-rose-500/30 rounded-3xl text-center space-y-4 shadow-2xl">
+        <div className="p-6 sm:p-10 bg-[#0c0d14] border border-amber-500/30 rounded-3xl text-center space-y-4 shadow-2xl">
           
-          <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black shadow-lg">
+          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-3xl font-black shadow-lg">
             🚫
           </div>
           
-          <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
-            या स्पर्धेची ऑनलाइन नोंदणी बंद झाली आहे!
-          </h2>
-          
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-            <b className="text-amber-400">{compDetails?.title || 'दहीहंडी स्पर्धा'}</b> साठी अर्जांची मुदत पूर्ण झाली आहे किंवा असोसिएशनतर्फे नवीन अर्ज स्वीकारणे थांबवले आहे.
-          </p>
+          <div className="space-y-2">
+            <h2 className="text-xl sm:text-2xl font-black text-amber-400 leading-tight">
+              या स्पर्धेची नोंदणी सध्या बंद आहे!
+            </h2>
+            
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+              <b className="text-white">{compDetails?.title || 'दहीहंडी स्पर्धा'}</b> साठी नोंदणी अजून सुरू झाली नसल्यास किंवा अर्जाची मुदत पूर्ण झाली असल्यास फॉर्म बंद करण्यात आला आहे.
+            </p>
+
+            <p className="text-xs text-amber-400 font-semibold bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 max-w-sm mx-auto mt-2">
+              💡 अधिक माहितीसाठी कृपया MRDGA प्रतिनिधींशी संपर्क साधा.
+            </p>
+          </div>
 
           <div className="pt-4 border-t border-slate-800/80 flex justify-center gap-3">
             <a 

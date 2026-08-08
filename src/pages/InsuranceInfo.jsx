@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../firebase/config';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget';
 import InsuranceInfoContent from '../components/InsuranceInfoContent';
+import { dataService } from '../services/dataService';
 import { 
   ShieldCheck, FileText, Download, Eye, X,
   PlusCircle, UploadCloud, Loader2, CheckCircle, ArrowRight, ArrowLeft,
@@ -57,11 +58,36 @@ const otherDistricts = [
   { val: "Other State / Out of Maharashtra", label: "इतर राज्य / महाराष्ट्राबाहेर" }
 ];
 
+// 📱 STRICT REGEX PATTERNS
+const phoneRegex = /^[6-9]\d{9}$/;
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const pincodeRegex = /^[1-9][0-9]{5}$/;
+
 export default function InsuranceInfo() {
   const [activeTab, setActiveTab] = useState('info'); // 'info' | 'analysis'
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
   
+  // 🎯 1. फॉर्म ऑन/ऑफ स्टेट (PageSettings मधून कंट्रोल होईल)
+  const [isFormActive, setIsFormActive] = useState(true);
+
+  // 🎯 2. PageSettings ची स्थिती तपासणे
+  useEffect(() => {
+    const checkFormStatus = async () => {
+      try {
+        const config = await dataService.getPageConfig();
+        if (config && config.insuranceForm === false) {
+          setIsFormActive(false);
+        } else {
+          setIsFormActive(true);
+        }
+      } catch (err) {
+        console.error("Config check error:", err);
+      }
+    };
+    checkFormStatus();
+  }, []);
+
   // 🎯 Form Step State (1, 2, 3)
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -87,14 +113,31 @@ export default function InsuranceInfo() {
 
   const sampleFormatImgUrl = "https://i.ibb.co/N2FXL0R6/Whats-App-Image-2026-07-20-at-11-48-52-2.jpg"; 
 
-  const generateUniqueAppId = (phone) => {
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const suffix = phone ? phone.slice(-4) : '0000';
-    return `MRDGA-INS-2026-${suffix}-${randomNum}`;
+  // 🎯 100% Unique DDMM Format Application ID Generator
+  const generateUniqueAppId = () => {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const serialSuffix = String(Math.floor(1000 + Math.random() * 9000));
+    return `MRDGA-INS-2026-${dd}${mm}-${serialSuffix}`;
   };
 
+  // 🎯 Devanagari Input Restriction Handler (Only English Allowed)
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+    if (type !== 'checkbox' && /[\u0900-\u097F]/.test(value)) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Only English Allowed!',
+        text: 'कृपया मंडळाचे नाव व इतर माहिती फक्त इंग्रजी अक्षरांमध्येच टाईप करा.',
+        confirmButtonColor: '#f59e0b',
+        background: '#0c0d14',
+        color: '#fff'
+      });
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -136,6 +179,7 @@ export default function InsuranceInfo() {
     }
   };
 
+  // 🎯 Strict Step Validation
   const validateStep = (step) => {
     if (step === 1) {
       if (!formData.teamName.trim()) {
@@ -147,21 +191,61 @@ export default function InsuranceInfo() {
         Swal.fire({ icon: 'warning', title: 'संपर्क व्यक्तीचे नाव टाका!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
         return false;
       }
-      if (!formData.whatsappNumber || formData.whatsappNumber.length < 10) {
-        Swal.fire({ icon: 'warning', title: 'वैध १० अंकी व्हॉट्सॲप नंबर टाका!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
+
+      // 📱 Whatsapp Number Regex Check
+      if (!formData.whatsappNumber || !phoneRegex.test(formData.whatsappNumber.trim())) {
+        Swal.fire({ 
+          icon: 'warning', 
+          title: 'अवैध व्हॉट्सॲप नंबर!', 
+          text: 'कृपया ७, ८ किंवा ९ ने सुरू होणारा १० अंकी वैध मोबाईल नंबर टाका.', 
+          confirmButtonColor: '#f59e0b', 
+          background: '#0c0d14', 
+          color: '#fff' 
+        });
         return false;
       }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      // 📱 Alternate Number Regex Check (Optional Field)
+      if (formData.alternateNumber.trim() && !phoneRegex.test(formData.alternateNumber.trim())) {
+        Swal.fire({ 
+          icon: 'warning', 
+          title: 'अवैध पर्यायी नंबर!', 
+          text: 'पर्यायी नंबरसुद्धा वैध १० अंकी असणे आवश्यक आहे.', 
+          confirmButtonColor: '#f59e0b', 
+          background: '#0c0d14', 
+          color: '#fff' 
+        });
+        return false;
+      }
+
+      // 📧 Email Regex Check
       if (!formData.email || !emailRegex.test(formData.email.trim())) {
-        Swal.fire({ icon: 'warning', title: 'वैध ई-मेल आयडी टाका!', text: 'उदा. mymandal@gmail.com', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
+        Swal.fire({ 
+          icon: 'warning', 
+          title: 'अवैध ई-मेल आयडी!', 
+          text: 'कृपया अचूक ई-मेल आयडी टाका (उदा. mymandal@gmail.com).', 
+          confirmButtonColor: '#f59e0b', 
+          background: '#0c0d14', 
+          color: '#fff' 
+        });
         return false;
       }
+
+      // 📍 Pincode Regex Check (6 Digits)
+      if (!formData.pincode || !pincodeRegex.test(formData.pincode.trim())) {
+        Swal.fire({ 
+          icon: 'warning', 
+          title: 'अवैध पिनकोड!', 
+          text: 'कृपया ६ अंकी अचूक भारतीय पिनकोड टाका (उदा. 400601).', 
+          confirmButtonColor: '#f59e0b', 
+          background: '#0c0d14', 
+          color: '#fff' 
+        });
+        return false;
+      }
+
       if (!formData.address.trim()) {
         Swal.fire({ icon: 'warning', title: 'पत्रव्यवहाराचा पत्ता टाका!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
-        return false;
-      }
-      if (!formData.pincode || formData.pincode.length < 6) {
-        Swal.fire({ icon: 'warning', title: 'वैध ६ अंकी पिनकोड टाका!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
         return false;
       }
     }
@@ -236,7 +320,7 @@ export default function InsuranceInfo() {
     setLoading(true);
 
     try {
-      const appId = generateUniqueAppId(formData.whatsappNumber);
+      const appId = generateUniqueAppId();
       let uploadedFileUrl = "";
 
       if (formData.file) {
@@ -322,6 +406,23 @@ export default function InsuranceInfo() {
     setShowFormModal(false);
   };
 
+  // 🎯 फॉर्म उघडण्यापूर्वीचे चेकिंग फंक्शन (PageSettings Control)
+  const handleOpenFormModal = () => {
+    if (!isFormActive) {
+      Swal.fire({
+        icon: 'info',
+        title: 'अर्ज स्वीकृती बंद आहे!',
+        text: 'गोविंदा विमा अर्ज सादर करण्याची प्रक्रिया सध्या बंद करण्यात आली आहे.',
+        confirmButtonColor: '#f59e0b',
+        background: '#0c0d14',
+        color: '#fff'
+      });
+      return;
+    }
+    resetFormModal();
+    setShowFormModal(true);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
       <Navbar />
@@ -366,7 +467,7 @@ export default function InsuranceInfo() {
             </div>
 
             <button
-              onClick={() => { resetFormModal(); setShowFormModal(true); }}
+              onClick={handleOpenFormModal}
               className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" /> नवीन विमा अर्ज करा
@@ -526,7 +627,7 @@ export default function InsuranceInfo() {
                             required
                             value={formData.teamName}
                             onChange={handleInputChange}
-                            placeholder="उदा. जय बजरंग गोविंदा पथक"
+                            placeholder="उदा. Jai Bajrang Govinda Pathak"
                             className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
                           />
                         </div>
@@ -591,7 +692,7 @@ export default function InsuranceInfo() {
                               required
                               value={formData.contactPerson}
                               onChange={handleInputChange}
-                              placeholder="अध्यक्ष / सचिव यांचे नाव"
+                              placeholder="अध्यक्ष / सचिव यांचे नाव (In English)"
                               className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
                             />
                           </div>
@@ -604,9 +705,12 @@ export default function InsuranceInfo() {
                               required
                               maxLength={10}
                               value={formData.whatsappNumber}
-                              onChange={handleInputChange}
+                              onChange={(e) => {
+                                const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                                setFormData(prev => ({ ...prev, whatsappNumber: onlyNums }));
+                              }}
                               placeholder="10 digit WhatsApp number"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono font-bold"
                             />
                           </div>
 
@@ -617,9 +721,12 @@ export default function InsuranceInfo() {
                               name="alternateNumber"
                               maxLength={10}
                               value={formData.alternateNumber}
-                              onChange={handleInputChange}
+                              onChange={(e) => {
+                                const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                                setFormData(prev => ({ ...prev, alternateNumber: onlyNums }));
+                              }}
                               placeholder="पर्यायी कॉल / व्हॉट्सॲप नंबर"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono font-bold"
                             />
                           </div>
 
@@ -632,7 +739,7 @@ export default function InsuranceInfo() {
                               value={formData.email}
                               onChange={handleInputChange}
                               placeholder="example@gmail.com"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono"
                             />
                           </div>
                         </div>
@@ -667,7 +774,10 @@ export default function InsuranceInfo() {
                               required
                               maxLength={6}
                               value={formData.pincode}
-                              onChange={handleInputChange}
+                              onChange={(e) => {
+                                const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                                setFormData(prev => ({ ...prev, pincode: onlyNums }));
+                              }}
                               placeholder="उदा. 400601"
                               className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-mono font-bold"
                             />
@@ -682,7 +792,7 @@ export default function InsuranceInfo() {
                             rows={2}
                             value={formData.address}
                             onChange={handleInputChange}
-                            placeholder="पूर्ण पत्ता टाका"
+                            placeholder="पूर्ण पत्ता टाका (In English)"
                             className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
                           />
                         </div>
@@ -731,7 +841,6 @@ export default function InsuranceInfo() {
                               <option value="8 Layer">८ थर</option>
                               <option value="9 Layer">९ थर</option>
                               <option value="10 Layer">१० थर</option>
-                              
                             </select>
                           </div>
 

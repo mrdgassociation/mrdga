@@ -9,7 +9,7 @@ import { useCompetitions } from '../hooks/useCompetitions';
 
 import { 
   Shield, Trophy, Users, Calendar, MapPin, ChevronRight, 
-  Award, HeartPulse, FileText, PhoneCall, CheckCircle2, Info 
+  Award, HeartPulse, FileText, PhoneCall, CheckCircle2, Info ,ShieldCheck 
 } from 'lucide-react';
 
 export default function Home() {
@@ -81,23 +81,53 @@ export default function Home() {
               असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विविध उपक्रम, महत्त्वाच्या सूचना आणि ताज्या अपडेट्सशी सतत जोडलेले रहा..
             </p>
 
-            {/* CTA Buttons */}
-            <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center items-center">
-              {/* 🎯 अपडेट केलेले विमा अर्ज बटण */}
-              <button
-                onClick={() => navigate('/insurance-info')}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                ऑनलाइन विमा अर्ज करा <ChevronRight className="w-5 h-5" />
-              </button>
+          {/* CTA Buttons */}
+<div className="pt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
 
-              <Link
-                to="/about"
-                className="w-full sm:w-auto px-6 py-4 bg-slate-900 border border-slate-700 hover:border-amber-500/50 text-slate-200 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2"
-              >
-                असोसिएशन बद्दल जाणून घ्या <Info className="w-4 h-4 text-amber-400" />
-              </Link>
-            </div>
+  {/* 🏆 १. स्पर्धा नोंदणी करा बटण (सध्या चालू असलेले) */}
+  <button
+    onClick={() => navigate('/form/COMP-2026-01')}
+    className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
+  >
+    <Trophy className="w-5 h-5 text-black shrink-0" />
+    दहीहंडी स्पर्धा नोंदणी करा <ChevronRight className="w-5 h-5" />
+  </button>
+
+  {/* 🛡️ २. विमा अर्ज बटण (लवकरच येत आहे / Disabled Mode) */}
+  <div className="relative w-full sm:w-auto">
+    {/* Coming Soon चा पिवळा बॅज */}
+    <span className="absolute -top-2.5 right-3 z-10 px-2 py-0.5 bg-amber-500 text-black font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md animate-pulse">
+      लवकरच सुरू होत आहे
+    </span>
+
+    <button
+      onClick={() => {
+        Swal.fire({
+          icon: 'info',
+          title: 'विमा अर्ज लवकरच सुरू होत आहेत!',
+          text: 'गोविंदा विमा अर्ज नोंदणी प्रक्रिया येत्या ४ दिवसांत सार्वजनिकरीत्या सुरू केली जाईल.',
+          confirmButtonColor: '#f59e0b',
+          background: '#0c0d14',
+          color: '#fff'
+        });
+      }}
+      className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 border border-amber-500/30 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2 opacity-80 hover:opacity-100 cursor-pointer"
+    >
+      <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+      ऑनलाइन विमा अर्ज (Coming Soon)
+    </button>
+  </div>
+
+  {/* ℹ️ ३. असोसिएशन बद्दल */}
+  <Link
+    to="/about"
+    className="w-full sm:w-auto px-6 py-4 bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2"
+  >
+    असोसिएशन बद्दल <Info className="w-4 h-4 text-amber-400 shrink-0" />
+  </Link>
+
+</div>
+
           </div>
         </div>
 
@@ -123,7 +153,7 @@ export default function Home() {
             <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0"><Trophy className="w-7 h-7" /></div>
             <div>
               <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">रजिस्ट्रेशन मुदत</p>
-              <p className="text-base font-black text-amber-400">लवकरच जाहीर केली जाईल</p>
+              <p className="text-base font-black text-amber-400">९ ऑगस्ट २०२६ दुपारी १:०० वाजता </p>
             </div>
           </div>
         </div>

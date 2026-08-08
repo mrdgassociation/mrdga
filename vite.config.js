@@ -34,8 +34,8 @@ export default defineConfig({
         theme_color: '#030D26',
         background_color: '#030D26',
         display: 'standalone',
-        start_url: '/mrdga/#/',
-        scope: '/mrdga/',
+        start_url: '/#/', // 👈 कस्टम डोमेनसाठी मूळ स्टार्ट पाथ
+        scope: '/',      // 👈 कस्टम डोमेनसाठी रुट स्कोप
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -57,5 +57,5 @@ export default defineConfig({
       }
     })
   ],
-  base: '/mrdga/',
+  base: '/', // 👈 कस्टम डोमेनसाठी बेस पाथ बदलून '/' ठेवला आहे
 })
