@@ -6,9 +6,11 @@ import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
+
+import CertificatePrintModal from '../components/CertificatePrintModal';
 
 // ==========================================
 // 📌 SECTION 1: CONSTANTS & PRE-DEFINED DATA
@@ -61,6 +63,8 @@ export default function InsuranceDashboard() {
   const [userDepartment, setUserDepartment] = useState('MRDGA');
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
+
+  const [printReqData, setPrintReqData] = useState(null);
 
   // ==========================================
   // 📌 SECTION 3: DATA FETCHING & AUTH LIFECYCLE
@@ -407,13 +411,13 @@ export default function InsuranceDashboard() {
     <div className="space-y-4 max-w-7xl mx-auto px-2 py-2 font-sans text-slate-100">
       
       {/* Header Banner - High Contrast Clean */}
-      <div className="flex justify-between items-center bg-slate-900 border border-slate-700/80 p-3.5 rounded-2xl shadow-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-700/80 p-3.5 rounded-2xl shadow-md">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-white leading-tight flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-bold text-white leading-tight flex items-center gap-2 flex-wrap">
               गोविंदा विमा <span className="text-amber-400">व्यवस्थापन</span>
               <span className="text-[10px] px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-300 rounded font-semibold uppercase">
                 {userDepartment} ({userRole})
@@ -426,13 +430,26 @@ export default function InsuranceDashboard() {
           </div>
         </div>
 
-        <button 
-          onClick={loadInsuranceRequests} 
-          className="p-2 sm:px-3.5 sm:py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">रिफ्रेश</span>
-        </button>
+        {/* 🛠️ Action Buttons Area (Testing Bypass & Refresh) */}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* 🧪 नवीन विमा अर्ज (Admin Testing Bypass Button) */}
+          <button
+            onClick={() => window.open('#/insurance-info?admin_mode=true', '_blank')}
+            className="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition"
+            title="पब्लिक अर्ज बंद असतानाही टीमला टेस्ट करण्यासाठी फॉर्म उघडेल"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>नवीन विमा अर्ज (Testing)</span>
+          </button>
+
+          <button 
+            onClick={loadInsuranceRequests} 
+            className="p-2 sm:px-3.5 sm:py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">रिफ्रेश</span>
+          </button>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -562,55 +579,68 @@ export default function InsuranceDashboard() {
                   </div>
                 </div>
 
-                {/* Right Action Buttons */}
-                <div className="flex items-center justify-between md:justify-end gap-2 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800">
-                  <button 
-                    onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                    className="px-3 py-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer shrink-0"
-                  >
-                    रिमार्क्स <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+               {/* Right Action Buttons - Mobile Responsive (Flex Wrap Fix) */}
+<div className="flex flex-wrap items-center justify-start md:justify-end gap-2 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800 w-full md:w-auto">
+  
+  {/* रिमार्क्स बटण */}
+  <button 
+    onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+    className="px-3 py-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer shrink-0"
+  >
+    रिमार्क्स <ChevronRight className="w-3.5 h-3.5" />
+  </button>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {isApproved ? (
-                      hasCertificate ? (
-                        <button 
-                          onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
-                          className="px-3 py-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
-                        >
-                          <Eye className="w-4 h-4 text-emerald-400" />
-                          <span>पॉलिसी कॉपी पहा</span>
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                          className="px-3 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
-                        >
-                          <Camera className="w-4 h-4 text-amber-400" />
-                          <span>पॉलिसी अपलोड करा</span>
-                        </button>
-                      )
-                    ) : (
-                      canApproveOrReject && (
-                        <>
-                          <button 
-                            onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                            className="px-3 py-1.5 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition"
-                          >
-                            <CheckCircle className="w-4 h-4" /> Approve
-                          </button>
+  {/* 🖨️ Approved असल्यास प्रमाणपत्र प्रिन्ट करा */}
+  {isApproved && (
+    <button 
+      onClick={() => setPrintReqData(item)}
+      className="px-3 py-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-sm shrink-0"
+      title="कंपनीच्या फॉरमॅटमध्ये विमा प्रमाणपत्र प्रिंट करा"
+    >
+      <Printer className="w-4 h-4" />
+      <span>प्रिंट प्रमाणपत्र</span>
+    </button>
+  )}
 
-                          <button 
-                            onClick={() => setRejectModalReq(item)} 
-                            className="px-2.5 py-1.5 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition"
-                          >
-                            <XCircle className="w-3.5 h-3.5" /> Reject
-                          </button>
-                        </>
-                      )
-                    )}
-                  </div>
-                </div>
+  {/* स्टेटसनुसार इतर बटन्स (पॉलिसी पहा / अपलोड करा / Approve / Reject) */}
+  {isApproved ? (
+    hasCertificate ? (
+      <button 
+        onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
+        className="px-3 py-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shrink-0"
+      >
+        <Eye className="w-4 h-4 text-emerald-400" />
+        <span>पॉलिसी कॉपी पहा</span>
+      </button>
+    ) : (
+      <button 
+        onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+        className="px-3 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shrink-0"
+      >
+        <Camera className="w-4 h-4 text-amber-400" />
+        <span>अपलोड पॉलिसी</span>
+      </button>
+    )
+  ) : (
+    canApproveOrReject && (
+      <>
+        <button 
+          onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+          className="px-3 py-1.5 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+        >
+          <CheckCircle className="w-4 h-4" /> Approve
+        </button>
+
+        <button 
+          onClick={() => setRejectModalReq(item)} 
+          className="px-2.5 py-1.5 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+        >
+          <XCircle className="w-3.5 h-3.5" /> Reject
+        </button>
+      </>
+    )
+  )}
+</div>
 
               </div>
             );
@@ -900,6 +930,14 @@ export default function InsuranceDashboard() {
 
           </div>
         </div>
+      )}
+
+      {/* 📄 Certificate Print Modal Component */}
+      {printReqData && (
+        <CertificatePrintModal 
+          reqData={printReqData} 
+          onClose={() => setPrintReqData(null)} 
+        />
       )}
 
     </div>

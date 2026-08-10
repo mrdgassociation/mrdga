@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../firebase/config';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget';
@@ -64,17 +64,27 @@ const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const pincodeRegex = /^[1-9][0-9]{5}$/;
 
 export default function InsuranceInfo() {
-  const [activeTab, setActiveTab] = useState('info'); // 'info' | 'analysis'
+  const [activeTab, setActiveTab] = useState('info');
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
   
-  // 🎯 1. फॉर्म ऑन/ऑफ स्टेट (PageSettings मधून कंट्रोल होईल)
+  // 🎯 1. फॉर्म ऑन/ऑफ स्टेट
   const [isFormActive, setIsFormActive] = useState(true);
 
-  // 🎯 2. PageSettings ची स्थिती तपासणे
+  // 🎯 2. PageSettings ची स्थिती तपासणे (Admin Bypass सह)
   useEffect(() => {
     const checkFormStatus = async () => {
       try {
+        const hashParts = window.location.hash.split('?');
+        const searchParams = new URLSearchParams(hashParts[1] || '');
+        const isAdminBypass = searchParams.get('admin_mode') === 'true';
+
+        if (isAdminBypass) {
+          setIsFormActive(true);
+          setShowFormModal(true);
+          return;
+        }
+
         const config = await dataService.getPageConfig();
         if (config && config.insuranceForm === false) {
           setIsFormActive(false);
@@ -113,16 +123,28 @@ export default function InsuranceInfo() {
 
   const sampleFormatImgUrl = "https://i.ibb.co/N2FXL0R6/Whats-App-Image-2026-07-20-at-11-48-52-2.jpg"; 
 
-  // 🎯 100% Unique DDMM Format Application ID Generator
-  const generateUniqueAppId = () => {
+  // 🎯 🆕 अद्ययावत सीक्वेन्शियल आयडी जनरेटर (फॉरमॅट: MRDGA-INS-YYYYMMDD-0001)
+  const generateUniqueAppId = async () => {
     const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const serialSuffix = String(Math.floor(1000 + Math.random() * 9000));
-    return `MRDGA-INS-2026-${dd}${mm}-${serialSuffix}`;
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateFormatted = `${year}${month}${day}`; // 20260810
+
+    let serialNo = '0001';
+    try {
+      // डेटाबेसमधील एकूण अर्जांची संख्या + १
+      const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
+      const count = querySnapshot.size + 1;
+      serialNo = String(count).padStart(4, '0');
+    } catch (e) {
+      console.warn("Serial counter fallback triggered:", e);
+      serialNo = String(Math.floor(1000 + Math.random() * 9000));
+    }
+
+    return `MRDGA-${dateFormatted}-${serialNo}`;
   };
 
-  // 🎯 Devanagari Input Restriction Handler (Only English Allowed)
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
 
@@ -179,7 +201,6 @@ export default function InsuranceInfo() {
     }
   };
 
-  // 🎯 Strict Step Validation
   const validateStep = (step) => {
     if (step === 1) {
       if (!formData.teamName.trim()) {
@@ -192,7 +213,6 @@ export default function InsuranceInfo() {
         return false;
       }
 
-      // 📱 Whatsapp Number Regex Check
       if (!formData.whatsappNumber || !phoneRegex.test(formData.whatsappNumber.trim())) {
         Swal.fire({ 
           icon: 'warning', 
@@ -205,7 +225,6 @@ export default function InsuranceInfo() {
         return false;
       }
 
-      // 📱 Alternate Number Regex Check (Optional Field)
       if (formData.alternateNumber.trim() && !phoneRegex.test(formData.alternateNumber.trim())) {
         Swal.fire({ 
           icon: 'warning', 
@@ -218,7 +237,6 @@ export default function InsuranceInfo() {
         return false;
       }
 
-      // 📧 Email Regex Check
       if (!formData.email || !emailRegex.test(formData.email.trim())) {
         Swal.fire({ 
           icon: 'warning', 
@@ -231,7 +249,6 @@ export default function InsuranceInfo() {
         return false;
       }
 
-      // 📍 Pincode Regex Check (6 Digits)
       if (!formData.pincode || !pincodeRegex.test(formData.pincode.trim())) {
         Swal.fire({ 
           icon: 'warning', 
@@ -320,7 +337,8 @@ export default function InsuranceInfo() {
     setLoading(true);
 
     try {
-      const appId = generateUniqueAppId();
+      // 🎯 क्रमवार नवीन App ID तयार केला
+      const appId = await generateUniqueAppId();
       let uploadedFileUrl = "";
 
       if (formData.file) {
@@ -406,7 +424,6 @@ export default function InsuranceInfo() {
     setShowFormModal(false);
   };
 
-  // 🎯 फॉर्म उघडण्यापूर्वीचे चेकिंग फंक्शन (PageSettings Control)
   const handleOpenFormModal = () => {
     if (!isFormActive) {
       Swal.fire({
@@ -487,10 +504,7 @@ export default function InsuranceInfo() {
         {/* ---------------- TAB 1: INFO & BASIC WIDGET ---------------- */}
         {activeTab === 'info' && (
           <div className="space-y-6">
-            {/* 📊 Basic Live Progress Widget */}
             <InsuranceAnalysisWidget mode="basic" />
-
-            {/* 📜 विमा माहितीचे सर्व सेक्शन्स */}
             <InsuranceInfoContent onOpenSampleModal={() => setShowSampleModal(true)} />
           </div>
         )}
@@ -498,7 +512,6 @@ export default function InsuranceInfo() {
         {/* ---------------- TAB 2: DETAILED DISTRICT ANALYSIS ---------------- */}
         {activeTab === 'analysis' && (
           <div className="space-y-6">
-            {/* 📊 सविस्तर जिल्हावार विश्लेषण विजेट */}
             <InsuranceAnalysisWidget mode="detailed" />
           </div>
         )}

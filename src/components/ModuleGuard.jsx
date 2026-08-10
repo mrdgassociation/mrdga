@@ -10,6 +10,18 @@ export default function ModuleGuard({ pageKey, children }) {
   useEffect(() => {
     const checkConfig = async () => {
       try {
+        // 🔍 URL मधील admin_mode=true तपासणे (HashRouter सह)
+        const hashParts = window.location.hash.split('?');
+        const searchParams = new URLSearchParams(hashParts[1] || window.location.search);
+        const isAdminBypass = searchParams.get('admin_mode') === 'true';
+
+        // 🟢 जर admin_mode=true असेल तर डायरेक्ट बायपास करा (पेज चालू करा)
+        if (isAdminBypass) {
+          setIsEnabled(true);
+          setLoading(false);
+          return;
+        }
+
         const config = await dataService.getPageConfig();
         // जर ते पेज 'false' असेल तर ब्लॉक करा
         if (config && config[pageKey] === false) {
@@ -22,7 +34,7 @@ export default function ModuleGuard({ pageKey, children }) {
       } finally {
         setLoading(false);
       }
-    };
+    }
     checkConfig();
   }, [pageKey]);
 
@@ -34,7 +46,7 @@ export default function ModuleGuard({ pageKey, children }) {
     );
   }
 
-  // 🛑 जर पेज बंद (OFF) असेल तर Coming Soon Screen दाखवा
+  // 🛑 जर पेज बंद (OFF) असेल आणि Admin Mode नसेल तर Coming Soon Screen दाखवा
   if (!isEnabled) {
     return (
       <div className="min-h-[80vh] bg-[#08090d] flex flex-col items-center justify-center p-6 text-center font-sans space-y-4">
@@ -55,6 +67,6 @@ export default function ModuleGuard({ pageKey, children }) {
     );
   }
 
-  // 🟢 जर चालू (ON) असेल तर मूळ पेज दाखवा
+  // 🟢 जर चालू (ON) असेल किंवा Admin Mode असेल तर मूळ पेज दाखवा
   return children;
 }
