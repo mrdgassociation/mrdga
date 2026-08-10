@@ -15,6 +15,16 @@ export default function CompetitionReportTab({
   const [districtFilter, setDistrictFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
+  // 🔤 Title Case Formatting Helper (proper casing: JAI BAJRANG -> Jai Bajrang)
+  const toTitleCase = (str) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const uniqueDistricts = Array.from(new Set(teams.map(t => t.district).filter(Boolean)));
   const uniqueCategories = Array.from(new Set(teams.map(t => t.category).filter(Boolean)));
 
@@ -45,7 +55,7 @@ export default function CompetitionReportTab({
   const pendingCount = filteredTeams.filter(t => t.status === 'Pending' || !t.status).length;
   const rejectedCount = filteredTeams.filter(t => t.status === 'Rejected').length;
 
-  // 🏆 Category Wise Grouping Function (जुन्या कोडप्रमाणे)
+  // 🏆 Category Wise Grouping Function
   const getTeamsByCategory = (catKey) => {
     if (catKey === 'OTHERS') {
       return filteredTeams.filter(t => !['M7', 'M6', 'W'].includes(t.category));
@@ -70,15 +80,15 @@ export default function CompetitionReportTab({
       'Reg ID': team.registrationId || '',
       'स्पर्धा ID': team.competitionId || '',
       'स्पर्धेचे नाव': team.competitionTitle || 'महाराष्ट्र राज्य दहीहंडी नोंदणी',
-      'संघाचे नाव': team.teamName || '',
+      'संघाचे नाव': toTitleCase(team.teamName || ''),
       'गट / प्रकार': team.category || '',
       'खेळाडू संख्या': team.playerCount || '',
-      'जिल्हा': team.district || '',
-      'विभाग / तालुका': team.vibhag || '',
+      'जिल्हा': toTitleCase(team.district || ''),
+      'विभाग / तालुका': toTitleCase(team.vibhag || ''),
       'पिनकोड': team.pincode || '',
-      'संपर्क १ (कॅप्टन)': team.captain?.name || team.contact1?.name || '',
+      'संपर्क १ (कॅप्टन)': toTitleCase(team.captain?.name || team.contact1?.name || ''),
       'संपर्क १ फोन': team.captain?.phone || team.contact1?.phone || '',
-      'संपर्क २ नाव': team.manager?.name || team.contact2?.name || '',
+      'संपर्क २ नाव': toTitleCase(team.manager?.name || team.contact2?.name || ''),
       'संपर्क २ फोन': team.manager?.phone || team.contact2?.phone || '',
       'ईमेल': team.email || '',
       'लोगो लिंक': team.media?.logoUrl || '',
@@ -111,7 +121,7 @@ export default function CompetitionReportTab({
   return (
     <div className="space-y-3.5">
       
-      {/* 🖨️ PRINT & PDF STYLING (जुन्या कोडमधील हूबेहूब CSS) */}
+      {/* 🖨️ PRINT & PDF STYLING */}
       <style>{`
         @media print {
           body {
@@ -253,7 +263,7 @@ export default function CompetitionReportTab({
           >
             <option value="ALL" className="bg-[#0c0d14]">सर्व जिल्हे</option>
             {uniqueDistricts.map(dist => (
-              <option key={dist} value={dist} className="bg-[#0c0d14]">{dist}</option>
+              <option key={dist} value={dist} className="bg-[#0c0d14]">{toTitleCase(dist)}</option>
             ))}
           </select>
 
@@ -277,7 +287,8 @@ export default function CompetitionReportTab({
           {/* 📱 MOBILE VIEW CARDS */}
           <div className="no-print grid grid-cols-1 md:hidden gap-3">
             {filteredTeams.map((team, idx) => {
-              const c1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
+              const rawC1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
+              const c1Name = toTitleCase(rawC1Name);
               const c1Phone = team.captain?.phone || team.contact1?.phone || '';
 
               return (
@@ -287,9 +298,9 @@ export default function CompetitionReportTab({
                       <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                         #{team.registrationId}
                       </span>
-                      <h3 className="font-bold text-sm text-white mt-1 leading-tight">{team.teamName}</h3>
+                      <h3 className="font-bold text-sm text-white mt-1 leading-tight">{toTitleCase(team.teamName)}</h3>
                       <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-amber-400" /> {team.district || 'जिल्हा N/A'} | <b className="text-amber-400">{team.category || '-'}</b>
+                        <MapPin className="w-3 h-3 text-amber-400" /> {toTitleCase(team.district) || 'जिल्हा N/A'} | <b className="text-amber-400">{team.category || '-'}</b>
                       </p>
                     </div>
 
@@ -321,7 +332,7 @@ export default function CompetitionReportTab({
             })}
           </div>
 
-          {/* 💻 DESKTOP & PRINTABLE SECTION (Category-wise Separate Blocks & Page Breaks) */}
+          {/* 💻 DESKTOP & PRINTABLE SECTION */}
           <div className="hidden md:block print-area glass-panel rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-4 bg-[#0c0d14] text-white">
             
             <div className="mb-4 pb-3 border-b border-gray-600 flex justify-between items-center">
@@ -349,7 +360,7 @@ export default function CompetitionReportTab({
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 पुरुष ७ थर (M7) - एकूण: {getTeamsByCategory('M7').length}
                 </div>
-                <CategoryTable teamsList={getTeamsByCategory('M7')} />
+                <CategoryTable teamsList={getTeamsByCategory('M7')} toTitleCase={toTitleCase} />
               </div>
             )}
 
@@ -364,7 +375,7 @@ export default function CompetitionReportTab({
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 पुरुष ६ थर (M6) - एकूण: {getTeamsByCategory('M6').length}
                 </div>
-                <CategoryTable teamsList={getTeamsByCategory('M6')} />
+                <CategoryTable teamsList={getTeamsByCategory('M6')} toTitleCase={toTitleCase} />
               </div>
             )}
 
@@ -379,7 +390,7 @@ export default function CompetitionReportTab({
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 महिला पथक (Women's) - एकूण: {getTeamsByCategory('W').length}
                 </div>
-                <CategoryTable teamsList={getTeamsByCategory('W')} />
+                <CategoryTable teamsList={getTeamsByCategory('W')} toTitleCase={toTitleCase} />
               </div>
             )}
 
@@ -394,7 +405,7 @@ export default function CompetitionReportTab({
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 इतर गट (Other Categories) - एकूण: {getTeamsByCategory('OTHERS').length}
                 </div>
-                <CategoryTable teamsList={getTeamsByCategory('OTHERS')} />
+                <CategoryTable teamsList={getTeamsByCategory('OTHERS')} toTitleCase={toTitleCase} />
               </div>
             )}
 
@@ -406,8 +417,8 @@ export default function CompetitionReportTab({
   );
 }
 
-// 🖨️ Reusable Category Table Component
-function CategoryTable({ teamsList }) {
+// 🖨️ Reusable Category Table Component (Proper Casing Support)
+function CategoryTable({ teamsList, toTitleCase }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse text-xs">
@@ -428,15 +439,15 @@ function CategoryTable({ teamsList }) {
             <tr key={team.registrationId || idx} className="hover:bg-white/5 transition">
               <td className="p-2 border border-white/5 text-gray-400 font-mono text-center">{idx + 1}</td>
               <td className="p-2 border border-white/5 font-mono font-bold text-amber-400">{team.registrationId}</td>
-              <td className="p-2 border border-white/5 font-bold text-white">{team.teamName}</td>
+              <td className="p-2 border border-white/5 font-bold text-white">{toTitleCase(team.teamName)}</td>
               <td className="p-2 border border-white/5 text-gray-300 text-center font-bold">{team.playerCount || '-'}</td>
-              <td className="p-2 border border-white/5 text-gray-300">{team.district}, <span className="text-[10px] text-gray-400">{team.vibhag}</span></td>
+              <td className="p-2 border border-white/5 text-gray-300">{toTitleCase(team.district)}, <span className="text-[10px] text-gray-400">{toTitleCase(team.vibhag)}</span></td>
               <td className="p-2 border border-white/5">
-                <p className="font-semibold text-gray-200">{team.captain?.name || team.contact1?.name || '-'}</p>
+                <p className="font-semibold text-gray-200">{toTitleCase(team.captain?.name || team.contact1?.name || '-')}</p>
                 <p className="text-[10px] text-gray-400 font-mono">{team.captain?.phone || team.contact1?.phone || ''}</p>
               </td>
               <td className="p-2 border border-white/5">
-                <p className="font-semibold text-gray-200">{team.manager?.name || team.contact2?.name || '-'}</p>
+                <p className="font-semibold text-gray-200">{toTitleCase(team.manager?.name || team.contact2?.name || '-')}</p>
                 <p className="text-[10px] text-gray-400 font-mono">{team.manager?.phone || team.contact2?.phone || ''}</p>
               </td>
               <td className="p-2 border border-white/5 text-center">

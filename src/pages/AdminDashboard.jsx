@@ -41,6 +41,22 @@ export default function AdminDashboard() {
   const [isFormOpen, setIsFormOpen] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
 
+  // 🔤 Helper Function for Title Case (Proper Formatting: jai bajrang -> Jai Bajrang)
+  const toTitleCase = (str) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // 🛡️ Helper Function for Team Logo URL Extraction (Handles media.logo)
+  const getTeamLogo = (team) => {
+    if (!team) return null;
+    return team.media?.logo || team.media?.logoUrl || team.logo || team.logoUrl || null;
+  };
+
   // ==========================================
   // #SECTION 3: API & AUTHENTICATION HANDLERS
   // ==========================================
@@ -85,7 +101,6 @@ export default function AdminDashboard() {
           const userDoc = await authService.getUserRole(user.email);
           if (userDoc) {
             if (userDoc.role) setUserRole(userDoc.role);
-            // 🏢 डिपार्टमेंट फेच करा (नसल्यास Default 'MRDGA')
             if (userDoc.department) setUserDepartment(userDoc.department);
           }
         } catch (e) {
@@ -112,7 +127,7 @@ export default function AdminDashboard() {
         background: '#0c0d14',
         color: '#fff'
       });
-      loadTeams();
+      loadCompetitionsAndTeams();
       if (selectedTeam && selectedTeam.registrationId === regId) {
         setSelectedTeam(prev => ({ ...prev, status: newStatus }));
       }
@@ -156,7 +171,7 @@ export default function AdminDashboard() {
 
       setSelectedTeam(prev => ({ ...prev, comments: updatedComments }));
       setNewComment('');
-      loadTeams();
+      loadCompetitionsAndTeams();
 
       Swal.fire({
         icon: 'success',
@@ -230,13 +245,9 @@ export default function AdminDashboard() {
   // ==========================================
   // 🔐 PERMISSION & ACCESS CHECKS
   // ==========================================
-  // १. या डॅशबोर्डचा ॲक्सेस फक्त MRDGA विभाग, SUPER विभाग किंवा Super Admin ला आहे (INSURANCE ला नाही)
   const hasMrdgaAccess = (userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA') && userDepartment !== 'INSURANCE';
-
-  // २. Approve/Reject करण्याचे अधिकार फक्त Super Admin किंवा MRDGA/SUPER चा Admin यांनाच
   const canApproveReject = userRole === 'Super Admin' || (userRole === 'Admin' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER'));
 
-  // 🔒 जर युझरचा विभाग MRDGA/SUPER नसेल किंवा INSURANCE असेल तर ब्लॉक करा
   if (!loading && !hasMrdgaAccess) {
     return (
       <div className="p-8 text-center space-y-3 font-sans">
@@ -369,11 +380,18 @@ export default function AdminDashboard() {
           {/* 📱 Mobile Responsive Cards View */}
           <div className="grid grid-cols-1 md:hidden gap-3">
             {filteredTeams.map((team) => {
-              const c1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
+              const rawC1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
+              const c1Name = toTitleCase(rawC1Name);
               const c1Phone = team.captain?.phone || team.contact1?.phone || '';
 
-              const c2Name = team.manager?.name || team.contact2?.name || '';
+              const rawC2Name = team.manager?.name || team.contact2?.name || '';
+              const c2Name = toTitleCase(rawC2Name);
               const c2Phone = team.manager?.phone || team.contact2?.phone || '';
+
+              const formattedTeamName = toTitleCase(team.teamName);
+              const formattedDistrict = toTitleCase(team.district);
+
+              const teamLogo = getTeamLogo(team);
 
               return (
                 <div 
@@ -382,9 +400,15 @@ export default function AdminDashboard() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
+                      {/* 🛡️ टीम लोगो डिस्प्ले (Proper Title Case संगती) */}
                       <div className="w-12 h-12 rounded-full border-2 border-amber-500/30 overflow-hidden bg-amber-500/10 shrink-0 flex items-center justify-center">
-                        {team.media?.logoUrl ? (
-                          <img src={team.media.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                        {teamLogo ? (
+                          <img 
+                            src={teamLogo} 
+                            alt="Logo" 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
                         ) : (
                           <Shield className="w-6 h-6 text-amber-400/60" />
                         )}
@@ -394,9 +418,10 @@ export default function AdminDashboard() {
                         <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                           #{team.registrationId}
                         </span>
-                        <h3 className="font-bold text-sm text-white leading-tight mt-1">{team.teamName}</h3>
+                        {/* प्रॉपर टायटल केसमध्ये टीमचे नाव */}
+                        <h3 className="font-bold text-sm text-white leading-tight mt-1">{formattedTeamName}</h3>
                         <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-amber-400" /> {team.district || 'जिल्हा N/A'}
+                          <MapPin className="w-3 h-3 text-amber-400" /> {formattedDistrict || 'जिल्हा N/A'}
                         </p>
                       </div>
                     </div>
@@ -419,7 +444,7 @@ export default function AdminDashboard() {
 
                       {c1Phone && (
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <a href={`https://wa.me/91${c1Phone}?text=नमस्कार ${encodeURIComponent(c1Name)}, ${encodeURIComponent(team.teamName)} संदर्भात...`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition">
+                          <a href={`https://wa.me/91${c1Phone}?text=नमस्कार ${encodeURIComponent(c1Name)}, ${encodeURIComponent(formattedTeamName)} संदर्भात...`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition">
                             <MessageSquare className="w-3 h-3" />
                           </a>
                           <a href={`tel:${c1Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition">
@@ -438,7 +463,7 @@ export default function AdminDashboard() {
 
                         {c2Phone && (
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <a href={`https://wa.me/91${c2Phone}?text=नमस्कार ${encodeURIComponent(c2Name)}, ${encodeURIComponent(team.teamName)} संदर्भात...`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition">
+                            <a href={`https://wa.me/91${c2Phone}?text=नमस्कार ${encodeURIComponent(c2Name)}, ${encodeURIComponent(formattedTeamName)} संदर्भात...`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition">
                               <MessageSquare className="w-3 h-3" />
                             </a>
                             <a href={`tel:${c2Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition">
@@ -455,7 +480,6 @@ export default function AdminDashboard() {
                       संपूर्ण माहिती व रिमार्क्स <ChevronRight className="w-3 h-3" />
                     </button>
 
-                    {/* 🟢 १. MOBILE CARD APPROVE / REJECT CHECK */}
                     {canApproveReject && (
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => handleStatusChange(team.registrationId, 'Approved')} className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer">
@@ -491,18 +515,30 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody className="divide-y divide-amber-500/10">
                   {filteredTeams.map((team) => {
-                    const c1Name = team.captain?.name || team.contact1?.name || 'N/A';
+                    const rawC1Name = team.captain?.name || team.contact1?.name || 'N/A';
+                    const c1Name = toTitleCase(rawC1Name);
                     const c1Phone = team.captain?.phone || team.contact1?.phone || '';
 
-                    const c2Name = team.manager?.name || team.contact2?.name || '-';
+                    const rawC2Name = team.manager?.name || team.contact2?.name || '-';
+                    const c2Name = toTitleCase(rawC2Name);
                     const c2Phone = team.manager?.phone || team.contact2?.phone || '';
+
+                    const formattedTeamName = toTitleCase(team.teamName);
+                    const formattedDistrict = toTitleCase(team.district);
+
+                    const teamLogo = getTeamLogo(team);
 
                     return (
                       <tr key={team.registrationId} className="hover:bg-amber-500/5 transition">
                         <td className="p-3">
                           <div className="w-9 h-9 rounded-full border border-amber-500/30 overflow-hidden bg-amber-500/10 flex items-center justify-center">
-                            {team.media?.logoUrl ? (
-                              <img src={team.media.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                            {teamLogo ? (
+                              <img 
+                                src={teamLogo} 
+                                alt="Logo" 
+                                className="w-full h-full object-cover" 
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
                             ) : (
                               <Shield className="w-4 h-4 text-amber-400/60" />
                             )}
@@ -510,7 +546,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="p-3 font-mono font-bold text-amber-400">{team.registrationId}</td>
                         <td className="p-3 font-bold text-white cursor-pointer hover:text-amber-400" onClick={() => setSelectedTeam(team)}>
-                          {team.teamName}
+                          {formattedTeamName}
                         </td>
                         <td className="p-3">
                           <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[10px] font-extrabold border border-amber-500/30">
@@ -518,7 +554,7 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="p-3 text-gray-300">
-                          {team.district}, <span className="text-[10px] text-gray-400 font-medium">{team.vibhag}</span>
+                          {formattedDistrict}, <span className="text-[10px] text-gray-400 font-medium">{team.vibhag}</span>
                         </td>
 
                         <td className="p-3">
@@ -571,7 +607,6 @@ export default function AdminDashboard() {
                               पहा
                             </button>
 
-                            {/* 🟢 २. DESKTOP TABLE APPROVE / REJECT CHECK */}
                             {canApproveReject && (
                               <>
                                 <button
@@ -612,8 +647,8 @@ export default function AdminDashboard() {
             <div className="flex justify-between items-start border-b border-amber-500/20 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full border-2 border-amber-500/30 overflow-hidden bg-amber-500/10 shrink-0 flex items-center justify-center">
-                  {selectedTeam.media?.logoUrl ? (
-                    <img src={selectedTeam.media.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  {getTeamLogo(selectedTeam) ? (
+                    <img src={getTeamLogo(selectedTeam)} alt="Logo" className="w-full h-full object-cover" />
                   ) : (
                     <Shield className="w-6 h-6 text-amber-400/60" />
                   )}
@@ -622,7 +657,7 @@ export default function AdminDashboard() {
                   <span className="text-[10px] font-mono text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                     #{selectedTeam.registrationId}
                   </span>
-                  <h3 className="text-base font-black text-white mt-1 leading-tight">{selectedTeam.teamName}</h3>
+                  <h3 className="text-base font-black text-white mt-1 leading-tight">{toTitleCase(selectedTeam.teamName)}</h3>
                 </div>
               </div>
 
@@ -646,11 +681,11 @@ export default function AdminDashboard() {
                 </div>
                 <div className="mt-2">
                   <p className="text-[10px] text-gray-400">जिल्हा</p>
-                  <p className="font-bold text-white">{selectedTeam.district || 'N/A'}</p>
+                  <p className="font-bold text-white">{toTitleCase(selectedTeam.district) || 'N/A'}</p>
                 </div>
                 <div className="mt-2">
                   <p className="text-[10px] text-gray-400">विभाग / तालुका</p>
-                  <p className="font-bold text-white">{selectedTeam.vibhag || 'N/A'}</p>
+                  <p className="font-bold text-white">{toTitleCase(selectedTeam.vibhag) || 'N/A'}</p>
                 </div>
               </div>
 
@@ -660,7 +695,7 @@ export default function AdminDashboard() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-[10px] text-gray-400">संपर्क १ (कॅप्टन)</p>
-                    <p className="font-bold text-white">{selectedTeam.captain?.name || selectedTeam.contact1?.name || 'N/A'}</p>
+                    <p className="font-bold text-white">{toTitleCase(selectedTeam.captain?.name || selectedTeam.contact1?.name) || 'N/A'}</p>
                     <p className="text-[10px] text-gray-400 font-mono">{selectedTeam.captain?.phone || selectedTeam.contact1?.phone}</p>
                   </div>
                   {(selectedTeam.captain?.phone || selectedTeam.contact1?.phone) && (
@@ -679,7 +714,7 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-center pt-2 border-t border-white/5">
                     <div>
                       <p className="text-[10px] text-gray-400">संपर्क २ (अध्यक्ष/मॅनेजर)</p>
-                      <p className="font-bold text-white">{selectedTeam.manager?.name || selectedTeam.contact2?.name}</p>
+                      <p className="font-bold text-white">{toTitleCase(selectedTeam.manager?.name || selectedTeam.contact2?.name)}</p>
                       <p className="text-[10px] text-gray-400 font-mono">{selectedTeam.manager?.phone || selectedTeam.contact2?.phone}</p>
                     </div>
                     {(selectedTeam.manager?.phone || selectedTeam.contact2?.phone) && (
@@ -696,9 +731,9 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              {selectedTeam.media?.logoUrl && (
+              {getTeamLogo(selectedTeam) && (
                 <div className="pt-1">
-                  <a href={selectedTeam.media.logoUrl} target="_blank" rel="noreferrer" className="w-full py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-xl font-bold flex items-center justify-center gap-2">
+                  <a href={getTeamLogo(selectedTeam)} target="_blank" rel="noreferrer" className="w-full py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-xl font-bold flex items-center justify-center gap-2">
                     मूळ लोगो इमेज उघडा <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -744,7 +779,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* 🟢 ३. POPUP MODAL APPROVE / REJECT CHECK */}
             {canApproveReject ? (
               <div className="flex items-center gap-2 pt-2 border-t border-amber-500/20">
                 <button onClick={() => handleStatusChange(selectedTeam.registrationId, 'Approved')} className="flex-1 py-2.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-black border border-emerald-500/30 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
