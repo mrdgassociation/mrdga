@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Shield, Menu, X, UserCheck, LayoutDashboard, LogOut } from 'lucide-react';
+import { Shield, Menu, X, LayoutDashboard, LogOut, LogIn } from 'lucide-react';
 
 import NotificationBell from './NotificationBell';
 
@@ -22,8 +22,6 @@ export default function Navbar() {
 
   // 💡 अचूक रोल व विभाग चेकिंग (Users -> Teams -> Insurance)
   useEffect(() => {
-    //console.log("🚀 [NAVBAR MOUNTED]: Navbar Component Load Zala!");
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser && currentUser.email) {
@@ -32,7 +30,6 @@ export default function Navbar() {
 
           // 🎯 Step 2: ऑथेंटिकेट झालेल्या ई-मेलसह Push Permission & FCM Token Save ट्रिगर करा
           import('../services/notificationService.js').then(m => {
-           // console.log("📞 [CALLING STEP 1]: Invoking requestPushPermission...");
             m.notificationService.requestPushPermission(emailLower);
           });
 
@@ -80,7 +77,6 @@ export default function Navbar() {
       } else {
         setUserRole(null);
         setHasTeamData(false);
-        // 💡 Note: गेस्ट युझरसाठी विना-ईमेलचा डुप्लिकेट FCM कॉल इथून काढून टाकला आहे.
       }
     });
     return () => unsubscribe();
@@ -152,14 +148,6 @@ export default function Navbar() {
             <Link to="/competitions" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Competitions</Link>
             <Link to="/insurance-info" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Insurance Info</Link>
             <Link to="/contact" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Contact</Link>
-            
-            {/* 🎯 Register Team Button 
-            <button 
-              onClick={handleNavRegister} 
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm rounded-xl shadow-lg shadow-amber-500/20 hover:opacity-90 transition cursor-pointer"
-            >
-              Register Team
-            </button>*/}
           </div>
 
           {/* 🎯 RIGHT SECTION: BELL ICON + PROFILE / LOGIN / MOBILE TOGGLE */}
@@ -204,12 +192,14 @@ export default function Navbar() {
                   </button>
                 </>
               ) : (
+                /* 🚀 आकर्षक डेस्कटॉप लॉगिन बटण */
                 <Link 
                   to="/login" 
-                  className="p-2 text-slate-400 hover:text-amber-400 transition" 
-                  title="Official Admin Login"
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer" 
+                  title="लॉगिन करा"
                 >
-                  <UserCheck className="w-5 h-5" />
+                  <LogIn className="w-4 h-4" />
+                  <span>लॉगिन (Login)</span>
                 </Link>
               )}
             </div>
@@ -237,13 +227,6 @@ export default function Navbar() {
           <Link to="/competitions" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Competitions</Link>
           <Link to="/insurance-info" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Insurance Info</Link>
           <Link to="/contact" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Contact</Link>
-          
-          {/* <button 
-            onClick={() => { setIsOpen(false); handleNavRegister(); }} 
-            className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-extrabold text-sm rounded-xl shadow-lg shadow-amber-500/20 hover:opacity-90 transition cursor-pointer"
-          >
-            Register Team
-          </button> */}
 
           {/* MOBILE: LOGGED-IN STATE */}
           {user ? (
@@ -274,7 +257,17 @@ export default function Navbar() {
               </button>
             </div>
           ) : (
-            <Link to="/login" onClick={() => setIsOpen(false)} className="block py-2 text-slate-400 text-xs">Admin Login</Link>
+            /* 🚀 आकर्षक मोबाईल लॉगिन बटण */
+            <div className="pt-2 border-t border-white/10">
+              <Link 
+                to="/login" 
+                onClick={() => setIsOpen(false)} 
+                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition cursor-pointer"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>लॉगिन (Login)</span>
+              </Link>
+            </div>
           )}
         </div>
       )}

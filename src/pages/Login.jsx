@@ -65,8 +65,16 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-dark px-4">
       <div className="glass-panel p-8 rounded-3xl max-w-md w-full text-center space-y-6">
-        <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl flex items-center justify-center mx-auto">
-          <Shield className="w-8 h-8" />
+        <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto overflow-hidden p-2">
+         <img 
+        src="./mrdga-logo.png" 
+        alt="MRDGA Logo" 
+        className="w-full h-full object-contain"
+        onError={(e) => {
+          e.target.onerror = null;
+          e.target.src = "https://via.placeholder.com/64?text=MRDGA"; // इमेज न सापडल्यास फॉलबॅक
+        }}
+      />
         </div>
 
         <div>

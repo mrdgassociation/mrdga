@@ -860,55 +860,92 @@ function ImageCarousel({ images = [] }) {
   );
 }
 
-// 🎯 SECTION: Updated Card Component with Registration Form ON/OFF Toggle
+// 🎯 SECTION: Updated Responsive & Readable Competition Card Component
 function Card({ comp, isLive, isSuperAdmin, onClick, onEdit, onDelete, onToggleForm }) {
   const isOnline = comp.isFormOpen !== false;
 
   return (
     <div 
       onClick={onClick} 
-      className="min-w-[250px] max-w-[250px] snap-start bg-[#0c0d14] border border-amber-500/20 rounded-2xl overflow-hidden shadow-lg hover:border-amber-500/50 transition cursor-pointer flex flex-col justify-between relative group"
+      className="min-w-[280px] sm:min-w-[320px] max-w-[340px] snap-start bg-[#0d0e15] border border-amber-500/20 rounded-2xl overflow-hidden shadow-xl hover:border-amber-500/50 hover:shadow-amber-500/10 transition-all duration-300 cursor-pointer flex flex-col justify-between relative group"
     >
-      <div className="relative h-32 bg-[#050608] flex items-center justify-center overflow-hidden border-b border-slate-800/80">
+      {/* 🖼️ पोस्टर / बॅनर सेक्शन */}
+      <div className="relative h-44 sm:h-48 bg-[#050608] overflow-hidden border-b border-slate-800/80">
         <img 
           src={comp.bannerUrl || './event-banner.jpg'} 
           alt={comp.title} 
-          className="w-full h-full object-contain p-1 transition-transform duration-300 group-hover:scale-105" 
-          onError={e => e.target.src = './event-banner.jpg'} 
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+          onError={e => { e.target.src = './event-banner.jpg'; }} 
         />
         
+        {/* डार्क ओव्हरले जेणेकरून टेक्स्ट चांगला दिसेल */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0e15] via-transparent to-black/40"></div>
+
+        {/* 🔴 LIVE Badge */}
         {isLive && (
-          <span className="absolute top-2 left-2 bg-red-600 text-white font-extrabold text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse z-10 shadow-md">
-            <Radio className="w-2.5 h-2.5" /> LIVE
+          <span className="absolute top-3 left-3 bg-red-600 text-white font-extrabold text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse z-10 shadow-lg tracking-wider">
+            <Radio className="w-3 h-3" /> LIVE
           </span>
         )}
 
+        {/* 👑 Super Admin Edit/Delete Floating Controls */}
         {isSuperAdmin && (
-          <div className="absolute top-2 right-2 flex gap-1 z-10">
-            <button onClick={onEdit} className="p-1 bg-black/80 text-amber-400 rounded-lg hover:bg-black cursor-pointer" title="संपादित करा"><Edit2 className="w-3 h-3"/></button>
-            <button onClick={onDelete} className="p-1 bg-black/80 text-red-400 rounded-lg hover:bg-black cursor-pointer" title="हटवा"><Trash2 className="w-3 h-3"/></button>
+          <div className="absolute top-3 right-3 flex gap-1.5 z-10">
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(e); }} 
+              className="p-1.5 bg-black/70 backdrop-blur-md text-amber-400 rounded-lg hover:bg-black hover:scale-110 transition cursor-pointer border border-amber-500/30" 
+              title="संपादित करा"
+            >
+              <Edit2 className="w-3.5 h-3.5"/>
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(e); }} 
+              className="p-1.5 bg-black/70 backdrop-blur-md text-rose-400 rounded-lg hover:bg-black hover:scale-110 transition cursor-pointer border border-rose-500/30" 
+              title="हटवा"
+            >
+              <Trash2 className="w-3.5 h-3.5"/>
+            </button>
           </div>
         )}
       </div>
 
-      <div className="p-3 space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] text-amber-400 font-mono font-bold">{comp.competitionId || comp.id}</span>
+      {/* 📝 स्पर्धा माहिती (मोठा आणि सुटसुटीत फॉन्ट) */}
+      <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
+        <div className="space-y-1.5">
+          <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 inline-block">
+            #{comp.competitionId || comp.id}
+          </span>
+          
+          {/* 🎯 मोठा व उठून दिसणारा स्पर्धेचा मथळा */}
+          <h3 className="font-extrabold text-sm sm:text-base text-white group-hover:text-amber-300 transition-colors leading-snug line-clamp-2">
+            {comp.title}
+          </h3>
         </div>
-        <h3 className="font-extrabold text-xs text-white line-clamp-2 leading-tight">{comp.title}</h3>
-        <p className="text-[10px] text-amber-400 font-bold">{comp.startDate} • {comp.venue}</p>
+
+        {/* 📅 तारीख आणि ठिकाण (आयकॉन्ससह स्पष्ट माहिती) */}
+        <div className="space-y-1 pt-1 border-t border-slate-800/60 text-xs text-slate-300">
+          <p className="flex items-center gap-1.5 font-semibold text-amber-300">
+            <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>{comp.startDate}</span>
+          </p>
+          <p className="flex items-center gap-1.5 text-slate-400 truncate">
+            <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate">{comp.venue}</span>
+          </p>
+        </div>
       </div>
 
-      <div className="p-2.5 bg-[#11131c] border-t border-slate-800 space-y-2">
+      {/* 🔒 फॉर्म स्टेटस आणि पहा बटण */}
+      <div className="px-4 py-3 bg-[#121420] border-t border-slate-800/80 space-y-2">
         {isSuperAdmin && (
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5" onClick={e => e.stopPropagation()}>
-            <span className="text-[10px] text-slate-400 font-semibold">फॉर्म:</span>
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2" onClick={e => e.stopPropagation()}>
+            <span className="text-xs text-slate-400 font-semibold">फॉर्म नोंदणी:</span>
             <button
               onClick={onToggleForm}
-              className={`px-2 py-0.5 rounded-md text-[10px] font-black transition flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
                 isOnline 
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30' 
-                  : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25' 
+                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25'
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
@@ -917,9 +954,11 @@ function Card({ comp, isLive, isSuperAdmin, onClick, onEdit, onDelete, onToggleF
           </div>
         )}
 
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="text-slate-400">माहिती व निकाल</span>
-          <span className="text-amber-400 font-bold flex items-center gap-0.5">पहा <Info className="w-3 h-3"/></span>
+        <div className="flex items-center justify-between text-xs font-bold pt-0.5">
+          <span className="text-slate-400 group-hover:text-slate-200 transition">माहिती व निकाल</span>
+          <span className="text-amber-400 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+            पहा <Info className="w-3.5 h-3.5"/>
+          </span>
         </div>
       </div>
     </div>
