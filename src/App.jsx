@@ -12,6 +12,8 @@ import InsuranceDashboard from './pages/InsuranceDashboard';
 import MyTeamDashboard from './pages/MyTeamDashboard';
 import NotificationHub from './pages/NotificationHub';
 import TournamentManager from './pages/TournamentManager';
+import MandalDirectory from './pages/MandalDirectory';
+import MeetingRSVP from './pages/MeetingRSVP';
 
 // Admin Pages
 import AdminDashboard from './pages/AdminDashboard';
@@ -141,6 +143,18 @@ export default function App() {
           } 
         />
 
+        {/* 🔐 📖 गोविंदा पथक डिरेक्टरी (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        <Route 
+          path="/admin/mandal-directory" 
+          element={
+            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
+              <AdminLayout>
+                <MandalDirectory />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
 
         {/* 🔐 4. User Management (फक्त Super Admin साठी) */}
         <Route 
@@ -175,6 +189,25 @@ export default function App() {
                 <NotificationHub />
               </AdminLayout>
             </ProtectedRoute>
+          } 
+        />
+
+                {/* 🚩 १६ ऑगस्ट बैठक RSVP (ModuleGuard द्वारे सुपर ॲडमिन कंट्रोल) */}
+        <Route 
+          path="/rsvp" 
+          element={
+            <ModuleGuard pageKey="rsvpPage">
+              <MeetingRSVP />
+            </ModuleGuard>
+          } 
+        />
+
+        <Route 
+          path="/meeting-16aug" 
+          element={
+            <ModuleGuard pageKey="rsvpPage">
+              <MeetingRSVP />
+            </ModuleGuard>
           } 
         />
 

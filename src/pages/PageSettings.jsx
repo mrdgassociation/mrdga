@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/dataService';
 import Swal from 'sweetalert2';
-import { ToggleLeft, ToggleRight, Shield, Save, LayoutDashboard, Trophy, FileText } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Shield, Save, LayoutDashboard, Trophy, FileText, Calendar, Users } from 'lucide-react';
 
 export default function PageSettings() {
   const [config, setConfig] = useState({
@@ -12,7 +12,9 @@ export default function PageSettings() {
     competitionPage: true,
 
     // 🎯 📝 Form Acceptance Toggles (फॉर्म ऑन/ऑफ सेटिंग्ज)
-    insuranceForm: true, // 👈 गोविंदा विमा अर्ज स्वीकृती (ON/OFF)
+    insuranceForm: true, // गोविंदा विमा अर्ज स्वीकृती (ON/OFF)
+    meetingRsvpForm: true, // १६ ऑगस्ट बैठक RSVP अर्ज (ON/OFF)
+    maxRsvpMembers: 2, // 👈 🚩 प्रतिनिधी मर्यादा (Default: 2)
 
     // 🔒 Admin Menu Visibility Toggles
     showDahiHandiScoringMenu: true,
@@ -79,7 +81,7 @@ export default function PageSettings() {
         </button>
       </div>
 
-      {/* 📝 1. Form Acceptance Controls (नवीन फॉर्म स्वीकृती विभाग) */}
+      {/* 📝 1. Form Acceptance Controls (फॉर्म स्वीकृती विभाग) */}
       <div className="bg-black/40 border border-amber-500/15 rounded-2xl p-4 space-y-3">
         <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <FileText className="w-4 h-4" /> अर्ज स्वीकृती कंट्रोल (Form Submissions)
@@ -96,6 +98,41 @@ export default function PageSettings() {
           <button onClick={() => handleToggle('insuranceForm')} className="text-amber-400 cursor-pointer">
             {config.insuranceForm !== false ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
           </button>
+        </div>
+
+        {/* 🚩 16 AUG RSVP Form Acceptance Toggle & Dynamic Player Limit */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-black/60 rounded-xl border border-amber-500/30 gap-3">
+          <div>
+            <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" /> १६ ऑगस्ट बैठक RSVP अर्ज (Meeting RSVP)
+            </h4>
+            <p className="text-[10px] text-gray-400">
+              {config.meetingRsvpForm !== false ? 'नोंदणी सुरु आहे (Active)' : 'नोंदणी बंद (Disabled - Redirects to Home)'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {/* ⚙️ प्रतिनिधी संख्या निवड ड्रॉपडाऊन */}
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/40 px-2.5 py-1 rounded-xl">
+              <Users className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[10px] text-slate-300 font-bold">मर्यादा:</span>
+              <select
+                value={config.maxRsvpMembers || 2}
+                onChange={(e) => setConfig(prev => ({ ...prev, maxRsvpMembers: Number(e.target.value) }))}
+                className="bg-black text-amber-400 font-extrabold text-xs border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
+              >
+                <option value={1}>१ जण (फक्त कॅप्टन)</option>
+                <option value={2}>२ जण (कॅप्टन + १)</option>
+                <option value={3}>३ जण (कॅप्टन + २)</option>
+                <option value={4}>४ जण (कॅप्टन + ३)</option>
+                <option value={5}>५ जण (कॅप्टन + ४)</option>
+              </select>
+            </div>
+
+            <button onClick={() => handleToggle('meetingRsvpForm')} className="text-amber-400 cursor-pointer shrink-0">
+              {config.meetingRsvpForm !== false ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
+            </button>
+          </div>
         </div>
       </div>
 

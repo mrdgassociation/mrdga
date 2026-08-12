@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ShieldCheck, LayoutDashboard, LogOut, ArrowLeft, Menu, X, 
-  User, FileText, UserCheck, Sliders, Bell, Trophy, Lock
+  User, FileText, UserCheck, Sliders, Bell, Trophy, Lock, BookOpen
 } from 'lucide-react';
 import { authService } from '../services/authService';
 import { dataService } from '../services/dataService';
@@ -208,6 +208,21 @@ export default function AdminLayout({ children }) {
                 }`}
               >
                 <Trophy className="w-4 h-4 shrink-0 text-amber-400" /> दहीहंडी स्पर्धा (Scoring)
+              </Link>
+            )}
+
+            {/* 📖 🆕 गोविंदा पथक डिरेक्टरी (MRDGA व SUPER साठी) */}
+            {canSeeCompetition && (
+              <Link
+                to="/admin/mandal-directory"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/mandal-directory'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 shrink-0 text-amber-400" /> पथक डिरेक्टरी (Directory)
               </Link>
             )}
 
