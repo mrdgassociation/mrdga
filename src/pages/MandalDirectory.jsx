@@ -347,7 +347,7 @@ export default function MandalDirectory() {
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">
-              १८००+ मंडळांची माहिती • कॉलर: <b className="text-amber-400">{currentUserName || currentUserEmail}</b>
+              मंडळांची माहिती • कॉलर: <b className="text-amber-400">{currentUserName || currentUserEmail}</b>
             </p>
           </div>
         </div>

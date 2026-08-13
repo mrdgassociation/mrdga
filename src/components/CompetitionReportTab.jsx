@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 export default function CompetitionReportTab({ 
-  teams, competitions, competitionFilter, setCompetitionFilter, 
+  teams = [], competitions = [], competitionFilter, setCompetitionFilter, 
   canExportAndPrint, selectedCompTitle 
 }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +27,42 @@ export default function CompetitionReportTab({
 
   const uniqueDistricts = Array.from(new Set(teams.map(t => t.district).filter(Boolean)));
   const uniqueCategories = Array.from(new Set(teams.map(t => t.category).filter(Boolean)));
+
+  // 🛡️ स्मार्ट डुप्लिकेट डिटेक्शन सेट (एक्सेल एक्सपोर्टसाठी)
+  const duplicateMap = useMemo(() => {
+    const dupMap = new Map();
+    const cleanStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    const cleanPhone = (ph) => (ph || '').replace(/[^0-9]/g, '').slice(-10);
+
+    const nameCounts = new Map();
+    const phoneCounts = new Map();
+
+    teams.forEach(t => {
+      const cName = cleanStr(t.teamName);
+      const cPhone = cleanPhone(t.captain?.phone || t.contact1?.phone);
+      if (cName && cName.length > 3) nameCounts.set(cName, (nameCounts.get(cName) || 0) + 1);
+      if (cPhone && cPhone.length === 10) phoneCounts.set(cPhone, (phoneCounts.get(cPhone) || 0) + 1);
+    });
+
+    teams.forEach(t => {
+      const cName = cleanStr(t.teamName);
+      const cPhone = cleanPhone(t.captain?.phone || t.contact1?.phone);
+
+      const isNameDup = cName && nameCounts.get(cName) > 1;
+      const isPhoneDup = cPhone && phoneCounts.get(cPhone) > 1;
+
+      if (isNameDup || isPhoneDup) {
+        let reason = '';
+        if (isNameDup && isPhoneDup) reason = 'नाव व मोबाईल समान (Name & Phone Match)';
+        else if (isNameDup) reason = 'समान मंडळ नाव (Name Match)';
+        else reason = `समान मोबाईल (${cPhone})`;
+
+        dupMap.set(t.registrationId, reason);
+      }
+    });
+
+    return dupMap;
+  }, [teams]);
 
   const filteredTeams = teams.filter(team => {
     const teamName = team.teamName || '';
@@ -55,7 +91,6 @@ export default function CompetitionReportTab({
   const pendingCount = filteredTeams.filter(t => t.status === 'Pending' || !t.status).length;
   const rejectedCount = filteredTeams.filter(t => t.status === 'Rejected').length;
 
-  // 🏆 Category Wise Grouping Function
   const getTeamsByCategory = (catKey) => {
     if (catKey === 'OTHERS') {
       return filteredTeams.filter(t => !['M7', 'M6', 'W'].includes(t.category));
@@ -63,6 +98,7 @@ export default function CompetitionReportTab({
     return filteredTeams.filter(t => t.category === catKey);
   };
 
+  // 📊 Excel Export Handler (विस्तारित कॉलम्ससह)
   const handleExportToExcel = () => {
     if (filteredTeams.length === 0) {
       Swal.fire({
@@ -75,27 +111,45 @@ export default function CompetitionReportTab({
       return;
     }
 
-    const excelData = filteredTeams.map((team, index) => ({
-      'अ. क्र.': index + 1,
-      'Reg ID': team.registrationId || '',
-      'स्पर्धा ID': team.competitionId || '',
-      'स्पर्धेचे नाव': team.competitionTitle || 'महाराष्ट्र राज्य दहीहंडी नोंदणी',
-      'संघाचे नाव': toTitleCase(team.teamName || ''),
-      'गट / प्रकार': team.category || '',
-      'खेळाडू संख्या': team.playerCount || '',
-      'जिल्हा': toTitleCase(team.district || ''),
-      'विभाग / तालुका': toTitleCase(team.vibhag || ''),
-      'पिनकोड': team.pincode || '',
-      'संपर्क १ (कॅप्टन)': toTitleCase(team.captain?.name || team.contact1?.name || ''),
-      'संपर्क १ फोन': team.captain?.phone || team.contact1?.phone || '',
-      'संपर्क २ नाव': toTitleCase(team.manager?.name || team.contact2?.name || ''),
-      'संपर्क २ फोन': team.manager?.phone || team.contact2?.phone || '',
-      'ईमेल': team.email || '',
-      'लोगो लिंक': team.media?.logoUrl || '',
-      'कॅप्टन फोटो लिंक': team.media?.captainPhotoUrl || '',
-      'नोंदणी दिनांक': team.createdAt ? new Date(team.createdAt).toLocaleDateString('mr-IN') : '',
-      'स्टेटस': team.status || 'Pending'
-    }));
+    const excelData = filteredTeams.map((team, index) => {
+      const comments = team.comments || [];
+      const lastComment = comments.length > 0 ? comments[comments.length - 1] : null;
+      const isDuplicate = duplicateMap.has(team.registrationId);
+      const dupReason = duplicateMap.get(team.registrationId) || '-';
+
+      return {
+        'अ. क्र.': index + 1,
+        'Reg ID': team.registrationId || '',
+        'स्पर्धा ID': team.competitionId || '',
+        'स्पर्धेचे नाव': team.competitionTitle || 'महाराष्ट्र राज्य दहीहंडी नोंदणी',
+        'संघाचे नाव': toTitleCase(team.teamName || ''),
+        'गट / प्रकार': team.category || '',
+        'खेळाडू संख्या': team.playerCount || '',
+        'जिल्हा': toTitleCase(team.district || ''),
+        'विभाग / तालुका': toTitleCase(team.vibhag || ''),
+        'पिनकोड': team.pincode || '',
+        'संपर्क १ (कॅप्टन)': toTitleCase(team.captain?.name || team.contact1?.name || ''),
+        'संपर्क १ फोन': team.captain?.phone || team.contact1?.phone || '',
+        'संपर्क २ नाव': toTitleCase(team.manager?.name || team.contact2?.name || ''),
+        'संपर्क २ फोन': team.manager?.phone || team.contact2?.phone || '',
+        'ईमेल': team.email || '',
+        
+        // 🚩 🟢 नवीन जोडलेले रिमार्क ट्रॅकिंग कॉलम्स
+        'एकूण रिमार्क्स संख्या': comments.length,
+        'शेवटचा रिमार्क / अपडेट': lastComment ? lastComment.text : 'अद्याप कॉल/रिमार्क नाही',
+        'रिमार्क देणारा अधिकारी': lastComment ? `${lastComment.byName || lastComment.name || ''} (${lastComment.role || ''})` : '-',
+        'रिमार्क दिनांक व वेळ': lastComment && lastComment.createdAt ? new Date(lastComment.createdAt).toLocaleString('mr-IN') : '-',
+        
+        // ⚠️ 🚩 नवीन जोडलेले डुप्लिकेट फ्लॅग कॉलम्स
+        'दुबार नोंदणी शक्यता?': isDuplicate ? 'होय (Yes)' : 'नाही (No)',
+        'दुबार असण्याचे कारण': isDuplicate ? dupReason : '-',
+
+        'लोगो लिंक': team.media?.logoUrl || '',
+        'कॅप्टन फोटो लिंक': team.media?.captainPhotoUrl || '',
+        'नोंदणी दिनांक': team.createdAt ? new Date(team.createdAt).toLocaleDateString('mr-IN') : '',
+        'स्टेटस': team.status || 'Pending'
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
@@ -107,7 +161,7 @@ export default function CompetitionReportTab({
 
   const handlePrint = () => {
     const originalTitle = document.title;
-    const cleanCompName = selectedCompTitle.replace(/[^a-zA-Z0-9_\u0900-\u097F]/g, "_");
+    const cleanCompName = (selectedCompTitle || 'Report').replace(/[^a-zA-Z0-9_\u0900-\u097F]/g, "_");
     const todayDate = new Date().toISOString().slice(0, 10);
     document.title = `MRDGA_Report_${cleanCompName}_${todayDate}`;
 
@@ -119,7 +173,7 @@ export default function CompetitionReportTab({
   };
 
   return (
-    <div className="space-y-3.5">
+    <div className="space-y-3.5 font-sans">
       
       {/* 🖨️ PRINT & PDF STYLING */}
       <style>{`

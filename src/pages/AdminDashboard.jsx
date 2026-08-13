@@ -1,14 +1,18 @@
 // ==========================================
 // #SECTION 1: IMPORTS & COMPONENT INITIALIZATION
 // ==========================================
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../services/dataService';
 import { authService } from '../services/authService';
 import Swal from 'sweetalert2';
 import { 
   CheckCircle, XCircle, Search, Filter, RefreshCw, 
-  Phone, MessageSquare, ExternalLink, Shield, MapPin, X, ChevronRight, User, Trophy, Layers, Lock
+  Phone, MessageSquare, ExternalLink, Shield, MapPin, X, ChevronRight, User, Trophy, Layers, Lock, Copy, CheckCircle2, MessageSquareCheck
 } from 'lucide-react';
+
+import CompetitionStats from '../components/CompetitionStats';
+import CompetitionDuplicatesModal from '../components/CompetitionDuplicatesModal';
+import CompetitionLeaderboardModal from '../components/CompetitionLeaderboardModal';
 
 export default function AdminDashboard() {
   // ==========================================
@@ -23,12 +27,15 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [competitionFilter, setCompetitionFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [remarkFilter, setRemarkFilter] = useState('ALL'); // 🟢 रिमार्क फिल्टर
   
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
 
   // User Authentication, Role & Department States
   const [userRole, setUserRole] = useState('Reviewer');
-  const [userDepartment, setUserDepartment] = useState('MRDGA'); // 🏢 Default MRDGA
+  const [userDepartment, setUserDepartment] = useState('MRDGA');
   
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
@@ -41,7 +48,6 @@ export default function AdminDashboard() {
   const [isFormOpen, setIsFormOpen] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
 
-  // 🔤 Helper Function for Title Case (Proper Formatting: jai bajrang -> Jai Bajrang)
   const toTitleCase = (str) => {
     if (!str) return '';
     return str
@@ -51,7 +57,6 @@ export default function AdminDashboard() {
       .join(' ');
   };
 
-  // 🛡️ Helper Function for Team Logo URL Extraction (Handles media.logo)
   const getTeamLogo = (team) => {
     if (!team) return null;
     return team.media?.logo || team.media?.logoUrl || team.logo || team.logoUrl || null;
@@ -60,18 +65,6 @@ export default function AdminDashboard() {
   // ==========================================
   // #SECTION 3: API & AUTHENTICATION HANDLERS
   // ==========================================
-  const loadTeams = async () => {
-    setLoading(true);
-    try {
-      const data = await dataService.getAllTeams();
-      setTeams(data || []);
-    } catch (err) {
-      console.error("Error loading teams:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadCompetitionsAndTeams = async () => {
     setLoading(true);
     try {
@@ -115,7 +108,6 @@ export default function AdminDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // Update Status Handler
   const handleStatusChange = async (regId, newStatus) => {
     try {
       await dataService.updateTeamStatus(regId, newStatus);
@@ -142,7 +134,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // Add Comment Handler
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedTeam) return;
 
@@ -194,57 +185,73 @@ export default function AdminDashboard() {
     }
   };
 
-  // Fetch Form Status
-  useEffect(() => {
-    const fetchStatus = async () => {
-      const status = await dataService.getFormStatus(competitionFilter);
-      setIsFormOpen(status?.isOpen !== false);
-    };
-    fetchStatus();
-  }, [competitionFilter]);
+  // ==========================================
+  // #SECTION 4: SMART DUPLICATE DETECTION LOGIC (Same Name `duplicateTeams`)
+  // ==========================================
+  const duplicateTeams = useMemo(() => {
+    if (!teams || teams.length === 0) return [];
 
-  // Toggle Form Status Handler
-  const handleToggleFormStatus = async () => {
-    const newStatus = !isFormOpen;
-    const targetCompText = competitionFilter === 'ALL' ? 'सर्व सामान्य फॉर्म' : competitionFilter;
-    
-    const result = await Swal.fire({
-      title: `${targetCompText} ${newStatus ? 'सुरू करायचा का?' : 'बंद करायचा का?'}`,
-      text: newStatus 
-        ? 'नवीन पथकांना अर्ज भरता येईल.' 
-        : 'फॉर्म बंद केल्यास नवीन नोंदणी करता येणार नाही.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: newStatus ? 'होय, सुरू करा' : 'होय, बंद करा',
-      cancelButtonText: 'रद्द करा',
-      background: '#0c0d14',
-      color: '#fff'
+    const groupMap = new Map();
+    const cleanStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    const cleanPhone = (ph) => (ph || '').replace(/[^0-9]/g, '').slice(-10);
+
+    teams.forEach((team) => {
+      const cleanName = cleanStr(team.teamName);
+      const c1Phone = cleanPhone(team.captain?.phone || team.contact1?.phone);
+      const c2Phone = cleanPhone(team.manager?.phone || team.contact2?.phone);
+
+      // १. नावावरून मॅचिंग
+      if (cleanName && cleanName.length > 3) {
+        const nameKey = `NAME_${cleanName}`;
+        if (!groupMap.has(nameKey)) groupMap.set(nameKey, { matchType: 'समान नाव (Name Match)', teams: [] });
+        groupMap.get(nameKey).teams.push(team);
+      }
+
+      // २. कॅप्टन फोन नंबर मॅचिंग
+      if (c1Phone && c1Phone.length === 10) {
+        const p1Key = `PHONE_${c1Phone}`;
+        if (!groupMap.has(p1Key)) groupMap.set(p1Key, { matchType: `समान मोबाईल (${c1Phone})`, teams: [] });
+        groupMap.get(p1Key).teams.push(team);
+      }
+
+      // ३. मॅनेजर फोन नंबर मॅचिंग
+      if (c2Phone && c2Phone.length === 10 && c2Phone !== c1Phone) {
+        const p2Key = `PHONE_${c2Phone}`;
+        if (!groupMap.has(p2Key)) groupMap.set(p2Key, { matchType: `समान मॅनेजर मोबाईल (${c2Phone})`, teams: [] });
+        groupMap.get(p2Key).teams.push(team);
+      }
     });
 
-    if (result.isConfirmed) {
-      setStatusLoading(true);
-      try {
-        await dataService.updateFormStatus(newStatus, competitionFilter);
-        setIsFormOpen(newStatus);
-        Swal.fire({
-          icon: 'success',
-          title: newStatus ? 'फॉर्म सुरू झाला!' : 'फॉर्म बंद झाला!',
-          timer: 1500,
-          showConfirmButton: false,
-          background: '#0c0d14',
-          color: '#fff'
-        });
-      } catch (err) {
-        Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्टेटस बदलता आला नाही.' });
-      } finally {
-        setStatusLoading(false);
-      }
-    }
-  };
+    const finalGroups = [];
+    const processedTeamIds = new Set();
 
-  // ==========================================
-  // 🔐 PERMISSION & ACCESS CHECKS
-  // ==========================================
+    groupMap.forEach((groupData) => {
+      const uniqueTeamsInGroup = [];
+      const seenIds = new Set();
+
+      groupData.teams.forEach(t => {
+        if (!seenIds.has(t.registrationId)) {
+          seenIds.add(t.registrationId);
+          uniqueTeamsInGroup.push(t);
+        }
+      });
+
+      if (uniqueTeamsInGroup.length > 1) {
+        const unparsedCount = uniqueTeamsInGroup.filter(t => !processedTeamIds.has(t.registrationId)).length;
+        if (unparsedCount > 0) {
+          uniqueTeamsInGroup.forEach(t => processedTeamIds.add(t.registrationId));
+          finalGroups.push({
+            matchKey: uniqueTeamsInGroup[0].teamName,
+            matchReason: groupData.matchType,
+            teams: uniqueTeamsInGroup
+          });
+        }
+      }
+    });
+
+    return finalGroups;
+  }, [teams]);
+
   const hasMrdgaAccess = (userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA') && userDepartment !== 'INSURANCE';
   const canApproveReject = userRole === 'Super Admin' || (userRole === 'Admin' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER'));
 
@@ -259,7 +266,7 @@ export default function AdminDashboard() {
   }
 
   // ==========================================
-  // #SECTION 4: DYNAMIC FILTER & SEARCH LOGIC
+  // #SECTION 5: DYNAMIC FILTER & SEARCH LOGIC
   // ==========================================
   const filteredTeams = teams.filter(team => {
     const teamName = team.teamName || '';
@@ -278,16 +285,21 @@ export default function AdminDashboard() {
     const matchesComp = competitionFilter === 'ALL' || team.competitionId === competitionFilter;
     const matchesCategory = categoryFilter === 'ALL' || team.category === categoryFilter;
 
-    return matchesSearch && matchesStatus && matchesComp && matchesCategory;
+    const hasRemark = Boolean(team.comments && team.comments.length > 0);
+    const matchesRemark = remarkFilter === 'ALL' || 
+                          (remarkFilter === 'WITH_REMARK' && hasRemark) ||
+                          (remarkFilter === 'WITHOUT_REMARK' && !hasRemark);
+
+    return matchesSearch && matchesStatus && matchesComp && matchesCategory && matchesRemark;
   });
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto px-1 py-2 font-sans">
+    <div className="space-y-3 max-w-7xl mx-auto px-1 py-2 font-sans">
       
       {/* ========================================== */}
-      {/* #SECTION 5: HEADER & SEARCH-FILTER BAR    */}
+      {/* #SECTION 6: TOP HEADER                     */}
       {/* ========================================== */}
-      <div className="flex justify-between items-center bg-black/50 border border-amber-500/20 p-3 sm:p-4 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-black/50 border border-amber-500/20 p-3 sm:p-4 rounded-2xl gap-2">
         <div className="flex items-center gap-2.5">
           <div className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
             <Shield className="w-4 h-4" />
@@ -306,19 +318,48 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <button 
-          onClick={loadCompetitionsAndTeams} 
-          className="p-2 sm:px-3 sm:py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">रिफ्रेश</span>
-        </button>
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* ⚠️ डुप्लिकेट टीम्स अलर्ट बटण */}
+          {duplicateTeams.length > 0 && (
+            <button
+              onClick={() => setShowDuplicatesModal(true)}
+              className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5 text-rose-400" />
+              <span>दुबार अर्ज ({duplicateTeams.length})</span>
+            </button>
+          )}
+
+          {/* 🏆 कॉलिंग लीडरबोर्ड बटण */}
+          <button
+            onClick={() => setShowLeaderboardModal(true)}
+            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span>कॉलिंग लीडरबोर्ड 🏆</span>
+          </button>
+
+          <button 
+            onClick={loadCompetitionsAndTeams} 
+            className="p-2 sm:px-3 sm:py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">रिफ्रेश</span>
+          </button>
+        </div>
       </div>
 
-      {/* Search & Dynamic Filter Inputs */}
-      <div className="glass-panel p-2.5 rounded-2xl flex flex-col sm:flex-row gap-2">
-        <div className="flex-1 relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-amber-400/60" />
+      {/* ========================================== */}
+      {/* #SECTION 7: STATS & CALLING TRACKER BOARD   */}
+      {/* ========================================== */}
+      <CompetitionStats teams={teams} filteredTeams={filteredTeams} />
+
+      {/* ========================================== */}
+      {/* #SECTION 8: SEARCH & MOBILE COMPACT FILTERS */}
+      {/* ========================================== */}
+      <div className="glass-panel p-2.5 rounded-2xl space-y-2">
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-400/60" />
           <input
             type="text"
             placeholder="संघ, संपर्क व्यक्ती किंवा जिल्ह्याने शोधा..."
@@ -328,48 +369,65 @@ export default function AdminDashboard() {
           />
         </div>
 
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
-          <Filter className="w-3.5 h-3.5 text-amber-400/60 shrink-0 ml-1" />
-          
-          <select
-            value={competitionFilter}
-            onChange={(e) => setCompetitionFilter(e.target.value)}
-            className="w-full sm:w-auto bg-black/60 border border-amber-500/10 rounded-xl px-2.5 py-1.5 text-xs text-amber-400 font-bold focus:outline-none focus:border-amber-400/50 transition"
-          >
-            <option value="ALL" className="bg-[#0c0d14] text-white">सर्व स्पर्धा (All)</option>
-            {competitions.map(comp => (
-              <option key={comp.competitionId || comp.id} value={comp.competitionId || comp.id} className="bg-[#0c0d14] text-white">
-                {comp.title || comp.competitionId}
-              </option>
-            ))}
-          </select>
+        {/* 📱 2x2 Compact Grid on Mobile */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          <div>
+            <select
+              value={competitionFilter}
+              onChange={(e) => setCompetitionFilter(e.target.value)}
+              className="w-full bg-black/60 border border-amber-500/10 rounded-xl px-2 py-1 text-[11px] text-amber-400 font-bold focus:outline-none"
+            >
+              <option value="ALL" className="bg-[#0c0d14] text-white">सर्व स्पर्धा</option>
+              {competitions.map(comp => (
+                <option key={comp.competitionId || comp.id} value={comp.competitionId || comp.id} className="bg-[#0c0d14] text-white">
+                  {comp.title || comp.competitionId}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="w-full sm:w-auto bg-black/60 border border-amber-500/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400/50 transition"
-          >
-            <option value="ALL" className="bg-[#0c0d14]">सर्व गट (Category)</option>
-            <option value="M7" className="bg-[#0c0d14]">पुरुष ७ थर (M7)</option>
-            <option value="M6" className="bg-[#0c0d14]">पुरुष ६ थर (M6)</option>
-            <option value="W" className="bg-[#0c0d14]">महिला पथक (W)</option>
-          </select>
+          <div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full bg-black/60 border border-amber-500/10 rounded-xl px-2 py-1 text-[11px] text-white focus:outline-none"
+            >
+              <option value="ALL" className="bg-[#0c0d14]">सर्व गट (Category)</option>
+              <option value="M7" className="bg-[#0c0d14]">पुरुष ७ थर (M7)</option>
+              <option value="M6" className="bg-[#0c0d14]">पुरुष ६ थर (M6)</option>
+              <option value="W" className="bg-[#0c0d14]">महिला पथक (W)</option>
+            </select>
+          </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-auto bg-black/60 border border-amber-500/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400/50 transition"
-          >
-            <option value="ALL" className="bg-[#0c0d14]">सर्व अर्जे (Status)</option>
-            <option value="Pending" className="bg-[#0c0d14]">प्रलंबित (Pending)</option>
-            <option value="Approved" className="bg-[#0c0d14]">मंजूर (Approved)</option>
-            <option value="Rejected" className="bg-[#0c0d14]">नाकारलेले (Rejected)</option>
-          </select>
+          <div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full bg-black/60 border border-amber-500/10 rounded-xl px-2 py-1 text-[11px] text-white focus:outline-none"
+            >
+              <option value="ALL" className="bg-[#0c0d14]">सर्व अर्ज (Status)</option>
+              <option value="Pending" className="bg-[#0c0d14]">प्रलंबित (Pending)</option>
+              <option value="Approved" className="bg-[#0c0d14]">मंजूर (Approved)</option>
+              <option value="Rejected" className="bg-[#0c0d14]">नाकारलेले (Rejected)</option>
+            </select>
+          </div>
+
+          <div>
+            <select
+              value={remarkFilter}
+              onChange={(e) => setRemarkFilter(e.target.value)}
+              className="w-full bg-black/60 border border-amber-500/10 rounded-xl px-2 py-1 text-[11px] text-emerald-400 font-bold focus:outline-none"
+            >
+              <option value="ALL" className="bg-[#0c0d14] text-white">सर्व कॉल्स (Calls)</option>
+              <option value="WITH_REMARK" className="bg-[#0c0d14] text-emerald-400">🟢 रिमार्क जोडलेले</option>
+              <option value="WITHOUT_REMARK" className="bg-[#0c0d14] text-rose-400">⚪ प्रलंबित कॉल्स</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* ========================================== */}
-      {/* #SECTION 6: MOBILE CARDS & DESKTOP TABLE UI */}
+      {/* #SECTION 9: MAIN TEAM LIST (MOBILE & DESKTOP) */}
       {/* ========================================== */}
       {loading ? (
         <p className="p-12 text-center text-amber-400 font-semibold text-xs animate-pulse">डेटा लोड होत आहे...</p>
@@ -377,8 +435,8 @@ export default function AdminDashboard() {
         <p className="p-12 text-center text-gray-400 text-xs font-medium">कोणतीही नोंदणी सापडली नाही.</p>
       ) : (
         <>
-          {/* 📱 Mobile Responsive Cards View */}
-          <div className="grid grid-cols-1 md:hidden gap-3">
+          {/* 📱 Mobile Cards View */}
+          <div className="grid grid-cols-1 md:hidden gap-2">
             {filteredTeams.map((team) => {
               const rawC1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
               const c1Name = toTitleCase(rawC1Name);
@@ -392,36 +450,43 @@ export default function AdminDashboard() {
               const formattedDistrict = toTitleCase(team.district);
 
               const teamLogo = getTeamLogo(team);
+              const hasRemark = Boolean(team.comments && team.comments.length > 0);
 
               return (
                 <div 
                   key={team.registrationId}
-                  className="glass-panel p-3.5 rounded-2xl border border-amber-500/20 bg-black/40 space-y-3 relative overflow-hidden"
+                  className="glass-panel p-2.5 rounded-2xl border border-amber-500/20 bg-black/40 space-y-2 relative overflow-hidden"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {/* 🛡️ टीम लोगो डिस्प्ले (Proper Title Case संगती) */}
-                      <div className="w-12 h-12 rounded-full border-2 border-amber-500/30 overflow-hidden bg-amber-500/10 shrink-0 flex items-center justify-center">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full border border-amber-500/30 overflow-hidden bg-amber-500/10 shrink-0 flex items-center justify-center">
                         {teamLogo ? (
-                          <img 
-                            src={teamLogo} 
-                            alt="Logo" 
-                            className="w-full h-full object-cover" 
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
+                          <img src={teamLogo} alt="Logo" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
                         ) : (
-                          <Shield className="w-6 h-6 text-amber-400/60" />
+                          <Shield className="w-5 h-5 text-amber-400/60" />
                         )}
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          #{team.registrationId}
-                        </span>
-                        {/* प्रॉपर टायटल केसमध्ये टीमचे नाव */}
-                        <h3 className="font-bold text-sm text-white leading-tight mt-1">{formattedTeamName}</h3>
-                        <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-amber-400" /> {formattedDistrict || 'जिल्हा N/A'}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                            #{team.registrationId}
+                          </span>
+                          {/* 🟢 रिमार्क इंडिकेटर टिक */}
+                          {hasRemark ? (
+                            <span className="p-0.5 text-emerald-400" title="रिमार्क / कॉल अपडेट जोडला आहे">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </span>
+                          ) : (
+                            <span className="p-0.5 text-slate-600" title="कॉल/रिमार्क प्रलंबित">
+                              <MessageSquareCheck className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="font-extrabold text-xs text-white leading-tight mt-0.5">{formattedTeamName}</h3>
+                        <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-2.5 h-2.5 text-amber-400" /> {formattedDistrict || 'N/A'} ({team.category})
                         </p>
                       </div>
                     </div>
@@ -435,58 +500,34 @@ export default function AdminDashboard() {
                     </span>
                   </div>
 
-                  <div className="bg-black/50 p-2.5 rounded-xl border border-white/5 space-y-2 text-xs">
+                  <div className="bg-black/50 p-2 rounded-xl border border-white/5 space-y-1 text-xs">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span className="text-gray-200 font-semibold truncate text-[11px]">{c1Name} <span className="text-[9px] text-gray-500">(कॅप्टन)</span></span>
-                      </div>
-
+                      <span className="text-[11px] text-gray-200 font-semibold truncate">{c1Name}</span>
                       {c1Phone && (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <a href={`https://wa.me/91${c1Phone}?text=नमस्कार ${encodeURIComponent(c1Name)}, ${encodeURIComponent(formattedTeamName)} संदर्भात...`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition">
+                        <div className="flex items-center gap-1">
+                          <a href={`https://wa.me/91${c1Phone}`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-md">
                             <MessageSquare className="w-3 h-3" />
                           </a>
-                          <a href={`tel:${c1Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition">
+                          <a href={`tel:${c1Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded-md">
                             <Phone className="w-3 h-3" />
                           </a>
                         </div>
                       )}
                     </div>
-
-                    {c2Name && (
-                      <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <User className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                          <span className="text-gray-200 font-semibold truncate text-[11px]">{c2Name} <span className="text-[9px] text-gray-500">(संपर्क २)</span></span>
-                        </div>
-
-                        {c2Phone && (
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <a href={`https://wa.me/91${c2Phone}?text=नमस्कार ${encodeURIComponent(c2Name)}, ${encodeURIComponent(formattedTeamName)} संदर्भात...`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 hover:bg-emerald-500 hover:text-black transition">
-                              <MessageSquare className="w-3 h-3" />
-                            </a>
-                            <a href={`tel:${c2Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30 hover:bg-blue-500 hover:text-white transition">
-                              <Phone className="w-3 h-3" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                    <button onClick={() => setSelectedTeam(team)} className="text-[11px] font-bold text-amber-400 hover:underline flex items-center gap-1 cursor-pointer">
-                      संपूर्ण माहिती व रिमार्क्स <ChevronRight className="w-3 h-3" />
+                    <button onClick={() => setSelectedTeam(team)} className="text-[10px] font-bold text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer">
+                      माहिती व रिमार्क्स <ChevronRight className="w-3 h-3" />
                     </button>
 
                     {canApproveReject && (
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => handleStatusChange(team.registrationId, 'Approved')} className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer">
-                          <CheckCircle className="w-3 h-3" /> Approve
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleStatusChange(team.registrationId, 'Approved')} className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-bold">
+                          Approve
                         </button>
-                        <button onClick={() => handleStatusChange(team.registrationId, 'Rejected')} className="px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer">
-                          <XCircle className="w-3 h-3" /> Reject
+                        <button onClick={() => handleStatusChange(team.registrationId, 'Rejected')} className="px-2 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold">
+                          Reject
                         </button>
                       </div>
                     )}
@@ -527,27 +568,33 @@ export default function AdminDashboard() {
                     const formattedDistrict = toTitleCase(team.district);
 
                     const teamLogo = getTeamLogo(team);
+                    const hasRemark = Boolean(team.comments && team.comments.length > 0);
 
                     return (
                       <tr key={team.registrationId} className="hover:bg-amber-500/5 transition">
                         <td className="p-3">
                           <div className="w-9 h-9 rounded-full border border-amber-500/30 overflow-hidden bg-amber-500/10 flex items-center justify-center">
                             {teamLogo ? (
-                              <img 
-                                src={teamLogo} 
-                                alt="Logo" 
-                                className="w-full h-full object-cover" 
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                              />
+                              <img src={teamLogo} alt="Logo" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
                             ) : (
                               <Shield className="w-4 h-4 text-amber-400/60" />
                             )}
                           </div>
                         </td>
                         <td className="p-3 font-mono font-bold text-amber-400">{team.registrationId}</td>
+                        
+                        {/* 🚩 नाव आणि 🟢 रिमार्क इंडिकेटर */}
                         <td className="p-3 font-bold text-white cursor-pointer hover:text-amber-400" onClick={() => setSelectedTeam(team)}>
-                          {formattedTeamName}
+                          <div className="flex items-center gap-1.5">
+                            {formattedTeamName}
+                            {hasRemark ? (
+                              <span className="p-0.5 text-emerald-400" title="रिमार्क जोडला आहे"><CheckCircle2 className="w-4 h-4" /></span>
+                            ) : (
+                              <span className="p-0.5 text-slate-600" title="कॉल प्रलंबित"><MessageSquareCheck className="w-4 h-4" /></span>
+                            )}
+                          </div>
                         </td>
+
                         <td className="p-3">
                           <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[10px] font-extrabold border border-amber-500/30">
                             {team.category}
@@ -638,7 +685,27 @@ export default function AdminDashboard() {
       )}
 
       {/* ========================================== */}
-      {/* #SECTION 7: POPUP MODAL & TRACK REMARKS    */}
+      {/* #SECTION 10: DUPLICATES COMPARISON MODAL   */}
+      {/* ========================================== */}
+      {showDuplicatesModal && (
+        <CompetitionDuplicatesModal
+          duplicateTeams={duplicateTeams}
+          onClose={() => setShowDuplicatesModal(false)}
+          onSelectTeam={(team) => setSelectedTeam(team)}
+        />
+      )}
+
+      {/* 🏆 कॉलिंग लीडरबोर्ड आणि सर्व रिमार्क्स मोडल */}
+{showLeaderboardModal && (
+  <CompetitionLeaderboardModal
+    teams={teams}
+    onClose={() => setShowLeaderboardModal(false)}
+    onSelectTeam={(team) => setSelectedTeam(team)}
+  />
+)}
+
+      {/* ========================================== */}
+      {/* #SECTION 11: POPUP MODAL & TRACK REMARKS   */}
       {/* ========================================== */}
       {selectedTeam && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -801,3 +868,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
