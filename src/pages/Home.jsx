@@ -4,12 +4,13 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SplashScreen from '../components/SplashScreen';
 import InstallPWAButton from '../components/InstallPWAButton';
+import Swal from 'sweetalert2';
 
 import { useCompetitions } from '../hooks/useCompetitions';
 
 import { 
   Shield, Trophy, Users, Calendar, MapPin, ChevronRight, 
-  Award, HeartPulse, FileText, PhoneCall, CheckCircle2, Info ,ShieldCheck 
+  Award, HeartPulse, FileText, PhoneCall, CheckCircle2, Info, ShieldCheck, Sparkles, Clock, CheckCircle
 } from 'lucide-react';
 
 export default function Home() {
@@ -27,116 +28,195 @@ export default function Home() {
 
   const { competitions } = useCompetitions();
 
-  // 💡 सर्वात लेटेस्ट किंवा LIVE असलेली स्पर्धा शोधणे (मूळ लॉजिक जसेच्या तसे)
   const getActiveCompId = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     
-    // १. आधी सध्या LIVE असलेली स्पर्धा शोधा
     const liveComp = competitions.find(c => c.startDate <= todayStr && c.endDate >= todayStr);
     if (liveComp) return liveComp.competitionId || liveComp.id;
 
-    // २. किंवा आगामी (Upcoming) स्पर्धा शोधा
     const upcomingComp = competitions.find(c => c.startDate > todayStr);
     if (upcomingComp) return upcomingComp.competitionId || upcomingComp.id;
 
-    // ३. जर लिस्टमध्ये स्पर्धा असतील तर सर्वात पहिली/नवीन स्पर्धा घ्या
     if (competitions.length > 0) {
       return competitions[0].competitionId || competitions[0].id;
     }
 
-    // ॲपमध्ये कोणतीच स्पर्धा नसेल तरच 2026 चा जनरल फॉर्म
     return '2026';
   };
 
-  // 🎯 मूळ handleRegisterClick लॉजिक (कोणताही बदल न करता तसाच सुरक्षित ठेवला आहे)
-  const handleRegisterClick = () => {
-    const activeCompId = getActiveCompId();
-    navigate(`/form/${activeCompId}`);
-  };
+  // 🗓️ १६ ऑगस्ट रात्री १२ वाजेपर्यंतच सोहळ्याचा कार्ड दाखवायचा की नाही ते तपासणे
+  const isSohalaActive = new Date() <= new Date('2026-08-16T23:59:59');
 
   return (
     <>
       {showSplash && <SplashScreen onFinish={handleSplashFinish} season="2026" />}
 
-      <div className="min-h-screen flex flex-col bg-[#08090d] text-white">
+      <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
         <Navbar />
 
         {/* 🌟 1. HERO BANNER SECTION */}
-        <div className="relative overflow-hidden pt-12 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent border-b border-amber-500/10">
-          {/* Ambient Background Glow */}
+        <div className="relative overflow-hidden pt-10 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-amber-500/15 via-orange-500/5 to-transparent border-b border-amber-500/10">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-96 bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
 
           <div className="max-w-7xl mx-auto text-center space-y-6 relative z-10">
             
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
-              <Award className="w-4 h-4" /> राज्यस्तरीय दहीहंडी स्पर्धा २०२६
-            </div>
+            {/* 🚩 १६ ऑगस्ट कृष्णानंद सोहळा बॅज */}
+            {isSohalaActive && (
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/20 via-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider animate-bounce">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>विशेष निमंत्रण: भव्य 'कृष्णानंद सोहळा' (रविवार, १६ ऑगस्ट)</span>
+              </div>
+            )}
 
             <h1 className="text-3xl sm:text-6xl font-black tracking-tight text-white max-w-4xl mx-auto leading-tight">
               महाराष्ट्र राज्य <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500">दहीहंडी गोविंदा असोसिएशन</span>
             </h1>
 
             <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto font-medium leading-relaxed">
-              परंपरा, संस्कृती, सुरक्षितता आणि भव्यतेचा संगम! आपले मनःपूर्वक स्वागत!
-              असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विविध उपक्रम, महत्त्वाच्या सूचना आणि ताज्या अपडेट्सशी सतत जोडलेले रहा..
+              परंपरा, संस्कृती, सुरक्षितता आणि भव्यतेचा संगम! असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विविध उपक्रम, महत्त्वाच्या सूचना आणि ताज्या अपडेट्सशी सतत जोडलेले रहा..
             </p>
 
-          {/* CTA Buttons */}
-<div className="pt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
+            {/* CTA Buttons */}
+            <div className="pt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
 
-  {/* 🏆 १. स्पर्धा नोंदणी करा बटण (सध्या चालू असलेले) */}
-  <button
-    onClick={() => navigate('/form/COMP-2026-01')}
-    className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
-  >
-    <Trophy className="w-5 h-5 text-black shrink-0" />
-    दहीहंडी स्पर्धा नोंदणी करा <ChevronRight className="w-5 h-5" />
-  </button>
+              {/* 🏆 १. स्पर्धा नोंदणी करा बटण */}
+              <button
+                onClick={() => navigate('/form/COMP-2026-01')}
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Trophy className="w-5 h-5 text-black shrink-0" />
+                दहीहंडी स्पर्धा नोंदणी करा <ChevronRight className="w-5 h-5" />
+              </button>
 
-  {/* 🛡️ २. विमा अर्ज बटण (लवकरच येत आहे / Disabled Mode) */}
-  <div className="relative w-full sm:w-auto">
-    {/* Coming Soon चा पिवळा बॅज */}
-    <span className="absolute -top-2.5 right-3 z-10 px-2 py-0.5 bg-amber-500 text-black font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md animate-pulse">
-      लवकरच सुरू होत आहे
-    </span>
+              {/* 🛡️ २. विमा अर्ज बटण */}
+              <div className="relative w-full sm:w-auto">
+                <span className="absolute -top-2.5 right-3 z-10 px-2 py-0.5 bg-amber-500 text-black font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md animate-pulse">
+                  लवकरच सुरू होत आहे
+                </span>
 
-    <button
-      onClick={() => {
-        Swal.fire({
-          icon: 'info',
-          title: 'विमा अर्ज लवकरच सुरू होत आहेत!',
-          text: 'गोविंदा विमा अर्ज नोंदणी प्रक्रिया येत्या ४ दिवसांत सार्वजनिकरीत्या सुरू केली जाईल.',
-          confirmButtonColor: '#f59e0b',
-          background: '#0c0d14',
-          color: '#fff'
-        });
-      }}
-      className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 border border-amber-500/30 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2 opacity-80 hover:opacity-100 cursor-pointer"
-    >
-      <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-      ऑनलाइन विमा अर्ज (Coming Soon)
-    </button>
-  </div>
+                <button
+                  onClick={() => {
+                    Swal.fire({
+                      icon: 'info',
+                      title: 'विमा अर्ज लवकरच सुरू होत आहेत!',
+                      text: 'गोविंदा विमा अर्ज नोंदणी प्रक्रिया येत्या ४ दिवसांत सार्वजनिकरीत्या सुरू केली जाईल.',
+                      confirmButtonColor: '#f59e0b',
+                      background: '#0c0d14',
+                      color: '#fff'
+                    });
+                  }}
+                  className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 border border-amber-500/30 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2 opacity-80 hover:opacity-100 cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                  ऑनलाइन विमा अर्ज (Coming Soon)
+                </button>
+              </div>
 
-  {/* ℹ️ ३. असोसिएशन बद्दल */}
-  <Link
-    to="/about"
-    className="w-full sm:w-auto px-6 py-4 bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2"
-  >
-    असोसिएशन बद्दल <Info className="w-4 h-4 text-amber-400 shrink-0" />
-  </Link>
+              {/* ℹ️ ३. असोसिएशन बद्दल */}
+              <Link
+                to="/about"
+                className="w-full sm:w-auto px-6 py-4 bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2"
+              >
+                असोसिएशन बद्दल <Info className="w-4 h-4 text-amber-400 shrink-0" />
+              </Link>
 
-</div>
+            </div>
 
           </div>
         </div>
 
-        {/* 🏆 2. QUICK EVENT INFO CARDS */}
-        <div className="max-w-7xl mx-auto px-4 -mt-8 relative z-20 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        {/* 🚩 2. SPECIAL 'KRISHNANAND SOHALA' RSVP BANNER CARD (फक्त १६ ऑगस्टपर्यंतच दिसेल) */}
+        {isSohalaActive && (
+          <div className="max-w-7xl mx-auto px-4 -mt-6 relative z-20 w-full">
+            <div className="bg-gradient-to-br from-[#0d101d] via-[#121629] to-[#0c0d14] border-2 border-amber-500/40 p-5 sm:p-7 rounded-3xl shadow-2xl backdrop-blur-xl space-y-4">
+              
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-amber-500/20 pb-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-2xl shrink-0">
+                    <Sparkles className="w-7 h-7 text-amber-400" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30 uppercase tracking-wider">
+                      सस्नेह जय गोपाळ! • निमंत्रण पत्र
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-black text-white mt-1 leading-tight">
+                      भव्य <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-orange-400">'कृष्णानंद सोहळा'</span>
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+                  <span className="bg-amber-500 text-black px-3.5 py-1.5 rounded-xl text-xs font-black font-mono shadow-md">
+                    रविवार, १६ ऑगस्ट २०२६
+                  </span>
+                  <span className="bg-slate-800 text-amber-300 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold font-mono">
+                    सकाळी १०:०० वाजता
+                  </span>
+                  <a 
+                    href="https://maps.app.goo.gl/NwV7HFxbC7PR38oT6" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="bg-slate-800 hover:bg-amber-500 hover:text-black text-amber-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="गूगल मॅपवर दिशा पाहा"
+                  >
+                    <MapPin className="w-3.5 h-3.5" /> Map 🗺️
+                  </a>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-slate-200 text-xs sm:text-sm leading-relaxed font-medium">
+                <p>
+                  तमाम महिला व पुरुष दहीहंडी पथकांतील गोविंदांना आणि संघटकांना आदरपूर्वक आवाहन करण्यात येते की, महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशनच्या वतीने भव्य <strong>'कृष्णानंद सोहळा'</strong> आयोजित करण्यात आला आहे.
+                </p>
+                <p className="text-amber-300/90 font-semibold">
+                  📌 <strong>विशेष सूचना:</strong> कार्यक्रमाचे संयोजन आणि बैठकीचे स्वरूप लक्षात घेता, प्रत्येक दहीहंडी पथकातून <strong> २ प्रतिनिधींनी (खेळाडू/पदाधिकारी)</strong> वेळेवर उपस्थित राहावे, ही नम्र विनंती.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
+                
+                  <MapPin className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">स्थान / ठिकाण</p>
+                    <p className="text-xs font-bold text-white leading-snug">
+                      राष्ट्रीय मिल मजदूर संघ, मजदूर मंजिल, जी. डी. आंबेकर रोड, भोईवाडा, परेल, मुंबई ४०००१२
+                    </p>
+                  </div>
+                </div>
+
+               
+
+                <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">वेळ</p>
+                    <p className="text-xs font-bold text-amber-300">सकाळी १०:०० वाजता (वेळेवर उपस्थित राहावे)</p>
+                  </div>
+                </div>
+
+                {/* 📝 RSVP फॉर्म भरण्यासाठीचे बटण */}
+                <div className="flex items-center justify-center bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 p-3 rounded-2xl">
+                  <Link
+                    to="/rsvp"
+                    className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
+                  >
+                    <span>सोहळ्यासाठी उपस्थिती नोंदवा (RSVP)</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* 🏆 3. QUICK EVENT INFO CARDS */}
+        <div className="max-w-7xl mx-auto px-4 mt-6 relative z-20 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
           <div className="bg-[#0c0d14] border border-amber-500/20 p-5 rounded-2xl flex items-center gap-4 shadow-xl backdrop-blur-xl">
             <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0"><Calendar className="w-7 h-7" /></div>
             <div>
-              <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">स्पर्धा दिनांक</p>
+              <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">मुख्य स्पर्धा दिनांक</p>
               <p className="text-base font-black text-white">३० ऑगस्ट २०२६</p>
             </div>
           </div>
@@ -144,7 +224,7 @@ export default function Home() {
           <div className="bg-[#0c0d14] border border-amber-500/20 p-5 rounded-2xl flex items-center gap-4 shadow-xl backdrop-blur-xl">
             <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 shrink-0"><MapPin className="w-7 h-7" /></div>
             <div>
-              <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">स्थान / ठिकाण</p>
+              <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">स्पर्धेचे स्थान</p>
               <p className="text-base font-black text-white">वामन दुबाशी मैदान, विलेपार्ले</p>
             </div>
           </div>
@@ -158,7 +238,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 📊 3. ABOUT MRDGA & STATS SECTION */}
+        {/* 📊 4. ABOUT MRDGA & STATS SECTION */}
         <div className="max-w-7xl mx-auto px-4 py-16 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold">
@@ -204,7 +284,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 📋 4. COMPETITION RULES HIGHLIGHT */}
+        {/* 📋 5. COMPETITION RULES HIGHLIGHT */}
         <div className="bg-[#0b0c12] border-y border-slate-800/80 py-16 px-4">
           <div className="max-w-7xl mx-auto space-y-8">
             <div className="text-center space-y-2">
@@ -234,7 +314,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 📞 5. HELPDESK & CONTACT BANNER */}
+        {/* 📞 6. HELPDESK & CONTACT BANNER */}
         <div className="max-w-7xl mx-auto px-4 py-12 w-full">
           <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent border border-amber-500/30 rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center sm:text-left">

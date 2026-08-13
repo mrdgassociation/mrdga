@@ -215,7 +215,7 @@ export default function MeetingRSVP() {
             <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase">
               RSVP CONFIRMED
             </span>
-            <h2 className="text-xl font-black text-white mt-2">उपस्थिती आधीच नोंदवली आहे!</h2>
+            <h2 className="text-xl font-black text-white mt-2">उपस्थिती नोंदवली आहे!</h2>
             <p className="text-xs text-slate-300 mt-1">
               १६ ऑगस्टच्या 'कृष्णानंद सोहळा' बैठकीसाठी तुमची उपस्थिती यशस्वीरित्या नोंदवली गेली आहे.
             </p>
@@ -260,7 +260,8 @@ export default function MeetingRSVP() {
               <Calendar className="w-3.5 h-3.5 shrink-0" /> रविवार, १६ ऑगस्ट २०२६ (सकाळी १०:०० वा.)
             </p>
             <p className="flex items-center justify-center gap-1.5 text-slate-400 text-[10px]">
-              <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" /> मजूर मंजिल, भोईवाडा, परेल, मुंबई ४०००१२
+              <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />राष्ट्रीय मिल मजदूर संघ, मजदूर मंजिल, जी. डी. आंबेकर रोड, भोईवाडा, परेल, मुंबई ४०००१२
+
             </p>
           </div>
 
@@ -294,7 +295,7 @@ export default function MeetingRSVP() {
               <label className="text-slate-300 font-bold block mb-1">२. अध्यक्ष/कॅप्टन नाव (प्रतिनिधी १) *</label>
               <input
                 type="text"
-                placeholder="e.g. Vinayak Bandekar"
+                placeholder="e.g. Amit Pradhan"
                 value={contactPerson}
                 onChange={(e) => setContactPerson(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400"
