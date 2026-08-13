@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
   Phone, MessageSquare, Search, Filter, 
-  MapPin, UploadCloud, Lock, FileSpreadsheet, User, BookOpen, Database, Loader2, CheckCircle2, Circle, Send, Check
+  MapPin, UploadCloud, Lock, FileSpreadsheet, User, BookOpen, Database, Loader2, CheckCircle2, Circle, Send, Check, MessageSquareCheck, CalendarCheck
 } from 'lucide-react';
 import { db } from '../firebase/config';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -58,6 +58,7 @@ export default function MandalDirectory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('ALL');
   const [selectedPincode, setSelectedPincode] = useState('ALL');
+  const [selectedArea, setSelectedArea] = useState('ALL'); // 🚩 एरिया फिल्टर स्टेट
   const [selectedType, setSelectedType] = useState('ALL');
   const [remarkFilter, setRemarkFilter] = useState('ALL');
   
@@ -66,6 +67,14 @@ export default function MandalDirectory() {
   const [remarks, setRemarks] = useState({});
   const [syncingRemarkId, setSyncingRemarkId] = useState(null);
   const [savedSuccessId, setSavedSuccessId] = useState(null);
+
+  // 📊 Google Sheet मधुन थेट रिमार्क डेटा व काउंट लोड करणे
+  const [sheetRemarkCount, setSheetRemarkCount] = useState(0);
+  const [fetchingSheetStats, setFetchingSheetStats] = useState(false);
+
+  // 🚩 १६ ऑगस्ट RSVP डेटा फेच स्टेट्स
+  const [rsvpStats, setRsvpStats] = useState({ totalEntries: 0, totalPeople: 0, list: [] });
+  const [fetchingRsvpStats, setFetchingRsvpStats] = useState(false);
 
   // 🔐 User Permissions
   const [userRole, setUserRole] = useState('');
@@ -81,6 +90,68 @@ export default function MandalDirectory() {
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+
+  // 📊 १. Google Sheet मधुन रिमार्क्स फेच करणारे फिक्स केलेले फंक्शन (CORS Safe)
+  const fetchGoogleSheetRemarksStats = async () => {
+    setFetchingSheetStats(true);
+    try {
+      const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwduB8dMvnNqbEZ4rnfSBbZoAZqfN4tp9qBFR_6Gm6ErcOfuMAcftC3A8M17MqIsYO3fw/exec";
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=GET_REMARKS`, {
+        method: 'GET',
+        redirect: 'follow'
+      });
+
+      const resData = await res.json();
+
+      if (resData && resData.status === 'success' && resData.remarks) {
+        setSheetRemarkCount(Object.keys(resData.remarks).length);
+        
+        // लोकल रिमार्क्ससोबत गूगल शीटचा रिमार्क डेटा मर्ज करणे
+        setRemarks(prev => {
+          const merged = { ...prev, ...resData.remarks };
+          localStorage.setItem('mrdga_directory_remarks', JSON.stringify(merged));
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.warn("⚠️ Google Sheet remarks fetch fallback active:", err);
+      const localRemarks = localStorage.getItem('mrdga_directory_remarks');
+      if (localRemarks) {
+        try {
+          const parsed = JSON.parse(localRemarks);
+          setSheetRemarkCount(Object.keys(parsed).length);
+        } catch (e) {}
+      }
+    } finally {
+      setFetchingSheetStats(false);
+    }
+  };
+
+  // 📊 २. १६ ऑगस्ट RSVP डेटा फेच करणारे फिक्स केलेले फंक्शन
+  const fetch16AugRsvpData = async () => {
+    setFetchingRsvpStats(true);
+    try {
+      const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwduB8dMvnNqbEZ4rnfSBbZoAZqfN4tp9qBFR_6Gm6ErcOfuMAcftC3A8M17MqIsYO3fw/exec";
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=GET_16AUG_RSVP`, {
+        method: 'GET',
+        redirect: 'follow'
+      });
+
+      const resData = await res.json();
+
+      if (resData && resData.status === 'success') {
+        setRsvpStats({
+          totalEntries: resData.totalEntries || 0,
+          totalPeople: resData.totalPeopleCount || 0,
+          list: resData.data || []
+        });
+      }
+    } catch (err) {
+      console.warn("⚠️ 16 Aug RSVP fetch warning:", err);
+    } finally {
+      setFetchingRsvpStats(false);
+    }
   };
 
   useEffect(() => {
@@ -127,6 +198,8 @@ export default function MandalDirectory() {
     };
 
     fetchDirectoryCache();
+    fetchGoogleSheetRemarksStats(); // कॉल्स काउंट व डेटा फेच करणे
+    fetch16AugRsvpData();           // १६ ऑगस्ट RSVP डेटा फेच करणे
 
     const savedRemarks = localStorage.getItem('mrdga_directory_remarks');
     if (savedRemarks) {
@@ -136,7 +209,7 @@ export default function MandalDirectory() {
     return () => unsubscribe();
   }, []);
 
-  // 📄 Excel Upload
+  // 📄 Excel Upload (Merge, Update Area & District Support)
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -152,10 +225,16 @@ export default function MandalDirectory() {
         const parsedData = XLSX.utils.sheet_to_json(sheet);
 
         let addedCount = 0;
-        let duplicateCount = 0;
+        let updatedCount = 0;
 
-        const existingPhoneSet = new Set(data.map(item => item.phone).filter(Boolean));
         const updatedList = [...data];
+
+        const phoneIndexMap = new Map();
+        updatedList.forEach((item, index) => {
+          if (item.phone) {
+            phoneIndexMap.set(String(item.phone).replace(/[^0-9]/g, ''), index);
+          }
+        });
 
         parsedData.forEach((row) => {
           const phone1 = String(
@@ -174,29 +253,62 @@ export default function MandalDirectory() {
           ).replace(/[^0-9]/g, '');
 
           const teamName = toTitleCase(row['Team Name'] || row['teamName'] || '');
+          
+          const areaVal = toTitleCase(
+            row['Area'] || 
+            row['AREA'] || 
+            row['area'] || 
+            row['Vibhag'] || 
+            row['vibhag'] || 
+            ''
+          );
 
-          if (phone1 && existingPhoneSet.has(phone1)) {
-            duplicateCount++;
+          const districtVal = toTitleCase(row['District'] || row['DISTRICT'] || row['district'] || '');
+          const pincodeVal = String(row['PINCODE'] || row['Pincode'] || row['pincode'] || '');
+          const addressVal = toTitleCase(row['CORRESPONDENCE ADDRESS'] || row['address'] || areaVal || '');
+          const contactPersonVal = toTitleCase(row['CONTACT PERSON NAME'] || row['Contact Person Name'] || row['contactPerson'] || '');
+          const emailVal = row['Email'] || row['EMAIL'] || row['Email Address'] || row['email'] || '';
+          const typeVal = row['TYPE'] || row['Type'] || row['type'] || 'Mandal';
+
+          if (phone1 && phoneIndexMap.has(phone1)) {
+            const existingIdx = phoneIndexMap.get(phone1);
+            
+            updatedList[existingIdx] = {
+              ...updatedList[existingIdx],
+              teamName: teamName || updatedList[existingIdx].teamName,
+              type: typeVal || updatedList[existingIdx].type,
+              district: districtVal || updatedList[existingIdx].district,
+              vibhag: areaVal || updatedList[existingIdx].vibhag,
+              area: areaVal || updatedList[existingIdx].area,
+              address: addressVal || updatedList[existingIdx].address,
+              pincode: pincodeVal || updatedList[existingIdx].pincode,
+              alternateNumber: phone2 || updatedList[existingIdx].alternateNumber,
+              contactPerson: contactPersonVal || updatedList[existingIdx].contactPerson,
+              email: emailVal || updatedList[existingIdx].email
+            };
+
+            updatedCount++;
           } else {
-            if (phone1) existingPhoneSet.add(phone1);
-            addedCount++;
+            if (phone1) {
+              const newEntry = {
+                id: updatedList.length + 1,
+                teamName: teamName,
+                type: typeVal,
+                district: districtVal,
+                vibhag: areaVal,
+                area: areaVal,
+                address: addressVal,
+                pincode: pincodeVal,
+                phone: phone1,
+                alternateNumber: phone2,
+                contactPerson: contactPersonVal,
+                email: emailVal
+              };
 
-            updatedList.push({
-              id: updatedList.length + 1,
-              teamName: teamName,
-              type: row['TYPE'] || row['type'] || 'Mandal',
-              district: toTitleCase(row['DISTRICT'] || row['district'] || ''),
-              address: toTitleCase(row['CORRESPONDENCE ADDRESS'] || row['address'] || ''),
-              pincode: String(row['PINCODE'] || row['pincode'] || ''),
-              phone: phone1,
-              alternateNumber: phone2,
-              contactPerson: toTitleCase(
-                row['CONTACT PERSON NAME'] || 
-                row['Contact Person Name'] || 
-                ''
-              ),
-              email: row['Email'] || row['Email Address'] || row['email'] || ''
-            });
+              updatedList.push(newEntry);
+              phoneIndexMap.set(phone1, updatedList.length - 1);
+              addedCount++;
+            }
           }
         });
 
@@ -211,10 +323,10 @@ export default function MandalDirectory() {
         localStorage.setItem('mrdga_mandal_directory_cache', JSON.stringify(updatedList));
 
         Swal.fire({
-          icon: duplicateCount > 0 ? 'info' : 'success',
-          title: 'कॅश डेटाबेस अपडेट झाला!',
-          html: `<b>${addedCount}</b> नवीन संघ जोडले गेले.<br/>` + 
-                (duplicateCount > 0 ? `<span style="color:#f59e0b">⚠️ <b>${duplicateCount}</b> डुप्लिकेट नंबर वगळले गेले.</span>` : ''),
+          icon: 'success',
+          title: 'डेटाबेस यशस्वीरीत्या अद्ययावत झाला!',
+          html: `<b>${updatedCount}</b> जुन्या नोंदींमध्ये (Area व सुधारित जिल्हा) अपडेट झाले.<br/>` + 
+                (addedCount > 0 ? `<span style="color:#10b981">➕ <b>${addedCount}</b> नवीन संघ जोडले गेले.</span>` : ''),
           background: '#0c0d14',
           color: '#fff'
         });
@@ -229,12 +341,16 @@ export default function MandalDirectory() {
     reader.readAsBinaryString(file);
   };
 
-  // 🚀 रिमार्क सेव्ह करणे (सबमिट बटणावरच ट्रिगर होईल)
+  // 🚀 रिमार्क सेव्ह करणे
   const saveRemarkToGoogleSheet = async (item, remarkText) => {
     if (!remarkText || !remarkText.trim()) return;
 
-    // Local Storage मध्ये सेव्ह
-    const updatedRemarks = { ...remarks, [item.id]: remarkText.trim() };
+    const updatedRemarks = { 
+      ...remarks, 
+      [item.id]: remarkText.trim(),
+      [item.phone]: remarkText.trim(),
+      [item.teamName]: remarkText.trim()
+    };
     setRemarks(updatedRemarks);
     localStorage.setItem('mrdga_directory_remarks', JSON.stringify(updatedRemarks));
 
@@ -263,6 +379,7 @@ export default function MandalDirectory() {
 
       setSavedSuccessId(item.id);
       setTimeout(() => setSavedSuccessId(null), 2000);
+      fetchGoogleSheetRemarksStats();
 
     } catch (err) {
       console.error("Remark Sync Error:", err);
@@ -272,41 +389,65 @@ export default function MandalDirectory() {
     }
   };
 
-  // 🔍 फिल्टर्स (Memoized - Fast Filtering)
+  // 🔍 डायनॅमिक फिल्टर्स (Districts, Areas, Pincodes, Types)
   const districts = useMemo(() => ['ALL', ...new Set(data.map(item => item.district).filter(Boolean))], [data]);
   
-  const availablePincodes = useMemo(() => ['ALL', ...new Set(
-    data
-      .filter(item => selectedDistrict === 'ALL' || item.district === selectedDistrict)
-      .map(item => item.pincode)
-      .filter(Boolean)
-  )], [data, selectedDistrict]);
+  // 🔢 🚩 पिनकोड चढत्या क्रमाने (400012, 400013, 400014...) सॉर्ट करणे
+  const availablePincodes = useMemo(() => {
+    const rawPincodes = Array.from(new Set(
+      data
+        .filter(item => selectedDistrict === 'ALL' || item.district === selectedDistrict)
+        .map(item => item.pincode)
+        .filter(Boolean)
+    ));
+
+    // न्यूमेरिकली सॉर्ट (Ascending Order)
+    rawPincodes.sort((a, b) => Number(a) - Number(b));
+
+    return ['ALL', ...rawPincodes];
+  }, [data, selectedDistrict]);
+
+  const availableAreas = useMemo(() => {
+    const rawAreas = Array.from(new Set(
+      data
+        .filter(item => selectedDistrict === 'ALL' || item.district === selectedDistrict)
+        .map(item => item.area || item.vibhag)
+        .filter(Boolean)
+    ));
+    rawAreas.sort();
+    return ['ALL', ...rawAreas];
+  }, [data, selectedDistrict]);
 
   const types = useMemo(() => ['ALL', ...new Set(data.map(item => item.type).filter(Boolean))], [data]);
 
   const filteredData = useMemo(() => {
     return data.filter(item => {
+      const itemArea = item.area || item.vibhag || '';
+
       const matchesSearch = 
         item.teamName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.phone.includes(searchTerm) ||
-        item.alternateNumber.includes(searchTerm);
+        item.alternateNumber.includes(searchTerm) ||
+        itemArea.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesDistrict = selectedDistrict === 'ALL' || item.district === selectedDistrict;
       const matchesPincode = selectedPincode === 'ALL' || item.pincode === selectedPincode;
+      const matchesArea = selectedArea === 'ALL' || itemArea === selectedArea;
       const matchesType = selectedType === 'ALL' || item.type.toLowerCase() === selectedType.toLowerCase();
 
-      const hasRemark = Boolean(remarks[item.id] && remarks[item.id].trim() !== '');
+      const currentRemark = remarks[item.id] || remarks[item.phone] || remarks[item.teamName] || '';
+      const hasRemark = Boolean(currentRemark && currentRemark.trim() !== '');
+
       const matchesRemark = 
         remarkFilter === 'ALL' || 
         (remarkFilter === 'WITH_REMARK' && hasRemark) ||
         (remarkFilter === 'WITHOUT_REMARK' && !hasRemark);
 
-      return matchesSearch && matchesDistrict && matchesPincode && matchesType && matchesRemark;
+      return matchesSearch && matchesDistrict && matchesPincode && matchesArea && matchesType && matchesRemark;
     });
-  }, [data, searchTerm, selectedDistrict, selectedPincode, selectedType, remarkFilter, remarks]);
+  }, [data, searchTerm, selectedDistrict, selectedPincode, selectedArea, selectedType, remarkFilter, remarks]);
 
-  // ⚡ २५-२५ टीम्सचा डेटा स्क्रोलनुसार दाखवणे (Lazy Load)
   const displayedData = useMemo(() => {
     return filteredData.slice(0, visibleCount);
   }, [filteredData, visibleCount]);
@@ -347,22 +488,42 @@ export default function MandalDirectory() {
               </span>
             </h1>
             <p className="text-[11px] text-slate-400">
-              मंडळांची माहिती • कॉलर: <b className="text-amber-400">{currentUserName || currentUserEmail}</b>
+              मंडळांची माहिती: <b className="text-amber-400">{currentUserName || currentUserEmail}</b>
             </p>
           </div>
         </div>
 
-        {canUploadExcel ? (
-          <label className="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition shrink-0">
-            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-            {uploading ? 'सेव्ह होत आहे...' : 'एक्सेल सेव्ह करा'}
-            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} disabled={uploading} className="hidden" />
-          </label>
-        ) : (
-          <span className="text-[10px] text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl font-semibold">
-            ✓ अधिकृत डिरेक्टरी लिस्ट (Read-Only)
-          </span>
-        )}
+        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+          {/* 📊 १. Google Sheet मधुन कॉल्स संपन्न काउंट कार्ड */}
+          <div className="bg-emerald-950/80 border border-emerald-500/40 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-md">
+            <MessageSquareCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-[9px] text-emerald-300 font-bold uppercase leading-tight">मेसेज/कॉल्स संपन्न</p>
+              <p className="text-xs font-black text-white font-mono leading-tight">
+                {fetchingSheetStats ? '...' : `${sheetRemarkCount} पथके`}
+              </p>
+            </div>
+          </div>
+
+          {/* 🚩 २. १६ ऑगस्ट RSVP उपस्थिती काउंट कार्ड */}
+          <div className="bg-indigo-950/80 border border-indigo-500/40 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-md">
+            <CalendarCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+            <div>
+              <p className="text-[9px] text-indigo-300 font-bold uppercase leading-tight">१६ ऑग RSVP हजेरी</p>
+              <p className="text-xs font-black text-white font-mono leading-tight">
+                {fetchingRsvpStats ? '...' : `${rsvpStats.totalEntries} मंडळे (${rsvpStats.totalPeople} लोक)`}
+              </p>
+            </div>
+          </div>
+
+          {canUploadExcel && (
+            <label className="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition shrink-0">
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+              {uploading ? 'सेव्ह होत आहे...' : 'एक्सेल सेव्ह करा'}
+              <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} disabled={uploading} className="hidden" />
+            </label>
+          )}
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -373,11 +534,11 @@ export default function MandalDirectory() {
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="मंडळ, संपर्क व्यक्ती किंवा नंबरने शोधा..."
+                placeholder="मंडळ, संपर्क व्यक्ती, एरिया किंवा नंबरने शोधा..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setVisibleCount(25); // सर्च केल्यास पुन्हा २५ पासून दाखवणे
+                  setVisibleCount(25);
                 }}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
               />
@@ -398,13 +559,14 @@ export default function MandalDirectory() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
             <div>
               <select
                 value={selectedDistrict}
                 onChange={(e) => {
                   setSelectedDistrict(e.target.value);
                   setSelectedPincode('ALL');
+                  setSelectedArea('ALL');
                   setVisibleCount(25);
                 }}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-[11px] text-amber-400 font-bold focus:outline-none"
@@ -418,12 +580,29 @@ export default function MandalDirectory() {
 
             <div>
               <select
+                value={selectedArea}
+                onChange={(e) => {
+                  setSelectedArea(e.target.value);
+                  setVisibleCount(25);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-[11px] text-amber-300 font-bold focus:outline-none"
+              >
+                <option value="ALL" className="bg-[#0c0d14]">सर्व विभाग (Area)</option>
+                {availableAreas.filter(a => a !== 'ALL').map(a => (
+                  <option key={a} value={a} className="bg-[#0c0d14]">{a}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 🔢 🚩 चढत्या क्रमाने सॉर्ट झालेला पिनकोड ड्रॉपडाऊन */}
+            <div>
+              <select
                 value={selectedPincode}
                 onChange={(e) => {
                   setSelectedPincode(e.target.value);
                   setVisibleCount(25);
                 }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-[11px] text-white focus:outline-none"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-[11px] text-white font-mono focus:outline-none"
               >
                 <option value="ALL" className="bg-[#0c0d14]">सर्व पिनकोड (Pincodes)</option>
                 {availablePincodes.filter(p => p !== 'ALL').map(p => (
@@ -455,7 +634,7 @@ export default function MandalDirectory() {
                   setRemarkFilter(e.target.value);
                   setVisibleCount(25);
                 }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-[11px] text-emerald-400 font-bold focus:outline-none"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2 py-1 text-[11px] text-emerald-400 font-bold focus:outline-none col-span-2 sm:col-span-1"
               >
                 <option value="ALL" className="bg-[#0c0d14] text-white">सर्व कॉल्स (Status)</option>
                 <option value="WITH_REMARK" className="bg-[#0c0d14] text-emerald-400">🟢 रिमार्क जोडलेले (Done)</option>
@@ -495,15 +674,17 @@ export default function MandalDirectory() {
                     <th className="p-2.5">अ.क्र.</th>
                     <th className="p-2.5">मंडळाचे नाव & प्रकार</th>
                     <th className="p-2.5">संपर्क व्यक्ती</th>
-                    <th className="p-2.5">जिल्हा & पिनकोड</th>
+                    <th className="p-2.5">जिल्हा, विभाग & पिनकोड</th>
                     <th className="p-2.5 text-center">सुरक्षित कृती (Actions)</th>
                     <th className="p-2.5 w-72">रिमार्क (Call Details)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {displayedData.map((item, idx) => {
-                    const hasRemark = Boolean(remarks[item.id] && remarks[item.id].trim() !== '');
+                    const currentRemark = remarks[item.id] || remarks[item.phone] || remarks[item.teamName] || '';
+                    const hasRemark = Boolean(currentRemark && currentRemark.trim() !== '');
                     const msgText = activeTemplate.getMessage ? activeTemplate.getMessage(item.contactPerson, item.teamName) : '';
+                    const itemArea = item.area || item.vibhag || '';
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-800/40 transition">
@@ -529,7 +710,9 @@ export default function MandalDirectory() {
 
                         <td className="p-2.5">
                           <span className="text-amber-300 font-bold block">{item.district || 'N/A'}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">पिन: {item.pincode || '-'}</span>
+                          <span className="text-[10px] text-slate-300 font-medium block">
+                            {itemArea ? ` ${itemArea}` : ''} {item.pincode ? `(${item.pincode})` : ''}
+                          </span>
                         </td>
 
                         <td className="p-2.5 text-center">
@@ -576,11 +759,10 @@ export default function MandalDirectory() {
                           </div>
                         </td>
 
-                        {/* 📝 रिमार्कसाठी मोठी जागा + सेव्ह बटण कंपोनंट */}
                         <td className="p-2.5">
                           <RemarkBox 
                             item={item}
-                            initialRemark={remarks[item.id]}
+                            initialRemark={currentRemark}
                             onSave={saveRemarkToGoogleSheet}
                             syncingId={syncingRemarkId}
                             savedId={savedSuccessId}
@@ -597,8 +779,10 @@ export default function MandalDirectory() {
           {/* 📱 MOBILE CARDS VIEW */}
           <div className="grid grid-cols-1 md:hidden gap-2">
             {displayedData.map((item) => {
-              const hasRemark = Boolean(remarks[item.id] && remarks[item.id].trim() !== '');
+              const currentRemark = remarks[item.id] || remarks[item.phone] || remarks[item.teamName] || '';
+              const hasRemark = Boolean(currentRemark && currentRemark.trim() !== '');
               const msgText = activeTemplate.getMessage ? activeTemplate.getMessage(item.contactPerson, item.teamName) : '';
+              const itemArea = item.area || item.vibhag || '';
 
               return (
                 <div key={item.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl space-y-2 shadow-sm">
@@ -614,7 +798,7 @@ export default function MandalDirectory() {
                     </div>
 
                     <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">
-                      {item.district || 'N/A'} {item.pincode ? `(${item.pincode})` : ''}
+                      {item.district || 'N/A'} {itemArea ? `(${itemArea})` : ''}
                     </span>
                   </div>
 
@@ -667,10 +851,9 @@ export default function MandalDirectory() {
                     </div>
                   </div>
 
-                  {/* 📝 मोबाइलवर रिमार्क बॉक्स */}
                   <RemarkBox 
                     item={item}
-                    initialRemark={remarks[item.id]}
+                    initialRemark={currentRemark}
                     onSave={saveRemarkToGoogleSheet}
                     syncingId={syncingRemarkId}
                     savedId={savedSuccessId}

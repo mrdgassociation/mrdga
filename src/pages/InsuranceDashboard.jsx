@@ -1,3 +1,6 @@
+// ==========================================
+// #SECTION 1: IMPORTS & COMPONENT INITIALIZATION
+// ==========================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase/config';
 import { collection, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -6,11 +9,13 @@ import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
 import CertificatePrintModal from '../components/CertificatePrintModal';
+import InsuranceDuplicatesTab from '../components/InsuranceDuplicatesTab';
+import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget';
 
 const PREDEFINED_REJECT_REASONS = [
   "१. मंडळाच्या लेटरहेडवर नावाची नोंद नाही (No Mandal Name on List)",
@@ -26,19 +31,17 @@ const PREDEFINED_REJECT_REASONS = [
   "इतर कारण (कस्टम टाईप करा)"
 ];
 
-// 🛡️ सुरक्षित तारीख पार्सर (RangeError टाळण्यासाठी)
 const parseFormattedDate = (createdAtField) => {
   if (!createdAtField) return '';
   try {
     let d;
-    // जर फायरबेस टायमस्टॅम्प असेल तर
     if (typeof createdAtField === 'object' && createdAtField.toDate) {
       d = createdAtField.toDate();
     } else {
       d = new Date(createdAtField);
     }
     if (isNaN(d.getTime())) return '';
-    return d.toISOString().split('T')[0]; // YYYY-MM-DD फॉरमॅट
+    return d.toISOString().split('T')[0];
   } catch (e) {
     return '';
   }
@@ -46,13 +49,19 @@ const parseFormattedDate = (createdAtField) => {
 
 export default function InsuranceDashboard() {
 
+  // ==========================================
+  // #SECTION 2: STATE MANAGEMENT
+  // ==========================================
   const [requests, setInsurances] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 🎯 TABS STATE
+  const [activeTab, setActiveTab] = useState('ALL_REQUESTS');
 
   // 🎯 Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [dateFilter, setDateFilter] = useState(''); // 📅 तारीख फिल्टर
+  const [dateFilter, setDateFilter] = useState('');
 
   const [visibleCount, setVisibleCount] = useState(10);
 
@@ -75,6 +84,9 @@ export default function InsuranceDashboard() {
   const [viewPdfTitle, setViewPdfTitle] = useState('मंडळाची अपलोड केलेली लेटरहेड PDF यादी');
   const [zoomLevel, setZoomLevel] = useState(100);
 
+  // 🎯 २ PDF समोरासमोर दाखवण्यासाठी स्टेट
+  const [comparePdfs, setComparePdfs] = useState(null);
+
   // User Profile States
   const [userRole, setUserRole] = useState('Reviewer');
   const [userDepartment, setUserDepartment] = useState('MRDGA');
@@ -83,6 +95,9 @@ export default function InsuranceDashboard() {
 
   const [printReqData, setPrintReqData] = useState(null);
 
+  // ==========================================
+  // #SECTION 3: API & AUTHENTICATION HANDLERS
+  // ==========================================
   const loadInsuranceRequests = async () => {
     setLoading(true);
     try {
@@ -124,18 +139,24 @@ export default function InsuranceDashboard() {
     userDepartment === 'INSURANCE' || 
     (userDepartment === 'SUPER' && userRole === 'Super Admin') || 
     (userDepartment === 'MRDGA' && userRole === 'Super Admin') || 
-    (userDepartment === 'MRDGA' && userRole === 'Admin');
+    (userDepartment === 'MRDGA' && userRole === 'Super Admin');
 
-  // 📊 समरी मोजणी
+  // ==========================================
+  // #SECTION 4: SUMMARY STATS CALCULATIONS
+  // ==========================================
   const stats = useMemo(() => {
     let pending = 0;
     let approved = 0;
     let rejected = 0;
+    let totalApprovedGovindas = 0;
 
     requests.forEach(item => {
       const st = item.status || 'Pending';
+      const count = Number(item.govindaCount) || 0;
+
       if (st === 'Approved' || st.includes('मंजूर')) {
         approved++;
+        totalApprovedGovindas += count;
       } else if (st === 'Rejected' || st.includes('नामंजूर')) {
         rejected++;
       } else {
@@ -143,10 +164,19 @@ export default function InsuranceDashboard() {
       }
     });
 
-    return { total: requests.length, pending, approved, rejected };
+    return { 
+      total: requests.length, 
+      pending, 
+      approved, 
+      rejected, 
+      totalApprovedGovindas,
+      target: 160000 
+    };
   }, [requests]);
 
-  // 🔍 सुरक्षित फिल्टरिंग (RangeError Fix)
+  // ==========================================
+  // #SECTION 5: SEARCH & FILTERING LOGIC
+  // ==========================================
   const filteredRequests = useMemo(() => {
     return requests.filter(item => {
       const tName = item.teamName || '';
@@ -165,7 +195,6 @@ export default function InsuranceDashboard() {
                             (statusFilter === 'Approved' && (item.status === 'Approved' || item.status.includes('मंजूर'))) ||
                             (statusFilter === 'Rejected' && (item.status === 'Rejected' || item.status.includes('नामंजूर')));
 
-      // 🛡️ सुरक्षित तारीख चेक (RangeError १००% फिक्स)
       let matchesDate = true;
       if (dateFilter) {
         const itemDateStr = parseFormattedDate(item.createdAt);
@@ -188,6 +217,9 @@ export default function InsuranceDashboard() {
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 25, 75));
   const handleResetZoom = () => setZoomLevel(100);
 
+  // ==========================================
+  // #SECTION 6: FILE PROCESSING HELPERS
+  // ==========================================
   const convertFileToBase64 = async (file) => {
     if (file.type.startsWith('image/')) {
       return new Promise((resolve, reject) => {
@@ -265,16 +297,19 @@ export default function InsuranceDashboard() {
       case 'Approved':
       case 'मंजूर':
       case 'मंजूर (Approved)':
-        return <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-600/40">मंजूर (Approved)</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-600/40">मंजूर</span>;
       case 'Rejected':
       case 'नामंजूर':
       case 'नामंजूर (Rejected)':
-        return <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-rose-950/80 text-rose-400 border border-rose-600/40">नामंजूर (Rejected)</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/80 text-rose-400 border border-rose-600/40">नामंजूर</span>;
       default:
-        return <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-amber-950/80 text-amber-300 border border-amber-600/40">प्रलंबित (Pending)</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-600/40">प्रलंबित</span>;
     }
   };
 
+  // ==========================================
+  // #SECTION 7: REJECT & APPROVE HANDLERS
+  // ==========================================
   const handleConfirmReject = async () => {
     if (!canApproveOrReject) {
       Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
@@ -451,331 +486,455 @@ export default function InsuranceDashboard() {
   }
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto px-2 py-2 font-sans text-slate-100">
+    <div className="space-y-2.5 max-w-7xl mx-auto px-1.5 py-1.5 font-sans text-slate-100">
       
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-700/80 p-3.5 rounded-2xl shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
-            <ShieldCheck className="w-5 h-5" />
+      {/* ========================================== */}
+      {/* #SECTION 8: ULTRA-COMPACT HEADER BANNER   */}
+      {/* ========================================== */}
+      <div className="flex flex-row items-center justify-between gap-2 bg-slate-900 border border-slate-700/80 p-2 sm:p-2.5 rounded-xl shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-lg shrink-0">
+            <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-white leading-tight flex items-center gap-2 flex-wrap">
+            <h2 className="text-xs sm:text-sm font-extrabold text-white leading-none flex items-center gap-1.5">
               गोविंदा विमा <span className="text-amber-400">व्यवस्थापन</span>
-              <span className="text-[10px] px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-300 rounded font-semibold uppercase">
-                {userDepartment} ({userRole})
+              <span className="text-[9px] px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded font-semibold uppercase hidden sm:inline-block">
+                {userDepartment}
               </span>
             </h2>
-            <p className="text-xs text-slate-300 mt-0.5">
-              एकूण अर्ज: <b className="text-white font-bold">{requests.length}</b> 
-              {statusFilter !== 'ALL' && ` • फिल्टर केलेले: ${filteredRequests.length}`}
-            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        {/* 📊 डेस्कटॉपसाठी उद्दिष्ट व मंजूर गोविंदा आकडेवारी (1.6 Lakh Target) */}
+        <div className="hidden lg:flex items-center gap-3 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 font-mono text-xs">
+          <div className="flex items-center gap-1 text-slate-300">
+            <Target className="w-3.5 h-3.5 text-rose-400" />
+            <span>उद्दिष्ट: <b className="text-amber-400">1,60,000</b></span>
+          </div>
+          <span className="text-slate-600">|</span>
+          <div className="flex items-center gap-1 text-emerald-400 font-bold">
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span>मंजूर: {stats.totalApprovedGovindas.toLocaleString('mr-IN')}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => window.open('#/insurance-info?admin_mode=true', '_blank')}
-            className="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition"
-            title="पब्लिक अर्ज बंद असतानाही टीमला टेस्ट करण्यासाठी फॉर्म उघडेल"
+            className="px-2 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-black font-extrabold text-[10px] sm:text-xs rounded-lg shadow flex items-center gap-1 cursor-pointer transition"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>नवीन विमा अर्ज (Testing)</span>
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">नवीन अर्ज</span> (Testing)
           </button>
 
           <button 
             onClick={loadInsuranceRequests} 
-            className="p-2 sm:px-3.5 sm:py-2 bg-slate-800 hover:bg-slate-750 border border-slate-600 text-slate-200 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+            className="p-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-600 text-xs rounded-lg transition cursor-pointer"
+            title="रिफ्रेश"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">रिफ्रेश</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* 📊 SUMMARY CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div 
-          onClick={() => { setStatusFilter('ALL'); setVisibleCount(10); }}
-          className={`p-2.5 rounded-xl border transition cursor-pointer flex justify-between items-center ${statusFilter === 'ALL' ? 'bg-slate-800 border-amber-500/60' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+      {/* ========================================== */}
+      {/* #SECTION 9: COMPACT TAB NAVIGATION STRIP   */}
+      {/* ========================================== */}
+      <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-bold gap-1">
+        <button
+          onClick={() => setActiveTab('ALL_REQUESTS')}
+          className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[11px] sm:text-xs ${
+            activeTab === 'ALL_REQUESTS' 
+              ? 'bg-amber-500 text-black shadow font-black' 
+              : 'text-slate-400 hover:text-white'
+          }`}
         >
-          <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase">एकूण अर्ज</p>
-            <p className="text-base sm:text-lg font-black text-white font-mono">{stats.total}</p>
-          </div>
-          <ShieldCheck className="w-5 h-5 text-slate-400 opacity-60" />
-        </div>
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>सर्व अर्ज ({requests.length})</span>
+        </button>
 
-        <div 
-          onClick={() => { setStatusFilter('Pending'); setVisibleCount(10); }}
-          className={`p-2.5 rounded-xl border transition cursor-pointer flex justify-between items-center ${statusFilter === 'Pending' ? 'bg-amber-950/60 border-amber-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+        <button
+          onClick={() => setActiveTab('DUPLICATES')}
+          className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[11px] sm:text-xs ${
+            activeTab === 'DUPLICATES' 
+              ? 'bg-rose-500 text-white shadow font-black' 
+              : 'text-slate-400 hover:text-white'
+          }`}
         >
-          <div>
-            <p className="text-[10px] text-amber-400 font-bold uppercase">प्रलंबित (Pending)</p>
-            <p className="text-base sm:text-lg font-black text-amber-300 font-mono">{stats.pending}</p>
-          </div>
-          <Clock className="w-5 h-5 text-amber-400 opacity-80" />
-        </div>
+          <Copy className="w-3.5 h-3.5 text-rose-300" />
+          <span>⚠️ दुबार अर्ज</span>
+        </button>
 
-        <div 
-          onClick={() => { setStatusFilter('Approved'); setVisibleCount(10); }}
-          className={`p-2.5 rounded-xl border transition cursor-pointer flex justify-between items-center ${statusFilter === 'Approved' ? 'bg-emerald-950/60 border-emerald-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+        <button
+          onClick={() => setActiveTab('ANALYSIS')}
+          className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[11px] sm:text-xs ${
+            activeTab === 'ANALYSIS' 
+              ? 'bg-indigo-600 text-white shadow font-black' 
+              : 'text-slate-400 hover:text-white'
+          }`}
         >
-          <div>
-            <p className="text-[10px] text-emerald-400 font-bold uppercase">मंजूर (Approved)</p>
-            <p className="text-base sm:text-lg font-black text-emerald-300 font-mono">{stats.approved}</p>
-          </div>
-          <CheckCircle className="w-5 h-5 text-emerald-400 opacity-80" />
-        </div>
-
-        <div 
-          onClick={() => { setStatusFilter('Rejected'); setVisibleCount(10); }}
-          className={`p-2.5 rounded-xl border transition cursor-pointer flex justify-between items-center ${statusFilter === 'Rejected' ? 'bg-rose-950/60 border-rose-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
-        >
-          <div>
-            <p className="text-[10px] text-rose-400 font-bold uppercase">नाकारलेले (Rejected)</p>
-            <p className="text-base sm:text-lg font-black text-rose-300 font-mono">{stats.rejected}</p>
-          </div>
-          <XCircle className="w-5 h-5 text-rose-400 opacity-80" />
-        </div>
+          <BarChart3 className="w-3.5 h-3.5 text-indigo-300" />
+          <span>📊 विश्लेषण</span>
+        </button>
       </div>
 
-      {/* 🔍 SEARCH & FILTERS BAR */}
-      <div className="p-2.5 rounded-2xl grid grid-cols-1 sm:grid-cols-4 gap-2 bg-slate-900 border border-slate-800">
-        <div className="sm:col-span-2 relative">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="मंडळाचे नाव, App ID किंवा फोन नंबरने शोधा..."
-            value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); setVisibleCount(10); }}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400"
-          />
-        </div>
-
-        <div>
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setVisibleCount(10); }}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 font-bold"
-          >
-            <option value="ALL" className="bg-[#0c0d14]">सर्व अर्ज (Status)</option>
-            <option value="Pending" className="bg-[#0c0d14]">प्रलंबित (Pending)</option>
-            <option value="Approved" className="bg-[#0c0d14]">मंजूर (Approved)</option>
-            <option value="Rejected" className="bg-[#0c0d14]">नाकारलेले (Rejected)</option>
-          </select>
-        </div>
-
-        {/* 📅 कॅलेंडर तारीख निवड (सुरक्षित नो-रीफ्रेश) */}
-        <div className="relative flex items-center">
-          <Calendar className="w-4 h-4 absolute left-3 text-amber-400 pointer-events-none z-10" />
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => {
-              setDateFilter(e.target.value);
-              setVisibleCount(10);
-            }}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-7 py-1.5 text-xs text-amber-300 focus:outline-none focus:border-amber-400 cursor-pointer font-sans [color-scheme:dark]"
-            title="कॅलेंडरवरून तारीख निवडा"
-          />
-          {dateFilter && (
-            <button
-              type="button"
-              onClick={() => { setDateFilter(''); setVisibleCount(10); }}
-              className="absolute right-2 text-[10px] text-slate-400 hover:text-white bg-slate-800 px-1 py-0.5 rounded cursor-pointer"
-              title="तारीख फिल्टर रिसेट करा"
+      {/* ========================================== */}
+      {/* #SECTION 10: TAB 1 - ALL REQUESTS VIEW     */}
+      {/* ========================================== */}
+      {activeTab === 'ALL_REQUESTS' && (
+        <>
+          {/* 📊 COMPACT SUMMARY CARDS */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+            
+            {/* 💻 'एकूण अर्ज' फक्त डेस्कटॉपवरच दिसेल */}
+            <div 
+              onClick={() => { setStatusFilter('ALL'); setVisibleCount(10); }}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center hidden sm:block ${statusFilter === 'ALL' ? 'bg-slate-800 border-amber-500/60' : 'bg-slate-900 border-slate-800'}`}
             >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
+              <p className="text-[9px] text-slate-400 font-bold uppercase truncate">एकूण अर्ज</p>
+              <p className="text-xs sm:text-sm font-black text-white font-mono">{stats.total}</p>
+            </div>
 
-      {/* Cards List */}
-      {loading ? (
-        <div className="p-8 text-center text-amber-400 font-semibold text-xs animate-pulse space-y-2">
-          <Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-400" />
-          <p>डेटा लोड होत आहे...</p>
-        </div>
-      ) : filteredRequests.length === 0 ? (
-        <p className="p-8 text-center text-slate-400 text-xs font-medium bg-slate-900/50 rounded-2xl border border-dashed border-slate-800">
-          कोणताही विमा अर्ज सापडला नाही.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex justify-between items-center text-[11px] text-slate-400 px-1">
-            <span>दाखवलेले अर्ज: <b className="text-amber-400">{displayedRequests.length}</b> / {filteredRequests.length}</span>
+            <div 
+              onClick={() => { setStatusFilter('Pending'); setVisibleCount(10); }}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Pending' ? 'bg-amber-950/60 border-amber-500' : 'bg-slate-900 border-slate-800'}`}
+            >
+              <p className="text-[9px] text-amber-400 font-bold uppercase truncate">प्रलंबित</p>
+              <p className="text-xs sm:text-sm font-black text-amber-300 font-mono">{stats.pending}</p>
+            </div>
+
+            <div 
+              onClick={() => { setStatusFilter('Approved'); setVisibleCount(10); }}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Approved' ? 'bg-emerald-950/60 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}
+            >
+              <p className="text-[9px] text-emerald-400 font-bold uppercase truncate">मंजूर</p>
+              <p className="text-xs sm:text-sm font-black text-emerald-300 font-mono">{stats.approved}</p>
+            </div>
+
+            <div 
+              onClick={() => { setStatusFilter('Rejected'); setVisibleCount(10); }}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Rejected' ? 'bg-rose-950/60 border-rose-500' : 'bg-slate-900 border-slate-800'}`}
+            >
+              <p className="text-[9px] text-rose-400 font-bold uppercase truncate">नाकारलेले</p>
+              <p className="text-xs sm:text-sm font-black text-rose-300 font-mono">{stats.rejected}</p>
+            </div>
           </div>
 
-          {displayedRequests.map((item) => {
-            const isApproved = item.status === 'Approved' || item.status === 'मंजूर' || item.status?.includes('मंजूर');
-            const hasCertificate = !!item.certificateUrl;
-            const mandalAddressText = item.address || item.mandalAddress || '';
+          {/* 🔍 ULTRA-COMPACT MOBILE FILTERS BAR */}
+          <div className="p-1.5 rounded-xl grid grid-cols-1 sm:grid-cols-4 gap-1.5 bg-slate-900 border border-slate-800">
+            <div className="sm:col-span-2 relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="नाव, App ID किंवा फोनने शोधा..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setVisibleCount(10); }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-2 py-1 text-[11px] text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
 
-            return (
-              <div 
-                key={item.id}
-                className="p-4 rounded-2xl border border-slate-800 bg-[#0e1017] hover:border-slate-700 transition shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3.5"
+            <div className="grid grid-cols-2 gap-1 sm:col-span-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setVisibleCount(10); }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white font-bold focus:outline-none"
               >
-                {/* Left Details */}
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-semibold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-700/40">
-                      #{item.appId}
-                    </span>
-                    
-                    {getStatusBadge(item.status)}
+                <option value="ALL" className="bg-[#0c0d14]">सर्व स्टेटस</option>
+                <option value="Pending" className="bg-[#0c0d14]">प्रलंबित</option>
+                <option value="Approved" className="bg-[#0c0d14]">मंजूर</option>
+                <option value="Rejected" className="bg-[#0c0d14]">नाकारलेले</option>
+              </select>
 
-                    {item.policyNumber && (
-                      <span className="text-xs font-mono font-semibold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/40">
-                        पॉलिसी: {item.policyNumber}
-                      </span>
-                    )}
-                  </div>
+              <div className="relative flex items-center">
+                <Calendar className="w-3.5 h-3.5 absolute left-2 text-amber-400 pointer-events-none z-10" />
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => { setDateFilter(e.target.value); setVisibleCount(10); }}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-7 pr-1 py-1 text-[11px] text-amber-300 focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            </div>
+          </div>
 
-                  <h3 className="font-extrabold text-sm sm:text-base text-white tracking-wide leading-snug">
-                    {item.teamName}
-                  </h3>
+          {/* Cards List */}
+          {loading ? (
+            <div className="p-6 text-center text-amber-400 font-bold text-xs animate-pulse space-y-2">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-amber-400" />
+              <p>डेटा लोड होत आहे...</p>
+            </div>
+          ) : filteredRequests.length === 0 ? (
+            <p className="p-6 text-center text-slate-400 text-xs font-medium bg-slate-900/50 rounded-xl border border-dashed border-slate-800">
+              कोणताही विमा अर्ज सापडला नाही.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[10px] text-slate-400 px-1">
+                <span>दाखवलेले अर्ज: <b className="text-amber-400">{displayedRequests.length}</b> / {filteredRequests.length}</span>
+              </div>
 
-                  <div className="flex items-center gap-3 text-xs text-slate-300 flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {item.district} ({item.pincode || '-'})
-                      {mandalAddressText && <span className="text-[11px] text-slate-400 ml-1 font-sans">({mandalAddressText})</span>}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {item.category || 'Mens'}
-                    </span>
-                    <span className="flex items-center gap-1 text-amber-300 font-semibold font-mono">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" /> {item.govindaCount} गोविंदा ({item.pyramidCapacity})
-                    </span>
-                  </div>
-                </div>
+              {displayedRequests.map((item) => {
+                const isApproved = item.status === 'Approved' || item.status === 'मंजूर' || item.status?.includes('मंजूर');
+                const hasCertificate = !!item.certificateUrl;
+                const mandalAddressText = item.address || item.mandalAddress || '';
 
-                {/* Middle Contact & File Actions */}
-                <div className="flex items-center justify-between md:justify-end gap-3 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800">
-                  <div className="text-left md:text-right pr-2">
-                    <p className="text-[11px] text-slate-400 font-medium">संपर्क व्यक्ती:</p>
-                    <p className="font-bold text-xs sm:text-sm text-white">{item.contactPerson}</p>
-                    <p className="font-mono text-xs text-slate-300 mt-0.5">{item.whatsappNumber}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <a 
-                      href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="p-2 bg-slate-800 text-emerald-400 rounded-xl border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
-                      title="WhatsApp मेसेज पाठवा"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                    </a>
-
-                    <a 
-                      href={`tel:${item.whatsappNumber}`} 
-                      className="p-2 bg-slate-800 text-blue-400 rounded-xl border border-slate-700 hover:bg-blue-600 hover:text-white transition"
-                      title="मुख्य नंबरवर कॉल करा"
-                    >
-                      <Phone className="w-4 h-4" />
-                    </a>
-
-                    {item.alternateNumber && (
-                      <a 
-                        href={`tel:${item.alternateNumber}`} 
-                        className="p-2 bg-slate-800 text-indigo-400 rounded-xl border border-slate-700 hover:bg-indigo-600 hover:text-white transition"
-                        title="पर्यायी नंबरवर कॉल करा"
-                      >
-                        <Phone className="w-4 h-4" />
-                      </a>
-                    )}
-
-                    {item.fileUrl && (
-                      <button 
-                        onClick={() => { setViewPdfTitle('मंडळाची अपलोड केलेली लेटरहेड PDF यादी'); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
-                        className="p-2 bg-slate-800 text-amber-300 rounded-xl border border-slate-700 hover:bg-amber-500 hover:text-black transition cursor-pointer" 
-                        title="अपलोड केलेली PDF यादी पहा"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Action Buttons */}
-                <div className="flex flex-wrap items-center justify-start md:justify-end gap-2 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800 w-full md:w-auto">
-                  <button 
-                    onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                    className="px-3 py-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer shrink-0"
+                return (
+                  <div 
+                    key={item.id}
+                    className="p-3 rounded-xl border border-slate-800 bg-[#0e1017] hover:border-slate-700 transition shadow flex flex-col md:flex-row md:items-center justify-between gap-2.5"
                   >
-                    रिमार्क्स <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-700/40">
+                          #{item.appId}
+                        </span>
+                        
+                        {getStatusBadge(item.status)}
 
-                  {isApproved && (
-                    <button 
-                      onClick={() => setPrintReqData(item)}
-                      className="px-3 py-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-sm shrink-0"
-                      title="कंपनीच्या फॉरमॅटमध्ये विमा प्रमाणपत्र प्रिंट करा"
-                    >
-                      <Printer className="w-4 h-4" />
-                      <span>प्रिंट प्रमाणपत्र</span>
-                    </button>
-                  )}
+                        {item.policyNumber && (
+                          <span className="text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-700/40">
+                            पॉलिसी: {item.policyNumber}
+                          </span>
+                        )}
+                      </div>
 
-                  {isApproved ? (
-                    hasCertificate ? (
-                      <button 
-                        onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
-                        className="px-3 py-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shrink-0"
-                      >
-                        <Eye className="w-4 h-4 text-emerald-400" />
-                        <span>पॉलिसी कॉपी पहा</span>
-                      </button>
-                    ) : (
+                      <h3 className="font-extrabold text-xs sm:text-sm text-white leading-snug">
+                        {item.teamName}
+                      </h3>
+
+                      <div className="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap font-sans">
+                        <span><MapPin className="w-3 h-3 inline text-slate-400"/> {item.district} ({item.pincode || '-'})</span>
+                        {mandalAddressText && (
+      <span className="text-[11px] text-amber-300/90 font-sans ml-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+        📍 {mandalAddressText}
+      </span>
+    )}
+                        <span className="text-amber-300 font-bold font-mono"><ShieldCheck className="w-3 h-3 inline text-amber-400"/> {item.govindaCount} गोविंदा</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between md:justify-end gap-2 pt-1 md:pt-0 border-t md:border-t-0 border-slate-800">
+                      <div className="text-left md:text-right">
+                        <p className="font-bold text-xs text-white">{item.contactPerson}</p>
+                        <p className="font-mono text-[10px] text-slate-400">{item.whatsappNumber}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <a 
+                          href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="p-1.5 bg-slate-800 text-emerald-400 rounded-lg border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </a>
+
+                        <a 
+                          href={`tel:${item.whatsappNumber}`} 
+                          className="p-1.5 bg-slate-800 text-blue-400 rounded-lg border border-slate-700 hover:bg-blue-600 hover:text-white transition"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                        </a>
+
+                        {item.fileUrl && (
+                          <button 
+                            onClick={() => { setViewPdfTitle('मंडळाची अपलोड केलेली लेटरहेड PDF यादी'); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
+                            className="p-1.5 bg-slate-800 text-amber-300 rounded-lg border border-slate-700 hover:bg-amber-500 hover:text-black cursor-pointer" 
+                            title="यादी PDF पहा"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-start md:justify-end gap-1.5 pt-1.5 md:pt-0 border-t md:border-t-0 border-slate-800 w-full md:w-auto">
                       <button 
                         onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                        className="px-3 py-1.5 bg-slate-800 text-amber-300 border border-slate-700 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shrink-0"
+                        className="px-2.5 py-1 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-lg text-[11px] font-semibold transition flex items-center gap-0.5 cursor-pointer shrink-0"
                       >
-                        <Camera className="w-4 h-4 text-amber-400" />
-                        <span>अपलोड पॉलिसी</span>
+                        रिमार्क्स <ChevronRight className="w-3 h-3" />
                       </button>
-                    )
-                  ) : (
-                    canApproveOrReject && (
-                      <>
-                        <button 
-                          onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                          className="px-3 py-1.5 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
-                        >
-                          <CheckCircle className="w-4 h-4" /> Approve
-                        </button>
 
+                      {isApproved && (
                         <button 
-                          onClick={() => setRejectModalReq(item)} 
-                          className="px-2.5 py-1.5 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                          onClick={() => setPrintReqData(item)}
+                          className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-black rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
                         >
-                          <XCircle className="w-3.5 h-3.5" /> Reject
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>प्रिंट</span>
                         </button>
-                      </>
-                    )
-                  )}
+                      )}
+
+                      {isApproved ? (
+                        hasCertificate ? (
+                          <button 
+                            onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
+                            className="px-2.5 py-1 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>पॉलिसी कॉपी</span>
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+                            className="px-2.5 py-1 bg-slate-800 text-amber-300 border border-slate-700 hover:bg-amber-500 hover:text-black rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                          >
+                            <Camera className="w-3.5 h-3.5 text-amber-400" />
+                            <span>अपलोड पॉलिसी</span>
+                          </button>
+                        )
+                      ) : (
+                        canApproveOrReject && (
+                          <>
+                            <button 
+                              onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
+                              className="px-2.5 py-1 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Approve
+                            </button>
+
+                            <button 
+                              onClick={() => setRejectModalReq(item)} 
+                              className="px-2.5 py-1 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                            >
+                              <XCircle className="w-3.5 h-3.5" /> Reject
+                            </button>
+                          </>
+                        )
+                      )}
+                    </div>
+
+                  </div>
+                );
+              })}
+
+              {displayedRequests.length < filteredRequests.length && (
+                <div className="text-center pt-2 pb-3">
+                  <button
+                    type="button"
+                    onClick={loadMoreData}
+                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-300 font-bold text-xs rounded-lg transition cursor-pointer"
+                  >
+                    + आणखी १० अर्ज पाहा
+                  </button>
                 </div>
+              )}
 
-              </div>
-            );
-          })}
-
-          {displayedRequests.length < filteredRequests.length && (
-            <div className="text-center pt-2 pb-4">
-              <button
-                type="button"
-                onClick={loadMoreData}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-300 font-bold text-xs rounded-xl shadow-lg transition cursor-pointer"
-              >
-                + आणखी १० अर्ज पाहा (आत्ता दाखवले: {displayedRequests.length} / {filteredRequests.length})
-              </button>
             </div>
           )}
+        </>
+      )}
 
+      {/* ========================================== */}
+      {/* #SECTION 11: TAB 2 - DUPLICATES VIEW       */}
+      {/* ========================================== */}
+      {activeTab === 'DUPLICATES' && (
+        <InsuranceDuplicatesTab 
+          requests={requests}
+          onTriggerReject={(req) => {
+            setRejectModalReq(req);
+            setSelectedReason("१०. या मंडळाची आधीच नोंदणी झाली आहे [Duplicate Entry] (दुबार नोंदणी)");
+          }}
+          onViewPdf={(url, title) => {
+            setViewPdfTitle(title || 'यादी PDF');
+            setViewPdfUrl(url);
+            setZoomLevel(100);
+          }}
+          onComparePdfs={(compareData) => {
+            setComparePdfs(compareData);
+          }}
+        />
+      )}
+
+      {/* ========================================== */}
+      {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
+      {/* ========================================== */}
+      {activeTab === 'ANALYSIS' && (
+        <InsuranceAnalysisWidget requests={requests} />
+      )}
+
+      {/* ========================================== */}
+      {/* #SECTION 13: MODALS (PDF, REJECT & APPROVE) */}
+      {/* ========================================== */}
+
+      {/* 📄 समोरासमोर २ PDF ची तुलना करण्याचा Full Screen Modal */}
+      {comparePdfs && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 font-sans">
+          <div className="bg-[#0c0d14] border border-slate-700 w-full max-w-7xl h-[94vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            
+            <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-400 shrink-0" />
+                <h3 className="font-extrabold text-xs sm:text-sm text-white">
+                  दुबार यादी पडताळणी (Side-by-Side PDF Comparison)
+                </h3>
+              </div>
+
+              <button 
+                onClick={() => setComparePdfs(null)} 
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold cursor-pointer transition flex items-center gap-1"
+              >
+                <X className="w-4 h-4" /> बंद करा
+              </button>
+            </div>
+
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 p-2 bg-slate-950 overflow-hidden">
+              
+              <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <div className="bg-slate-950 px-3 py-1.5 border-b border-slate-800 flex justify-between items-center">
+                  <span className="text-xs font-bold text-amber-400 truncate">
+                    १. {comparePdfs.title1 || 'पहिला अर्ज'}
+                  </span>
+                  <a 
+                    href={comparePdfs.pdf1} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded hover:text-white"
+                  >
+                    उघडा ↗
+                  </a>
+                </div>
+                <iframe
+                  src={
+                    comparePdfs.pdf1.includes('drive.google.com')
+                      ? `https://drive.google.com/file/d/${comparePdfs.pdf1.match(/[-\w]{25,}/)?.[0]}/preview`
+                      : `https://docs.google.com/gview?url=${encodeURIComponent(comparePdfs.pdf1)}&embedded=true`
+                  }
+                  title="PDF Viewer 1"
+                  className="w-full h-full border-0"
+                />
+              </div>
+
+              <div className="flex flex-col h-full bg-slate-900 border border-rose-900/40 rounded-xl overflow-hidden">
+                <div className="bg-slate-950 px-3 py-1.5 border-b border-slate-800 flex justify-between items-center">
+                  <span className="text-xs font-bold text-rose-400 truncate">
+                    २. {comparePdfs.title2 || 'दुसरा दुबार अर्ज'}
+                  </span>
+                  <a 
+                    href={comparePdfs.pdf2} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded hover:text-white"
+                  >
+                    उघडा ↗
+                  </a>
+                </div>
+                <iframe
+                  src={
+                    comparePdfs.pdf2.includes('drive.google.com')
+                      ? `https://drive.google.com/file/d/${comparePdfs.pdf2.match(/[-\w]{25,}/)?.[0]}/preview`
+                      : `https://docs.google.com/gview?url=${encodeURIComponent(comparePdfs.pdf2)}&embedded=true`
+                  }
+                  title="PDF Viewer 2"
+                  className="w-full h-full border-0"
+                />
+              </div>
+
+            </div>
+
+          </div>
         </div>
       )}
 
@@ -912,7 +1071,7 @@ export default function InsuranceDashboard() {
                 </div>
               </div>
 
-              {/* Policy Number (Mandatory) */}
+              {/* Policy Number */}
               <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-1.5">
                 <label className="text-xs font-bold text-amber-300 block">
                   विमा पॉलिसी / सर्टिफिकेट नंबर (Policy No.) *
@@ -1007,7 +1166,7 @@ export default function InsuranceDashboard() {
         </div>
       )}
 
-      {/* PDF View Modal */}
+      {/* Single PDF View Modal */}
       {viewPdfUrl && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
           <div className="bg-[#0c0d14] border border-slate-700 w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
@@ -1060,7 +1219,7 @@ export default function InsuranceDashboard() {
         </div>
       )}
 
-      {/* 📄 Certificate Print Modal Component */}
+      {/* Certificate Print Modal */}
       {printReqData && (
         <CertificatePrintModal 
           reqData={printReqData} 
