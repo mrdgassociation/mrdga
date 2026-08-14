@@ -1,3 +1,6 @@
+// ==========================================
+// #SECTION 1: IMPORTS
+// ==========================================
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -7,9 +10,13 @@ import {
 import { authService } from '../services/authService';
 import { dataService } from '../services/dataService';
 
+// 🎯 Central Modules Import
+import { ALL_MODULE_KEYS } from '../constants/modules';
+
 export default function AdminLayout({ children }) {
   const [userRole, setUserRole] = useState('Reviewer');
   const [userDepartment, setUserDepartment] = useState('MRDGA');
+  const [allowedModules, setAllowedModules] = useState(ALL_MODULE_KEYS);
   const [currentUser, setCurrentUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pageConfig, setPageConfig] = useState({});
@@ -27,6 +34,9 @@ export default function AdminLayout({ children }) {
           if (uDoc) {
             if (uDoc.role) setUserRole(uDoc.role);
             if (uDoc.department) setUserDepartment(uDoc.department);
+            if (uDoc.allowedModules !== undefined && Array.isArray(uDoc.allowedModules)) {
+              setAllowedModules(uDoc.allowedModules);
+            }
           }
         } catch (e) {
           console.error("Error fetching role/department in layout:", e);
@@ -51,46 +61,59 @@ export default function AdminLayout({ children }) {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 🔐 नियम ७: Super Admin Check (Department: SUPER and Role: Super Admin)
-  const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin';
+  // 🔐 १. Super Admin Check
+  const isSuperAdminUser = (userDepartment === 'SUPER' && userRole === 'Super Admin') || userRole === 'Super Admin';
 
-  // 🔒 नियम ४ व ५: Department-wise Menus Access
-  const canSeeCompetition = (userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'MRDGA') && userDepartment !== 'INSURANCE';
-  const canSeeInsurance = userRole === 'Super Admin' || userDepartment === 'SUPER' || userDepartment === 'INSURANCE' || userDepartment === 'MRDGA';
+  // 🔒 २. मेनू व्हिजिबिलिटी
+  const canSeeInsurance = 
+    isSuperAdminUser ||
+    userDepartment === 'INSURANCE' ||
+    allowedModules.includes('INSURANCE');
 
-  // 🎯 स्मार्ट ऑटो-रिडायरेक्शन लॉजिक (नियमांनुसार)
+  const canSeeCompetition = 
+    (isSuperAdminUser || allowedModules.includes('COMPETITION')) &&
+    userDepartment !== 'INSURANCE';
+
+  const canSeeDahiHandi = 
+    (isSuperAdminUser || allowedModules.includes('COMPETITION')) &&
+    userDepartment !== 'INSURANCE';
+
+  const canSeeDirectory = 
+    (isSuperAdminUser || allowedModules.includes('DIRECTORY')) &&
+    userDepartment !== 'INSURANCE';
+
+ const canSeeReports = 
+  (isSuperAdminUser || allowedModules.includes('REPORTS')) &&
+  userDepartment !== 'INSURANCE' &&
+  pageConfig.showReportsMenu !== false;
+
+  // 🎯 ३. ऑटो-रिडायरेक्शन
   useEffect(() => {
     if (loadingConfig || !currentUser) return;
 
-    // नियम ४: Insurance Team ला फक्त Insurance चाच ॲक्सेस असेल
-    if (userDepartment === 'INSURANCE' && location.pathname !== '/admin/insurance') {
-      navigate('/admin/insurance', { replace: true });
-      return;
-    }
-
-    // नियम १, २ व ३: /admin वर आल्यावर सक्रिय असलेला पहिला मेन्यू शोधणे
     if (location.pathname === '/admin') {
       const isCompOn = pageConfig.showCompetitionsMenu !== false;
       const isInsOn = pageConfig.showInsuranceMenu !== false;
 
-      // जर स्पर्धा फॉर्म बंद असेल आणि विमा चालू असेल, तर थेट विम्यावर पाठवा
-      if (!isCompOn && canSeeInsurance && isInsOn) {
+      if ((!isCompOn || !canSeeCompetition) && canSeeInsurance && isInsOn) {
         navigate('/admin/insurance', { replace: true });
+      } else if (!canSeeCompetition && canSeeDirectory) {
+        navigate('/admin/mandal-directory', { replace: true });
       }
     }
-  }, [location.pathname, pageConfig, userDepartment, loadingConfig, currentUser, navigate]);
+  }, [location.pathname, pageConfig, userDepartment, canSeeCompetition, canSeeInsurance, canSeeDirectory, loadingConfig, currentUser, navigate]);
 
   const handleLogout = async () => {
     await authService.logout();
     navigate('/');
   };
 
-  // नियम १: जर सर्व मेन्यू बंद असतील तर डॅशबोर्ड उघडू नका
   const areAllMenusDisabled = 
-    pageConfig.showCompetitionsMenu === false &&
-    pageConfig.showInsuranceMenu === false &&
-    pageConfig.showDahiHandiScoringMenu === false &&
-    pageConfig.showReportsMenu === false &&
+    !canSeeInsurance &&
+    !canSeeCompetition &&
+    !canSeeDahiHandi &&
+    !canSeeDirectory &&
+    !canSeeReports &&
     !isSuperAdminUser;
 
   if (!loadingConfig && areAllMenusDisabled) {
@@ -98,9 +121,9 @@ export default function AdminLayout({ children }) {
       <div className="min-h-screen bg-[#08090d] text-white flex items-center justify-center p-6 text-center font-sans">
         <div className="bg-[#0c0d14] border border-rose-500/30 p-8 rounded-3xl max-w-md space-y-4 shadow-2xl">
           <Lock className="w-12 h-12 text-rose-500 mx-auto animate-bounce" />
-          <h2 className="text-lg font-black text-white">ॲडमिन डॅशबोर्ड सध्या बंद आहे</h2>
+          <h2 className="text-lg font-black text-white">ॲडमिन डॅशबोर्ड ॲक्सेस नाही</h2>
           <p className="text-xs text-gray-400">
-            सध्या सर्व ॲडमिन मेन्यू बंद (OFF) ठेवण्यात आले आहेत. अधिक माहितीसाठी मुख्य ॲडमिनशी संपर्क साधा.
+            तुमच्या खात्याला सध्या कोणताही मेन्यू पाहण्याचा अधिकार नाही. कृपया मुख्य ॲडमिनशी संपर्क साधा.
           </p>
           <button 
             onClick={handleLogout}
@@ -116,7 +139,7 @@ export default function AdminLayout({ children }) {
   return (
     <div className="min-h-screen bg-[#08090d] text-white flex flex-col md:flex-row font-sans">
       
-      {/* 🔹 Mobile Top Navbar */}
+      {/* 🔹 Mobile Top Header */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0c0d14] border-b border-amber-500/20 sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
           <img 
@@ -132,13 +155,13 @@ export default function AdminLayout({ children }) {
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 text-gray-300 hover:text-white bg-black/40 rounded-lg border border-amber-500/20"
+          className="p-2 text-gray-300 hover:text-white bg-black/40 rounded-lg border border-amber-500/20 cursor-pointer"
         >
           {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </header>
 
-      {/* 🔹 Desktop Sidebar & Mobile Slide-Over Drawer */}
+      {/* 🔹 Desktop Sidebar */}
       <aside
         className={`
           fixed md:static inset-y-0 left-0 z-50
@@ -149,7 +172,7 @@ export default function AdminLayout({ children }) {
       >
         <div className="space-y-6">
           
-          {/* Logo & Mobile Close Header */}
+          {/* Logo Header */}
           <div className="flex items-center gap-3">
             <img 
               src="./mrdga-logo.png" 
@@ -166,7 +189,7 @@ export default function AdminLayout({ children }) {
           {/* Navigation Links */}
           <nav className="space-y-1.5">
 
-            {/* 🛡️ गोविंदा विमा अर्ज (Insurance, MRDGA, SUPER) */}
+            {/* 🛡️ गोविंदा विमा अर्ज */}
             {canSeeInsurance && pageConfig.showInsuranceMenu !== false && (
               <Link
                 to="/admin/insurance"
@@ -181,7 +204,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🏆 स्पर्धा अर्ज (MRDGA व SUPER साठी, Insurance साठी नाही) */}
+            {/* 🏆 स्पर्धा अर्ज */}
             {canSeeCompetition && pageConfig.showCompetitionsMenu !== false && (
               <Link
                 to="/admin"
@@ -196,8 +219,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🚩 दहीहंडी स्पर्धा व्यवस्थापन (MRDGA व SUPER साठी) */}
-            {canSeeCompetition && pageConfig.showDahiHandiScoringMenu !== false && (
+            {/* 🚩 दहीहंडी स्पर्धा व्यवस्थापन (Scoring) */}
+            {canSeeDahiHandi && pageConfig.showDahiHandiScoringMenu !== false && (
               <Link
                 to="/admin/tournaments"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -211,8 +234,8 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 📖 🆕 गोविंदा पथक डिरेक्टरी (MRDGA व SUPER साठी) */}
-            {canSeeCompetition && (
+            {/* 📖 गोविंदा पथक डिरेक्टरी */}
+            {canSeeDirectory && (
               <Link
                 to="/admin/mandal-directory"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -227,7 +250,7 @@ export default function AdminLayout({ children }) {
             )}
 
             {/* 📊 रिपोर्ट्स & एक्सपोर्ट */}
-            {userDepartment !== 'INSURANCE' && pageConfig.showReportsMenu !== false && (
+            {canSeeReports && (
               <Link
                 to="/admin/reports"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -241,7 +264,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🔒 नियम ७: युझर मॅनेजमेंट (Only for SUPER Dept + Super Admin Role) */}
+            {/* 👥 युझर मॅनेजमेंट (Only for Super Admin) */}
             {isSuperAdminUser && (
               <Link
                 to="/admin/users"
@@ -256,7 +279,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* ⚙️ नियम ७: पेजेस ऑन/ऑफ (Settings - Only for SUPER Dept + Super Admin Role) */}
+            {/* ⚙️ पेजेस ऑन/ऑफ Settings (Only for Super Admin) */}
             {isSuperAdminUser && (
               <Link
                 to="/admin/settings"
@@ -271,7 +294,7 @@ export default function AdminLayout({ children }) {
               </Link>
             )}
 
-            {/* 🔔 नियम ७: नोटीफिकेशन सेंटर (Only for SUPER Dept + Super Admin Role) */}
+            {/* 🔔 नोटीफिकेशन सेंटर (Only for Super Admin) */}
             {isSuperAdminUser && (
               <Link
                 to="/admin/notifications"
@@ -298,7 +321,7 @@ export default function AdminLayout({ children }) {
           </nav>
         </div>
 
-        {/* Profile & Logout */}
+        {/* Profile Box */}
         {currentUser && (
           <div className="pt-4 border-t border-amber-500/10 space-y-3">
             <div className="flex items-center gap-2.5 px-2">
@@ -325,7 +348,7 @@ export default function AdminLayout({ children }) {
         )}
       </aside>
 
-      {/* Overlay Backdrop for Mobile Menu */}
+      {/* Mobile Backdrop */}
       {isMobileMenuOpen && (
         <div
           onClick={() => setIsMobileMenuOpen(false)}
@@ -333,7 +356,7 @@ export default function AdminLayout({ children }) {
         />
       )}
 
-      {/* 🔹 Main Content Body */}
+      {/* Main Content */}
       <main className="flex-1 p-3 sm:p-6 overflow-y-auto w-full">
         {children}
       </main>

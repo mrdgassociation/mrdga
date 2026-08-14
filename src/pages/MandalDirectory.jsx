@@ -1,16 +1,22 @@
+// ==========================================
+// #SECTION 1: IMPORTS
+// ==========================================
 import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
   Phone, MessageSquare, Search, Filter, 
-  MapPin, UploadCloud, Lock, FileSpreadsheet, User, BookOpen, Database, Loader2, CheckCircle2, Circle, Send, Check, MessageSquareCheck, CalendarCheck
+  MapPin, UploadCloud, Lock, FileSpreadsheet, User, BookOpen, Database, Loader2, CheckCircle2, Circle, Send, Check, MessageSquareCheck, CalendarCheck, BarChart3
 } from 'lucide-react';
 import { db } from '../firebase/config';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { authService } from '../services/authService';
 import { WHATSAPP_TEMPLATES } from '../utils/whatsappTemplates';
 
-// ⚡ टायपिंग लॅग पूर्ण घालवण्यासाठी सेपरेट रिमार्क कंपोनंट (Isolated Input Component)
+// 🎯 नवीन लीडरबोर्ड मोडल कॉम्पोनंट
+import DirectoryLeaderboardModal from '../components/DirectoryLeaderboardModal';
+
+// ⚡ सेपरेट रिमार्क कंपोनंट
 const RemarkBox = ({ item, initialRemark, onSave, syncingId, savedId }) => {
   const [val, setVal] = useState(initialRemark || '');
 
@@ -51,30 +57,34 @@ export default function MandalDirectory() {
   const [fetchingData, setFetchingData] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  // 🚀 २५ टीम्स पेजिनेशन / स्क्रोल लिमिट
+  // 🚀 २५ टीम्स पेजिनेशन
   const [visibleCount, setVisibleCount] = useState(25);
 
   // 🎯 Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('ALL');
   const [selectedPincode, setSelectedPincode] = useState('ALL');
-  const [selectedArea, setSelectedArea] = useState('ALL'); // 🚩 एरिया फिल्टर स्टेट
+  const [selectedArea, setSelectedArea] = useState('ALL');
   const [selectedType, setSelectedType] = useState('ALL');
   const [remarkFilter, setRemarkFilter] = useState('ALL');
   
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('MEETING_16AUG');
 
   const [remarks, setRemarks] = useState({});
+  const [rawRemarksList, setRawRemarksList] = useState({}); // लीडरबोर्डसाठी कच्चा डेटा
   const [syncingRemarkId, setSyncingRemarkId] = useState(null);
   const [savedSuccessId, setSavedSuccessId] = useState(null);
 
-  // 📊 Google Sheet मधुन थेट रिमार्क डेटा व काउंट लोड करणे
+  // 📊 Google Sheet मधुन थेट रिमार्क डेटा व काउंट
   const [sheetRemarkCount, setSheetRemarkCount] = useState(0);
   const [fetchingSheetStats, setFetchingSheetStats] = useState(false);
 
   // 🚩 १६ ऑगस्ट RSVP डेटा फेच स्टेट्स
   const [rsvpStats, setRsvpStats] = useState({ totalEntries: 0, totalPeople: 0, list: [] });
   const [fetchingRsvpStats, setFetchingRsvpStats] = useState(false);
+
+  // 🏆 Leaderboard Modal State
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 
   // 🔐 User Permissions
   const [userRole, setUserRole] = useState('');
@@ -92,43 +102,44 @@ export default function MandalDirectory() {
       .join(' ');
   };
 
-  // 📊 १. Google Sheet मधुन रिमार्क्स फेच करणारे फिक्स केलेले फंक्शन (CORS Safe)
-  const fetchGoogleSheetRemarksStats = async () => {
-    setFetchingSheetStats(true);
-    try {
-      const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwduB8dMvnNqbEZ4rnfSBbZoAZqfN4tp9qBFR_6Gm6ErcOfuMAcftC3A8M17MqIsYO3fw/exec";
-      const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=GET_REMARKS`, {
-        method: 'GET',
-        redirect: 'follow'
-      });
+// MandalDirectory.jsx मधील फेच फंक्शन
+const fetchGoogleSheetRemarksStats = async () => {
+  setFetchingSheetStats(true);
+  try {
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwduB8dMvnNqbEZ4rnfSBbZoAZqfN4tp9qBFR_6Gm6ErcOfuMAcftC3A8M17MqIsYO3fw/exec";
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=GET_REMARKS`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
 
-      const resData = await res.json();
+    const resData = await res.json();
 
-      if (resData && resData.status === 'success' && resData.remarks) {
+    if (resData && resData.status === 'success') {
+      // 🎯 Col E सह आलेली संपूर्ण लिस्ट स्टेटमध्ये सेव्ह करणे
+      if (resData.rawList && Array.isArray(resData.rawList)) {
+        setRawRemarksList(resData.rawList);
+        setSheetRemarkCount(resData.rawList.length);
+      } else if (resData.remarks) {
         setSheetRemarkCount(Object.keys(resData.remarks).length);
-        
-        // लोकल रिमार्क्ससोबत गूगल शीटचा रिमार्क डेटा मर्ज करणे
+        setRawRemarksList(resData.remarks);
+      }
+
+      if (resData.remarks) {
         setRemarks(prev => {
           const merged = { ...prev, ...resData.remarks };
           localStorage.setItem('mrdga_directory_remarks', JSON.stringify(merged));
           return merged;
         });
       }
-    } catch (err) {
-      console.warn("⚠️ Google Sheet remarks fetch fallback active:", err);
-      const localRemarks = localStorage.getItem('mrdga_directory_remarks');
-      if (localRemarks) {
-        try {
-          const parsed = JSON.parse(localRemarks);
-          setSheetRemarkCount(Object.keys(parsed).length);
-        } catch (e) {}
-      }
-    } finally {
-      setFetchingSheetStats(false);
     }
-  };
+  } catch (err) {
+    console.warn("⚠️ Google Sheet remarks fetch error:", err);
+  } finally {
+    setFetchingSheetStats(false);
+  }
+};
 
-  // 📊 २. १६ ऑगस्ट RSVP डेटा फेच करणारे फिक्स केलेले फंक्शन
+  // 📊 २. १६ ऑगस्ट RSVP डेटा फेच करणे
   const fetch16AugRsvpData = async () => {
     setFetchingRsvpStats(true);
     try {
@@ -198,18 +209,22 @@ export default function MandalDirectory() {
     };
 
     fetchDirectoryCache();
-    fetchGoogleSheetRemarksStats(); // कॉल्स काउंट व डेटा फेच करणे
-    fetch16AugRsvpData();           // १६ ऑगस्ट RSVP डेटा फेच करणे
+    fetchGoogleSheetRemarksStats();
+    fetch16AugRsvpData();
 
     const savedRemarks = localStorage.getItem('mrdga_directory_remarks');
     if (savedRemarks) {
-      try { setRemarks(JSON.parse(savedRemarks)); } catch (e) {}
+      try { 
+        const parsed = JSON.parse(savedRemarks);
+        setRemarks(parsed);
+        setRawRemarksList(parsed);
+      } catch (e) {}
     }
 
     return () => unsubscribe();
   }, []);
 
-  // 📄 Excel Upload (Merge, Update Area & District Support)
+  // 📄 Excel Upload
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -325,7 +340,7 @@ export default function MandalDirectory() {
         Swal.fire({
           icon: 'success',
           title: 'डेटाबेस यशस्वीरीत्या अद्ययावत झाला!',
-          html: `<b>${updatedCount}</b> जुन्या नोंदींमध्ये (Area व सुधारित जिल्हा) अपडेट झाले.<br/>` + 
+          html: `<b>${updatedCount}</b> जुन्या नोंदींमध्ये अपडेट झाले.<br/>` + 
                 (addedCount > 0 ? `<span style="color:#10b981">➕ <b>${addedCount}</b> नवीन संघ जोडले गेले.</span>` : ''),
           background: '#0c0d14',
           color: '#fff'
@@ -345,6 +360,8 @@ export default function MandalDirectory() {
   const saveRemarkToGoogleSheet = async (item, remarkText) => {
     if (!remarkText || !remarkText.trim()) return;
 
+    const callerNameInfo = currentUserName ? `${currentUserName} (${currentUserEmail})` : currentUserEmail;
+
     const updatedRemarks = { 
       ...remarks, 
       [item.id]: remarkText.trim(),
@@ -358,7 +375,6 @@ export default function MandalDirectory() {
 
     try {
       const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwduB8dMvnNqbEZ4rnfSBbZoAZqfN4tp9qBFR_6Gm6ErcOfuMAcftC3A8M17MqIsYO3fw/exec";
-      const callerNameInfo = currentUserName ? `${currentUserName} (${currentUserEmail})` : currentUserEmail;
 
       const rawPayload = {
         action: "UPDATE_REMARK",
@@ -389,10 +405,9 @@ export default function MandalDirectory() {
     }
   };
 
-  // 🔍 डायनॅमिक फिल्टर्स (Districts, Areas, Pincodes, Types)
+  // 🔍 डायनॅमिक फिल्टर्स
   const districts = useMemo(() => ['ALL', ...new Set(data.map(item => item.district).filter(Boolean))], [data]);
   
-  // 🔢 🚩 पिनकोड चढत्या क्रमाने (400012, 400013, 400014...) सॉर्ट करणे
   const availablePincodes = useMemo(() => {
     const rawPincodes = Array.from(new Set(
       data
@@ -400,10 +415,7 @@ export default function MandalDirectory() {
         .map(item => item.pincode)
         .filter(Boolean)
     ));
-
-    // न्यूमेरिकली सॉर्ट (Ascending Order)
     rawPincodes.sort((a, b) => Number(a) - Number(b));
-
     return ['ALL', ...rawPincodes];
   }, [data, selectedDistrict]);
 
@@ -494,6 +506,7 @@ export default function MandalDirectory() {
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+          
           {/* 📊 १. Google Sheet मधुन कॉल्स संपन्न काउंट कार्ड */}
           <div className="bg-emerald-950/80 border border-emerald-500/40 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-md">
             <MessageSquareCheck className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -516,10 +529,21 @@ export default function MandalDirectory() {
             </div>
           </div>
 
+          {/* 🏆 ३. कॉलिंग लीडरबोर्ड बटण */}
+          <button
+            type="button"
+            onClick={() => setIsLeaderboardOpen(true)}
+            className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg transition cursor-pointer shrink-0"
+            title="कॉलिंग लीडरबोर्ड पाहा"
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>लीडरबोर्ड</span>
+          </button>
+
           {canUploadExcel && (
-            <label className="px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition shrink-0">
+            <label className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-extrabold text-xs rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition shrink-0">
               {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-              {uploading ? 'सेव्ह होत आहे...' : 'एक्सेल सेव्ह करा'}
+              {uploading ? 'सेव्ह होत आहे...' : 'एक्सेल सेव्ह'}
               <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} disabled={uploading} className="hidden" />
             </label>
           )}
@@ -594,7 +618,6 @@ export default function MandalDirectory() {
               </select>
             </div>
 
-            {/* 🔢 🚩 चढत्या क्रमाने सॉर्ट झालेला पिनकोड ड्रॉपडाऊन */}
             <div>
               <select
                 value={selectedPincode}
@@ -864,7 +887,7 @@ export default function MandalDirectory() {
             })}
           </div>
 
-          {/* 🔽 आणखी २५ टीम्स दाखवण्यासाठी 'Load More' बटण */}
+          {/* 🔽 Load More Button */}
           {displayedData.length < filteredData.length && (
             <div className="text-center pt-2 pb-4">
               <button
@@ -878,6 +901,14 @@ export default function MandalDirectory() {
           )}
 
         </div>
+      )}
+
+      {/* 🏆 कॉलिंग लीडरबोर्ड मोडल */}
+      {isLeaderboardOpen && (
+        <DirectoryLeaderboardModal 
+          remarksData={rawRemarksList}
+          onClose={() => setIsLeaderboardOpen(false)}
+        />
       )}
 
     </div>

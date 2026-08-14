@@ -1,3 +1,6 @@
+// ==========================================
+// #SECTION 1: IMPORTS
+// ==========================================
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Menu, X, LayoutDashboard, LogOut, LogIn } from 'lucide-react';
@@ -16,6 +19,7 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null); // 'admin' | 'team' | 'guest'
   const [userDepartment, setUserDepartment] = useState('MRDGA'); // 🏢 Default MRDGA
+  const [dbRole, setDbRole] = useState(''); // 'Super Admin', 'Competition', 'Directory', etc.
   const [hasTeamData, setHasTeamData] = useState(false); // 🎯 Admin युझरची स्वतःची पर्सनल टिम आहे का हे तपासण्यासाठी
 
   const navigate = useNavigate();
@@ -28,12 +32,12 @@ export default function Navbar() {
         try {
           const emailLower = currentUser.email.toLowerCase().trim();
 
-          // 🎯 Step 2: ऑथेंटिकेट झालेल्या ई-मेलसह Push Permission & FCM Token Save ट्रिगर करा
+          // 🎯 Push Permission & FCM Token Save ट्रिगर
           import('../services/notificationService.js').then(m => {
             m.notificationService.requestPushPermission(emailLower);
           });
 
-          // १. 'users' मध्ये Admin/Staff शोधणे
+          // १. 'users' मध्ये Admin/Staff चेकिंग
           const userDocRef = doc(db, 'users', emailLower);
           const userDocSnap = await getDoc(userDocRef);
 
@@ -42,10 +46,23 @@ export default function Navbar() {
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             const isActive = userData.isActive !== false && userData.status !== 'Inactive';
+            const userRoleInDb = userData.role || 'Reviewer';
 
-            if (isActive && ['Super Admin', 'Admin', 'Reviewer'].includes(userData.role)) {
+            // 🎯 सर्व चालू आणि नवीन रोल्स तपासणे (Competition, Directory, Insurance, Viewer, Admin, Super Admin, Reviewer)
+            const allowedAdminRoles = [
+              'Super Admin', 
+              'Admin', 
+              'Reviewer', 
+              'Competition', 
+              'Directory', 
+              'Insurance', 
+              'Viewer'
+            ];
+
+            if (isActive && allowedAdminRoles.includes(userRoleInDb)) {
               isAdminUser = true;
               setUserRole('admin');
+              setDbRole(userRoleInDb);
               setUserDepartment(userData.department || 'MRDGA');
             }
           }
@@ -66,7 +83,6 @@ export default function Navbar() {
             }
           }
 
-          // 🎯 जर ॲडमिनने स्वतःच्या टिमचा अर्ज भरला असेल तर हा फ्लॅग true राहील
           setHasTeamData(hasPersonalReg);
 
         } catch (err) {
@@ -76,13 +92,13 @@ export default function Navbar() {
         }
       } else {
         setUserRole(null);
+        setDbRole('');
         setHasTeamData(false);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Form link dynamic
   const { competitions } = useCompetitions();
 
   const handleNavRegister = () => {
@@ -102,6 +118,7 @@ export default function Navbar() {
       await signOut(auth);
       setIsOpen(false);
       setUserRole(null);
+      setDbRole('');
       setHasTeamData(false);
       navigate('/');
     } catch (error) {
@@ -109,16 +126,19 @@ export default function Navbar() {
     }
   };
 
-  // 🎯 Admin Dashboard कडे नेणारे स्मार्ट हँडलर
+  // 🎯 रोलनुसार डॅशबोर्डकडे नेणारे स्मार्ट हँडलर
   const handleAdminDashboardClick = () => {
-    if (userDepartment === 'INSURANCE') {
-      navigate('/admin/insurance'); // 🛡️ विमा युझर थेट विमा डॅशबोर्डवर जाईल
+    if (userDepartment === 'INSURANCE' || dbRole === 'Insurance') {
+      navigate('/admin/insurance');
+    } else if (dbRole === 'Directory') {
+      navigate('/admin/mandal-directory');
     } else {
-      navigate('/admin'); // 🏆 बाकीचे नेहमीच्या स्पर्धा डॅशबोर्डवर जातील
+      navigate('/admin');
     }
   };
 
-  const canSeeMrdgaDashboard = userRole === 'admin' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER'|| userDepartment === 'INSURANCE');
+  // 🔐 ॲडमिन बटण दिसण्यासाठी चेकिंग (सर्व रोल्ससाठी TRUE)
+  const canSeeMrdgaDashboard = userRole === 'admin';
 
   return (
     <nav className="sticky top-0 z-40 bg-[#08090d]/90 backdrop-blur-md border-b border-white/10 font-sans">
@@ -162,11 +182,11 @@ export default function Navbar() {
             <div className="hidden md:flex items-center gap-2 border-l border-white/10 pl-3">
               {user ? (
                 <>
-                  {/* 👑 1. Admin Dashboard Button */}
+                  {/* 👑 1. Admin Dashboard Button (Competition/Directory/Insurance सर्व रोल्ससाठी दिसेल) */}
                   {canSeeMrdgaDashboard && (
                     <button
                       onClick={handleAdminDashboardClick}
-                      className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-black font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-black font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                     >
                       <LayoutDashboard className="w-4 h-4" /> Admin Dashboard
                     </button>
@@ -192,7 +212,6 @@ export default function Navbar() {
                   </button>
                 </>
               ) : (
-                /* 🚀 आकर्षक डेस्कटॉप लॉगिन बटण */
                 <Link 
                   to="/login" 
                   className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition cursor-pointer" 
@@ -257,7 +276,6 @@ export default function Navbar() {
               </button>
             </div>
           ) : (
-            /* 🚀 आकर्षक मोबाईल लॉगिन बटण */
             <div className="pt-2 border-t border-white/10">
               <Link 
                 to="/login" 

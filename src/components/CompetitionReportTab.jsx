@@ -1,9 +1,12 @@
+// ==========================================
+// #SECTION: COMPETITION REPORT TAB
+// ==========================================
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
   FileSpreadsheet, Printer, Search, BarChart3, 
-  MapPin, Phone, MessageSquare, User 
+  MapPin, Phone, MessageSquare, User, Users
 } from 'lucide-react';
 
 export default function CompetitionReportTab({ 
@@ -15,7 +18,6 @@ export default function CompetitionReportTab({
   const [districtFilter, setDistrictFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
-  // 🔤 Title Case Formatting Helper (proper casing: JAI BAJRANG -> Jai Bajrang)
   const toTitleCase = (str) => {
     if (!str) return '';
     return str
@@ -28,7 +30,6 @@ export default function CompetitionReportTab({
   const uniqueDistricts = Array.from(new Set(teams.map(t => t.district).filter(Boolean)));
   const uniqueCategories = Array.from(new Set(teams.map(t => t.category).filter(Boolean)));
 
-  // 🛡️ स्मार्ट डुप्लिकेट डिटेक्शन सेट (एक्सेल एक्सपोर्टसाठी)
   const duplicateMap = useMemo(() => {
     const dupMap = new Map();
     const cleanStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
@@ -98,7 +99,6 @@ export default function CompetitionReportTab({
     return filteredTeams.filter(t => t.category === catKey);
   };
 
-  // 📊 Excel Export Handler (विस्तारित कॉलम्ससह)
   const handleExportToExcel = () => {
     if (filteredTeams.length === 0) {
       Swal.fire({
@@ -133,19 +133,12 @@ export default function CompetitionReportTab({
         'संपर्क २ नाव': toTitleCase(team.manager?.name || team.contact2?.name || ''),
         'संपर्क २ फोन': team.manager?.phone || team.contact2?.phone || '',
         'ईमेल': team.email || '',
-        
-        // 🚩 🟢 नवीन जोडलेले रिमार्क ट्रॅकिंग कॉलम्स
         'एकूण रिमार्क्स संख्या': comments.length,
         'शेवटचा रिमार्क / अपडेट': lastComment ? lastComment.text : 'अद्याप कॉल/रिमार्क नाही',
         'रिमार्क देणारा अधिकारी': lastComment ? `${lastComment.byName || lastComment.name || ''} (${lastComment.role || ''})` : '-',
         'रिमार्क दिनांक व वेळ': lastComment && lastComment.createdAt ? new Date(lastComment.createdAt).toLocaleString('mr-IN') : '-',
-        
-        // ⚠️ 🚩 नवीन जोडलेले डुप्लिकेट फ्लॅग कॉलम्स
         'दुबार नोंदणी शक्यता?': isDuplicate ? 'होय (Yes)' : 'नाही (No)',
         'दुबार असण्याचे कारण': isDuplicate ? dupReason : '-',
-
-        'लोगो लिंक': team.media?.logoUrl || '',
-        'कॅप्टन फोटो लिंक': team.media?.captainPhotoUrl || '',
         'नोंदणी दिनांक': team.createdAt ? new Date(team.createdAt).toLocaleDateString('mr-IN') : '',
         'स्टेटस': team.status || 'Pending'
       };
@@ -154,7 +147,6 @@ export default function CompetitionReportTab({
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "MRDGA_Report");
-
     const compNameText = competitionFilter === 'ALL' ? 'All_Competitions' : competitionFilter;
     XLSX.writeFile(workbook, `MRDGA_Report_${compNameText}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
@@ -162,11 +154,8 @@ export default function CompetitionReportTab({
   const handlePrint = () => {
     const originalTitle = document.title;
     const cleanCompName = (selectedCompTitle || 'Report').replace(/[^a-zA-Z0-9_\u0900-\u097F]/g, "_");
-    const todayDate = new Date().toISOString().slice(0, 10);
-    document.title = `MRDGA_Report_${cleanCompName}_${todayDate}`;
-
+    document.title = `MRDGA_Report_${cleanCompName}_${new Date().toISOString().slice(0, 10)}`;
     window.print();
-
     setTimeout(() => {
       document.title = originalTitle;
     }, 1000);
@@ -178,44 +167,18 @@ export default function CompetitionReportTab({
       {/* 🖨️ PRINT & PDF STYLING */}
       <style>{`
         @media print {
-          body {
-            background-color: #fff !important;
-            color: #000 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .print-area {
-            background: white !important;
-            color: black !important;
-            box-shadow: none !important;
-            border: none !important;
-            width: 100% !important;
-            padding: 0 !important;
-          }
-          .print-page-break {
-            page-break-before: always !important;
-            break-before: page !important;
-            padding-top: 10px !important;
-          }
-          table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-          }
-          th, td {
-            color: black !important;
-            border: 1px solid #333 !important;
-          }
-          th {
-            background-color: #f3f4f6 !important;
-          }
+          body { background-color: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; }
+          .no-print { display: none !important; }
+          .print-area { background: white !important; color: black !important; box-shadow: none !important; border: none !important; width: 100% !important; padding: 0 !important; }
+          .print-page-break { page-break-before: always !important; break-before: page !important; padding-top: 10px !important; }
+          table { width: 100% !important; border-collapse: collapse !important; }
+          th, td { color: black !important; border: 1px solid #333 !important; }
+          th { background-color: #f3f4f6 !important; }
         }
       `}</style>
 
-      {/* Header & Export Buttons */}
-      <div className="no-print flex flex-col sm:flex-row justify-between items-start sm:items-center bg-black/50 border border-amber-500/20 p-2.5 sm:p-3 rounded-2xl backdrop-blur-md gap-2">
+      {/* Header & Compact Icon Buttons Bar */}
+      <div className="no-print flex justify-between items-center bg-black/50 border border-amber-500/20 p-2.5 sm:p-3 rounded-2xl backdrop-blur-md gap-2 shadow-xl">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl shrink-0">
             <BarChart3 className="w-4 h-4" />
@@ -228,19 +191,22 @@ export default function CompetitionReportTab({
           </div>
         </div>
 
+        {/* 🎯 कॉम्पॅक्ट आयकॉन बटन्स */}
         {canExportAndPrint && (
-          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={handleExportToExcel}
-              className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+              className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition cursor-pointer"
+              title="Excel डाउनलोड करा"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" /> Excel डाउनलोड
+              <FileSpreadsheet className="w-4 h-4" />
             </button>
             <button
               onClick={handlePrint}
-              className="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl shadow-md transition cursor-pointer"
+              title="PDF / प्रिंट काढा"
             >
-              <Printer className="w-3.5 h-3.5" /> PDF / प्रिंट काढा
+              <Printer className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -270,7 +236,7 @@ export default function CompetitionReportTab({
       </div>
 
       {/* MULTI-COLUMN FILTERS */}
-      <div className="no-print glass-panel p-2.5 rounded-2xl space-y-2">
+      <div className="no-print bg-black/50 border border-white/10 p-2.5 rounded-2xl space-y-2">
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-400/60" />
           <input
@@ -338,15 +304,19 @@ export default function CompetitionReportTab({
         <p className="p-8 text-center text-gray-400 text-xs font-medium">कोणतीही नोंदणी सापडली नाही.</p>
       ) : (
         <>
-          {/* 📱 MOBILE VIEW CARDS */}
+          {/* 📱 MOBILE VIEW CARDS (No Horizontal Scroll, Numbers Hidden on Screen) */}
           <div className="no-print grid grid-cols-1 md:hidden gap-3">
             {filteredTeams.map((team, idx) => {
               const rawC1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
               const c1Name = toTitleCase(rawC1Name);
               const c1Phone = team.captain?.phone || team.contact1?.phone || '';
 
+              const rawC2Name = team.manager?.name || team.contact2?.name || '';
+              const c2Name = toTitleCase(rawC2Name);
+              const c2Phone = team.manager?.phone || team.contact2?.phone || '';
+
               return (
-                <div key={team.registrationId || idx} className="glass-panel p-3.5 rounded-2xl border border-amber-500/20 bg-black/40 space-y-2.5">
+                <div key={team.registrationId || idx} className="p-3.5 rounded-2xl border border-amber-500/20 bg-black/40 space-y-2.5 shadow-md">
                   <div className="flex justify-between items-start gap-2">
                     <div>
                       <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
@@ -368,18 +338,35 @@ export default function CompetitionReportTab({
                   </div>
 
                   <div className="bg-black/50 p-2.5 rounded-xl border border-white/5 space-y-2 text-xs">
+                    {/* संपर्क १ (कॅप्टन) */}
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="flex items-center gap-1.5 overflow-hidden">
                         <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         <span className="text-gray-200 font-semibold truncate text-[11px]">{c1Name} <span className="text-[9px] text-gray-500">(कॅप्टन)</span></span>
                       </div>
                       {c1Phone && (
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <a href={`https://wa.me/91${c1Phone}`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg"><MessageSquare className="w-3 h-3" /></a>
-                          <a href={`tel:${c1Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded-lg"><Phone className="w-3 h-3" /></a>
+                          <a href={`https://wa.me/91${c1Phone}`} target="_blank" rel="noreferrer" className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30" title="WhatsApp करा"><MessageSquare className="w-3.5 h-3.5" /></a>
+                          <a href={`tel:${c1Phone}`} className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30" title="कॉल करा"><Phone className="w-3.5 h-3.5" /></a>
                         </div>
                       )}
                     </div>
+
+                    {/* संपर्क २ (मॅनेजर) */}
+                    {c2Name && (
+                      <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="text-gray-200 font-semibold truncate text-[11px]">{c2Name} <span className="text-[9px] text-gray-500">(मॅनेजर)</span></span>
+                        </div>
+                        {c2Phone && (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <a href={`https://wa.me/91${c2Phone}`} target="_blank" rel="noreferrer" className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30" title="WhatsApp करा"><MessageSquare className="w-3.5 h-3.5" /></a>
+                            <a href={`tel:${c2Phone}`} className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30" title="कॉल करा"><Phone className="w-3.5 h-3.5" /></a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -387,7 +374,7 @@ export default function CompetitionReportTab({
           </div>
 
           {/* 💻 DESKTOP & PRINTABLE SECTION */}
-          <div className="hidden md:block print-area glass-panel rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-4 bg-[#0c0d14] text-white">
+          <div className="hidden md:block print-area rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-4 bg-[#0c0d14] text-white">
             
             <div className="mb-4 pb-3 border-b border-gray-600 flex justify-between items-center">
               <div>
@@ -408,7 +395,7 @@ export default function CompetitionReportTab({
               </div>
             </div>
 
-            {/* 🤼 CATEGORY 1: M7 (पुरुष ७ थर) BLOCK */}
+            {/* 🤼 CATEGORY 1: M7 (पुरुष ७ थर) */}
             {getTeamsByCategory('M7').length > 0 && (
               <div className="mb-6 space-y-2">
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
@@ -418,14 +405,13 @@ export default function CompetitionReportTab({
               </div>
             )}
 
-            {/* 🤼 CATEGORY 2: M6 (पुरुष ६ थर) BLOCK */}
+            {/* 🤼 CATEGORY 2: M6 (पुरुष ६ थर) */}
             {getTeamsByCategory('M6').length > 0 && (
               <div className="mb-6 space-y-2 print-page-break">
                 <div className="hidden print:block mb-3 pb-2 border-b border-gray-400">
                   <h1 className="text-sm font-black text-black uppercase">MAHARASHTRA RAJYA DAHIHANDI GOVINDA ASSOCIATION</h1>
                   <h2 className="text-xs font-bold text-black">🏆 {selectedCompTitle}</h2>
                 </div>
-
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 पुरुष ६ थर (M6) - एकूण: {getTeamsByCategory('M6').length}
                 </div>
@@ -433,14 +419,13 @@ export default function CompetitionReportTab({
               </div>
             )}
 
-            {/* 🤼 CATEGORY 3: WOMEN (महिला पथक) BLOCK */}
+            {/* 🤼 CATEGORY 3: WOMEN (महिला पथक) */}
             {getTeamsByCategory('W').length > 0 && (
               <div className="mb-6 space-y-2 print-page-break">
                 <div className="hidden print:block mb-3 pb-2 border-b border-gray-400">
                   <h1 className="text-sm font-black text-black uppercase">MAHARASHTRA RAJYA DAHIHANDI GOVINDA ASSOCIATION</h1>
                   <h2 className="text-xs font-bold text-black">🏆 {selectedCompTitle}</h2>
                 </div>
-
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 महिला पथक (Women's) - एकूण: {getTeamsByCategory('W').length}
                 </div>
@@ -448,14 +433,13 @@ export default function CompetitionReportTab({
               </div>
             )}
 
-            {/* 🤼 OTHER CATEGORIES BLOCK */}
+            {/* 🤼 OTHER CATEGORIES */}
             {getTeamsByCategory('OTHERS').length > 0 && (
               <div className="mb-6 space-y-2 print-page-break">
                 <div className="hidden print:block mb-3 pb-2 border-b border-gray-400">
                   <h1 className="text-sm font-black text-black uppercase">MAHARASHTRA RAJYA DAHIHANDI GOVINDA ASSOCIATION</h1>
                   <h2 className="text-xs font-bold text-black">🏆 {selectedCompTitle}</h2>
                 </div>
-
                 <div className="bg-amber-500/20 border-l-4 border-amber-500 p-2 rounded-r-lg text-amber-300 font-extrabold text-xs">
                   🏆 इतर गट (Other Categories) - एकूण: {getTeamsByCategory('OTHERS').length}
                 </div>
@@ -471,7 +455,7 @@ export default function CompetitionReportTab({
   );
 }
 
-// 🖨️ Reusable Category Table Component (Proper Casing Support)
+// 🖨️ Reusable Category Table (Number printed on PDF, Hidden on Screen)
 function CategoryTable({ teamsList, toTitleCase }) {
   return (
     <div className="overflow-x-auto">
@@ -489,32 +473,70 @@ function CategoryTable({ teamsList, toTitleCase }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-white/10">
-          {teamsList.map((team, idx) => (
-            <tr key={team.registrationId || idx} className="hover:bg-white/5 transition">
-              <td className="p-2 border border-white/5 text-gray-400 font-mono text-center">{idx + 1}</td>
-              <td className="p-2 border border-white/5 font-mono font-bold text-amber-400">{team.registrationId}</td>
-              <td className="p-2 border border-white/5 font-bold text-white">{toTitleCase(team.teamName)}</td>
-              <td className="p-2 border border-white/5 text-gray-300 text-center font-bold">{team.playerCount || '-'}</td>
-              <td className="p-2 border border-white/5 text-gray-300">{toTitleCase(team.district)}, <span className="text-[10px] text-gray-400">{toTitleCase(team.vibhag)}</span></td>
-              <td className="p-2 border border-white/5">
-                <p className="font-semibold text-gray-200">{toTitleCase(team.captain?.name || team.contact1?.name || '-')}</p>
-                <p className="text-[10px] text-gray-400 font-mono">{team.captain?.phone || team.contact1?.phone || ''}</p>
-              </td>
-              <td className="p-2 border border-white/5">
-                <p className="font-semibold text-gray-200">{toTitleCase(team.manager?.name || team.contact2?.name || '-')}</p>
-                <p className="text-[10px] text-gray-400 font-mono">{team.manager?.phone || team.contact2?.phone || ''}</p>
-              </td>
-              <td className="p-2 border border-white/5 text-center">
-                <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border uppercase ${
-                  team.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                  team.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
-                  'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                }`}>
-                  {team.status || 'Pending'}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {teamsList.map((team, idx) => {
+            const c1Phone = team.captain?.phone || team.contact1?.phone || '';
+            const c2Phone = team.manager?.phone || team.contact2?.phone || '';
+
+            return (
+              <tr key={team.registrationId || idx} className="hover:bg-white/5 transition">
+                <td className="p-2 border border-white/5 text-gray-400 font-mono text-center">{idx + 1}</td>
+                <td className="p-2 border border-white/5 font-mono font-bold text-amber-400">{team.registrationId}</td>
+                <td className="p-2 border border-white/5 font-bold text-white">{toTitleCase(team.teamName)}</td>
+                <td className="p-2 border border-white/5 text-gray-300 text-center font-bold">{team.playerCount || '-'}</td>
+                <td className="p-2 border border-white/5 text-gray-300">{toTitleCase(team.district)}, <span className="text-[10px] text-gray-400">{toTitleCase(team.vibhag)}</span></td>
+                
+                {/* 🎯 संपर्क १: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
+                <td className="p-2 border border-white/5">
+                  <div className="flex items-center justify-between gap-1">
+                    <div>
+                      <p className="font-semibold text-gray-200">{toTitleCase(team.captain?.name || team.contact1?.name || '-')}</p>
+                      {c1Phone && (
+                        <p className="hidden print:block text-[10px] text-black font-mono font-bold mt-0.5">
+                          📞 {c1Phone}
+                        </p>
+                      )}
+                    </div>
+                    {c1Phone && (
+                      <div className="no-print flex items-center gap-1 shrink-0">
+                        <a href={`https://wa.me/91${c1Phone}`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded" title="WhatsApp करा"><MessageSquare className="w-3 h-3" /></a>
+                        <a href={`tel:${c1Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded" title="कॉल करा"><Phone className="w-3 h-3" /></a>
+                      </div>
+                    )}
+                  </div>
+                </td>
+
+                {/* 🎯 संपर्क २: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
+                <td className="p-2 border border-white/5">
+                  <div className="flex items-center justify-between gap-1">
+                    <div>
+                      <p className="font-semibold text-gray-200">{toTitleCase(team.manager?.name || team.contact2?.name || '-')}</p>
+                      {c2Phone && (
+                        <p className="hidden print:block text-[10px] text-black font-mono font-bold mt-0.5">
+                          📞 {c2Phone}
+                        </p>
+                      )}
+                    </div>
+                    {c2Phone && (
+                      <div className="no-print flex items-center gap-1 shrink-0">
+                        <a href={`https://wa.me/91${c2Phone}`} target="_blank" rel="noreferrer" className="p-1 bg-emerald-500/20 text-emerald-400 rounded" title="WhatsApp करा"><MessageSquare className="w-3 h-3" /></a>
+                        <a href={`tel:${c2Phone}`} className="p-1 bg-blue-500/20 text-blue-400 rounded" title="कॉल करा"><Phone className="w-3 h-3" /></a>
+                      </div>
+                    )}
+                  </div>
+                </td>
+
+                <td className="p-2 border border-white/5 text-center">
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border uppercase ${
+                    team.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                    team.status === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
+                    'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {team.status || 'Pending'}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

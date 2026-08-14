@@ -2,13 +2,17 @@
 // #SECTION 1: IMPORTS
 // ==========================================
 import React, { useState, useEffect } from 'react';
-import { dataService } from '../services/dataService';
+import { db } from '../firebase/config';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { authService } from '../services/authService';
 import Swal from 'sweetalert2';
 import { 
   UserPlus, UserCheck, Mail, Edit, RefreshCw, Lock, X, 
-  Building2, Search, Filter, Phone, MessageSquare, ShieldCheck, UserX 
+  Search, Phone, MessageSquare, CheckSquare, Square
 } from 'lucide-react';
+
+// 🎯 Central Modules Import
+import { SYSTEM_MODULES, ALL_MODULE_KEYS } from '../constants/modules';
 
 export default function UserManagement() {
   // ==========================================
@@ -36,6 +40,7 @@ export default function UserManagement() {
   const [department, setDepartment] = useState('MRDGA');
   const [customDepartment, setCustomDepartment] = useState('');
   const [isCustomDept, setIsCustomDept] = useState(false);
+  const [allowedModules, setAllowedModules] = useState(ALL_MODULE_KEYS);
   const [saving, setSaving] = useState(false);
 
   const [departmentList, setDepartmentList] = useState(['MRDGA', 'INSURANCE', 'SUPER']);
@@ -46,9 +51,9 @@ export default function UserManagement() {
   const loadUsersData = async () => {
     setLoading(true);
     try {
-      const data = await dataService.getAllUsers();
-      const loadedUsers = data || [];
-      setUsers(loadedUsers);
+      const querySnapshot = await getDocs(collection(db, "users"));
+      const loadedUsers = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUsers(loadedUsers || []);
 
       const existingDepts = loadedUsers
         .map(u => u.department)
@@ -57,7 +62,7 @@ export default function UserManagement() {
       const uniqueDepts = Array.from(new Set(['MRDGA', 'INSURANCE', 'SUPER', ...existingDepts]));
       setDepartmentList(uniqueDepts);
     } catch (err) {
-      console.error("Error loading users:", err);
+      console.error("❌ [ERROR] Error loading users:", err);
     } finally {
       setLoading(false);
     }
@@ -92,19 +97,38 @@ export default function UserManagement() {
     setDepartment('MRDGA');
     setCustomDepartment('');
     setIsCustomDept(false);
+    setAllowedModules(ALL_MODULE_KEYS);
     setIsModalOpen(true);
   };
 
   const handleEditClick = (u) => {
     setIsEditing(true);
-    setEmail(u.email);
+    setEmail(u.email || u.id);
     setName(u.name || '');
     setPhone(u.phone || '');
     setRole(u.role || 'Reviewer');
     setDepartment(u.department || 'MRDGA');
     setCustomDepartment('');
     setIsCustomDept(false);
+    
+    // 🎯 जर आधी ॲरे असेल तर तोच घ्या (Empty असेल तरी ओव्हरराईट नको)
+    if (u.allowedModules !== undefined && Array.isArray(u.allowedModules)) {
+      setAllowedModules(u.allowedModules);
+    } else {
+      setAllowedModules(ALL_MODULE_KEYS);
+    }
+    
     setIsModalOpen(true);
+  };
+
+  const handleModuleToggle = (modKey) => {
+    setAllowedModules(prev => {
+      if (prev.includes(modKey)) {
+        return prev.filter(m => m !== modKey);
+      } else {
+        return [...prev, modKey];
+      }
+    });
   };
 
   const handleSaveUser = async (e) => {
@@ -120,17 +144,25 @@ export default function UserManagement() {
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+    
+    const userPayload = {
+      email: cleanEmail,
+      name: name.trim(),
+      phone: phone.trim(),
+      role: role,
+      department: finalDepartment,
+      allowedModules: allowedModules,
+      isActive: true,
+      status: 'Active',
+      updatedAt: new Date().toISOString()
+    };
+
     setSaving(true);
+
     try {
-      await dataService.createOrUpdateUser({
-        email: email.trim().toLowerCase(),
-        name: name.trim(),
-        phone: phone.trim(),
-        role,
-        department: finalDepartment,
-        isActive: true,
-        status: 'Active'
-      });
+      const userRef = doc(db, "users", cleanEmail);
+      await setDoc(userRef, userPayload, { merge: true });
 
       Swal.fire({
         icon: 'success',
@@ -144,6 +176,7 @@ export default function UserManagement() {
       setIsModalOpen(false);
       loadUsersData();
     } catch (err) {
+      console.error("❌ [FIRESTORE SAVE ERROR]:", err);
       Swal.fire({
         icon: 'error',
         title: 'त्रुटी!',
@@ -211,13 +244,13 @@ export default function UserManagement() {
           >
             <UserPlus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">नवीन</span> जोडा
           </button>
-          <button onClick={loadUsersData} className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl">
+          <button onClick={loadUsersData} className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl cursor-pointer">
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* 🔍 ULTRA COMPACT FILTERS BAR (मोबाईलवर अजिबात जागा न खाणारा १ ओळीचा फिल्टर) */}
+      {/* 🔍 ULTRA COMPACT FILTERS BAR */}
       <div className="bg-black/60 border border-amber-500/20 p-2 rounded-2xl space-y-2">
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-400/60" />
@@ -230,7 +263,6 @@ export default function UserManagement() {
           />
         </div>
 
-        {/* 3 Dropdowns in 1 Row on Mobile */}
         <div className="grid grid-cols-3 gap-1.5">
           <select
             value={deptFilter}
@@ -252,6 +284,7 @@ export default function UserManagement() {
             <option value="Super Admin">Super Admin</option>
             <option value="Admin">Admin</option>
             <option value="Reviewer">Reviewer</option>
+            <option value="Viewer">Viewer</option>
           </select>
 
           <select
@@ -266,7 +299,7 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* 📱 BEAUTIFUL SINGLE-COLUMN CARDS LIST (मूळ कार्ड डिझाईन पण १-कॉलम व्ह्यू) */}
+      {/* 📱 CARDS LIST */}
       {loading ? (
         <p className="p-8 text-center text-amber-400 font-semibold text-xs animate-pulse">युझर्स लोड होत आहेत...</p>
       ) : filteredUsers.length === 0 ? (
@@ -275,20 +308,20 @@ export default function UserManagement() {
         <div className="space-y-2.5">
           {filteredUsers.map((u) => {
             const isUserActive = u.isActive !== false && u.status !== 'Inactive';
+            const userMods = u.allowedModules !== undefined && Array.isArray(u.allowedModules) ? u.allowedModules : ALL_MODULE_KEYS;
 
             return (
               <div 
-                key={u.email} 
+                key={u.email || u.id} 
                 className="p-3 rounded-2xl border border-amber-500/20 bg-black/50 backdrop-blur-md space-y-2 shadow-lg"
               >
-                {/* Header Row: Title, Dept & Role Badges */}
                 <div className="flex justify-between items-start gap-2">
                   <div>
                     <h4 className="font-bold text-xs sm:text-sm text-white leading-tight">
                       {u.name || 'नाव दिलेले नाही'}
                     </h4>
                     <p className="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1">
-                      <Mail className="w-3 h-3 text-amber-400/70 shrink-0" /> {u.email}
+                      <Mail className="w-3 h-3 text-amber-400/70 shrink-0" /> {u.email || u.id}
                     </p>
                   </div>
 
@@ -299,6 +332,7 @@ export default function UserManagement() {
                     <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${
                       u.role === 'Super Admin' ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' :
                       u.role === 'Admin' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' :
+                      u.role === 'Viewer' ? 'bg-purple-500/20 text-purple-400 border-purple-500/40' :
                       'bg-blue-500/20 text-blue-400 border-blue-500/40'
                     }`}>
                       {u.role || 'Reviewer'}
@@ -306,9 +340,21 @@ export default function UserManagement() {
                   </div>
                 </div>
 
-                {/* Footer Row: Calling & WhatsApp Actions + Edit */}
+                {/* 🎯 सेव्ह झालेले मॉड्यूल्स टॅग्ज (Dynamic from SYSTEM_MODULES) */}
+                <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                  <span className="text-[9px] text-gray-400 font-semibold">ॲक्सेस:</span>
+                  {userMods.length === 0 ? (
+                    <span className="text-[8px] text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.2 rounded border border-rose-500/20">कोणताही ॲक्सेस नाही</span>
+                  ) : (
+                    SYSTEM_MODULES.filter(m => userMods.includes(m.key)).map(m => (
+                      <span key={m.key} className="text-[8px] bg-white/5 text-amber-300 border border-white/10 px-1.5 py-0.2 rounded font-bold">
+                        {m.icon} {m.label}
+                      </span>
+                    ))
+                  )}
+                </div>
+
                 <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs">
-                  {/* Phone & Instant Call/WA Actions */}
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-gray-300">
                       {u.phone ? u.phone : 'फोन नंबर नाही'}
@@ -335,10 +381,10 @@ export default function UserManagement() {
                     )}
                   </div>
 
-                  {/* Status & Edit Button */}
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${isUserActive ? 'bg-emerald-400' : 'bg-rose-500'}`} />
                     <button
+                      type="button"
                       onClick={() => handleEditClick(u)}
                       className="px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500 hover:text-black transition flex items-center gap-1 font-bold text-[10px] cursor-pointer"
                     >
@@ -352,9 +398,9 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* 🔹 MODAL POPUP FOR ADD / EDIT USER */}
+      {/* 🔹 MODAL POPUP */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 font-sans">
           <div className="bg-[#0c0d14] border border-amber-500/30 rounded-3xl w-full max-w-md p-5 space-y-4 text-white relative shadow-2xl">
             
             <div className="flex justify-between items-center border-b border-amber-500/20 pb-3">
@@ -364,7 +410,7 @@ export default function UserManagement() {
                   {isEditing ? 'युझर एडिट करा' : 'नवीन युझर जोडा'}
                 </h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:text-white">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:text-white cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -436,12 +482,45 @@ export default function UserManagement() {
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full bg-black/60 border border-amber-500/20 rounded-xl px-2 py-2 text-xs text-white mt-1 focus:outline-none"
+                    className="w-full bg-black/60 border border-amber-500/20 rounded-xl px-2 py-2 text-xs text-white mt-1 focus:outline-none font-bold"
                   >
-                    <option value="Reviewer" className="bg-[#0c0d14]">Reviewer</option>
-                    <option value="Admin" className="bg-[#0c0d14]">Admin</option>
                     <option value="Super Admin" className="bg-[#0c0d14]">Super Admin</option>
+                    <option value="Admin" className="bg-[#0c0d14]">Admin</option>
+                    <option value="Reviewer" className="bg-[#0c0d14]">Reviewer</option>
+                    <option value="Viewer" className="bg-[#0c0d14]">Viewer (Read-Only)</option>
                   </select>
+                </div>
+              </div>
+
+              {/* 🎯 डायनॅमिक Checkboxes Grid (Driven by SYSTEM_MODULES) */}
+              <div className="space-y-1.5 bg-slate-950 p-2.5 rounded-2xl border border-amber-500/20">
+                <label className="text-[10px] text-amber-300 font-bold block">
+                  परवानगी मॉड्यूल्स (Allowed Modules Access) *
+                </label>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5">
+                  {SYSTEM_MODULES.map(mod => {
+                    const isChecked = allowedModules.includes(mod.key);
+                    return (
+                      <button
+                        key={mod.key}
+                        type="button"
+                        onClick={() => handleModuleToggle(mod.key)}
+                        className={`flex items-center gap-1.5 p-2 rounded-xl border text-xs cursor-pointer select-none transition ${
+                          isChecked
+                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 font-bold'
+                            : 'bg-black/40 border-white/5 text-gray-500'
+                        }`}
+                      >
+                        {isChecked ? (
+                          <CheckSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        ) : (
+                          <Square className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                        <span className="text-[11px] truncate">{mod.icon} {mod.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -457,8 +536,8 @@ export default function UserManagement() {
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 bg-white/5 text-gray-300 font-bold text-xs rounded-xl">रद्द करा</button>
-                <button type="submit" disabled={saving} className="flex-1 py-2 bg-amber-500 text-black font-extrabold text-xs rounded-xl disabled:opacity-50">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 bg-white/5 text-gray-300 font-bold text-xs rounded-xl cursor-pointer">रद्द करा</button>
+                <button type="submit" disabled={saving} className="flex-1 py-2 bg-amber-500 text-black font-extrabold text-xs rounded-xl disabled:opacity-50 cursor-pointer">
                   {saving ? 'सेव्ह होत आहे...' : 'सेव्ह करा'}
                 </button>
               </div>
