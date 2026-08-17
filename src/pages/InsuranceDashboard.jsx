@@ -138,7 +138,6 @@ export default function InsuranceDashboard() {
   const canApproveOrReject = 
     userDepartment === 'INSURANCE' || 
     (userDepartment === 'SUPER' && userRole === 'Super Admin') || 
-    (userDepartment === 'MRDGA' && userRole === 'Super Admin') || 
     (userDepartment === 'MRDGA' && userRole === 'Super Admin');
 
   // ==========================================
@@ -154,10 +153,10 @@ export default function InsuranceDashboard() {
       const st = item.status || 'Pending';
       const count = Number(item.govindaCount) || 0;
 
-      if (st === 'Approved' || st.includes('मंजूर')) {
+      if (st === 'Approved' || st.includes('Approved')) {
         approved++;
         totalApprovedGovindas += count;
-      } else if (st === 'Rejected' || st.includes('नामंजूर')) {
+      } else if (st === 'Rejected' || st.includes('Rejected')) {
         rejected++;
       } else {
         pending++;
@@ -292,19 +291,28 @@ export default function InsuranceDashboard() {
     }
   };
 
+// 🌿 सोबर आणि इंग्लिश स्टेटस बॅजेस (Approved, Rejected, Pending)
   const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Approved':
-      case 'मंजूर':
-      case 'मंजूर (Approved)':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-600/40">मंजूर</span>;
-      case 'Rejected':
-      case 'नामंजूर':
-      case 'नामंजूर (Rejected)':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950/80 text-rose-400 border border-rose-600/40">नामंजूर</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-600/40">प्रलंबित</span>;
+    const s = status || '';
+    if (s === 'Approved' || s === 'मंजूर' || s.includes('Approved') || s.includes('मंजूर')) {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide bg-emerald-950/40 text-emerald-300 border border-emerald-800/60 uppercase">
+          Approved
+        </span>
+      );
     }
+    if (s === 'Rejected' || s === 'नामंजूर' || s.includes('Rejected') || s.includes('नामंजूर') || s.includes('नाकारलेले')) {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide bg-rose-950/40 text-rose-300 border border-rose-800/60 uppercase">
+          Rejected
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide bg-slate-800 text-amber-200/90 border border-slate-700 uppercase">
+        Pending
+      </span>
+    );
   };
 
   // ==========================================
@@ -312,7 +320,7 @@ export default function InsuranceDashboard() {
   // ==========================================
   const handleConfirmReject = async () => {
     if (!canApproveOrReject) {
-      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
+      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0f172a', color: '#fff' });
       return;
     }
 
@@ -327,7 +335,7 @@ export default function InsuranceDashboard() {
     }
 
     if (!finalReason) {
-      Swal.fire({ icon: 'warning', title: 'नाकारण्याचे कारण निवडा किंवा टाका!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
+      Swal.fire({ icon: 'warning', title: 'नाकारण्याचे कारण निवडा किंवा टाका!', confirmButtonColor: '#d97706', background: '#0f172a', color: '#fff' });
       return;
     }
 
@@ -354,7 +362,7 @@ export default function InsuranceDashboard() {
         title: 'अर्ज नाकारण्यात आला!',
         timer: 1500,
         showConfirmButton: false,
-        background: '#0c0d14',
+        background: '#0f172a',
         color: '#fff'
       });
 
@@ -380,7 +388,7 @@ export default function InsuranceDashboard() {
       : 'Pending';
 
     if (cleanStatus === 'Approved' && !canApproveOrReject) {
-      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Approve करू शकतात.', confirmButtonColor: '#ef4444', background: '#0c0d14', color: '#fff' });
+      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Approve करू शकतात.', confirmButtonColor: '#ef4444', background: '#0f172a', color: '#fff' });
       return;
     }
 
@@ -390,8 +398,8 @@ export default function InsuranceDashboard() {
         icon: 'warning',
         title: 'पॉलिसी नंबर आवश्यक आहे!',
         text: 'अर्ज मंजूर करण्यासाठी कृपया विमा पॉलिसी / सर्टिफिकेट नंबर टाका.',
-        confirmButtonColor: '#f59e0b',
-        background: '#0c0d14',
+        confirmButtonColor: '#d97706',
+        background: '#0f172a',
         color: '#fff'
       });
       return;
@@ -458,7 +466,7 @@ export default function InsuranceDashboard() {
         title: 'विमा अर्ज अद्ययावत झाला!',
         timer: 1200,
         showConfirmButton: false,
-        background: '#0c0d14',
+        background: '#0f172a',
         color: '#fff'
       });
 
@@ -469,7 +477,7 @@ export default function InsuranceDashboard() {
 
     } catch (err) {
       console.error("Update Insurance action failed:", err);
-      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'डेटा सेव्ह झाला नाही.', background: '#0c0d14', color: '#fff' });
+      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'डेटा सेव्ह झाला नाही.', background: '#0f172a', color: '#fff' });
     } finally {
       setSubmitting(false);
     }
@@ -486,35 +494,35 @@ export default function InsuranceDashboard() {
   }
 
   return (
-    <div className="space-y-2.5 max-w-7xl mx-auto px-1.5 py-1.5 font-sans text-slate-100">
+    <div className="space-y-2.5 max-w-7xl mx-auto px-1.5 py-1.5 font-sans text-slate-200">
       
       {/* ========================================== */}
-      {/* #SECTION 8: ULTRA-COMPACT HEADER BANNER   */}
+      {/* #SECTION 8: SOBER & CLEAN HEADER BANNER   */}
       {/* ========================================== */}
-      <div className="flex flex-row items-center justify-between gap-2 bg-slate-900 border border-slate-700/80 p-2 sm:p-2.5 rounded-xl shadow-md">
+      <div className="flex flex-row items-center justify-between gap-2 bg-slate-900/90 border border-slate-800 p-2 sm:p-2.5 rounded-xl shadow-sm">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-lg shrink-0">
-            <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+          <div className="p-1.5 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg shrink-0">
+            <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
           </div>
           <div>
-            <h2 className="text-xs sm:text-sm font-extrabold text-white leading-none flex items-center gap-1.5">
-              गोविंदा विमा <span className="text-amber-400">व्यवस्थापन</span>
-              <span className="text-[9px] px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded font-semibold uppercase hidden sm:inline-block">
+            <h2 className="text-xs sm:text-sm font-bold text-white leading-none flex items-center gap-1.5">
+              गोविंदा विमा व्यवस्थापन
+              <span className="text-[9px] px-1.5 py-0.2 bg-slate-800 text-slate-400 border border-slate-700 rounded font-mono font-medium uppercase hidden sm:inline-block">
                 {userDepartment}
               </span>
             </h2>
           </div>
         </div>
 
-        {/* 📊 डेस्कटॉपसाठी उद्दिष्ट व मंजूर गोविंदा आकडेवारी (1.6 Lakh Target) */}
-        <div className="hidden lg:flex items-center gap-3 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800 font-mono text-xs">
-          <div className="flex items-center gap-1 text-slate-300">
-            <Target className="w-3.5 h-3.5 text-rose-400" />
-            <span>उद्दिष्ट: <b className="text-amber-400">1,60,000</b></span>
+        {/* 📊 सोबर आकडेवारी (1.6 Lakh Target) */}
+        <div className="hidden lg:flex items-center gap-3 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300">
+          <div className="flex items-center gap-1">
+            <Target className="w-3.5 h-3.5 text-slate-400" />
+            <span>उद्दिष्ट: <b className="text-slate-100">1,60,000</b></span>
           </div>
-          <span className="text-slate-600">|</span>
-          <div className="flex items-center gap-1 text-emerald-400 font-bold">
-            <CheckCircle className="w-3.5 h-3.5" />
+          <span className="text-slate-700">|</span>
+          <div className="flex items-center gap-1 text-emerald-300 font-semibold">
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
             <span>मंजूर: {stats.totalApprovedGovindas.toLocaleString('mr-IN')}</span>
           </div>
         </div>
@@ -522,15 +530,15 @@ export default function InsuranceDashboard() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => window.open('#/insurance-info?admin_mode=true', '_blank')}
-            className="px-2 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-black font-extrabold text-[10px] sm:text-xs rounded-lg shadow flex items-center gap-1 cursor-pointer transition"
+            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-[10px] sm:text-xs rounded-lg shadow-sm flex items-center gap-1 cursor-pointer transition"
           >
-            <PlusCircle className="w-3.5 h-3.5" />
+            <PlusCircle className="w-3.5 h-3.5 text-slate-400" />
             <span className="hidden sm:inline">नवीन अर्ज</span> (Testing)
           </button>
 
           <button 
             onClick={loadInsuranceRequests} 
-            className="p-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-600 text-xs rounded-lg transition cursor-pointer"
+            className="p-1.5 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs rounded-lg transition cursor-pointer"
             title="रिफ्रेश"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -539,18 +547,18 @@ export default function InsuranceDashboard() {
       </div>
 
       {/* ========================================== */}
-      {/* #SECTION 9: COMPACT TAB NAVIGATION STRIP   */}
+      {/* #SECTION 9: SOBER TAB NAVIGATION STRIP    */}
       {/* ========================================== */}
-      <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-bold gap-1">
+      <div className="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs font-semibold gap-1">
         <button
           onClick={() => setActiveTab('ALL_REQUESTS')}
           className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[11px] sm:text-xs ${
             activeTab === 'ALL_REQUESTS' 
-              ? 'bg-amber-500 text-black shadow font-black' 
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-slate-800 text-white shadow-sm border border-slate-700 font-bold' 
+              : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5" />
+          <ShieldCheck className="w-3.5 h-3.5 text-slate-300" />
           <span>सर्व अर्ज ({requests.length})</span>
         </button>
 
@@ -558,11 +566,11 @@ export default function InsuranceDashboard() {
           onClick={() => setActiveTab('DUPLICATES')}
           className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[11px] sm:text-xs ${
             activeTab === 'DUPLICATES' 
-              ? 'bg-rose-500 text-white shadow font-black' 
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-slate-800 text-rose-300 shadow-sm border border-slate-700 font-bold' 
+              : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Copy className="w-3.5 h-3.5 text-rose-300" />
+          <Copy className="w-3.5 h-3.5 text-rose-400" />
           <span>⚠️ दुबार अर्ज</span>
         </button>
 
@@ -570,11 +578,11 @@ export default function InsuranceDashboard() {
           onClick={() => setActiveTab('ANALYSIS')}
           className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer text-[11px] sm:text-xs ${
             activeTab === 'ANALYSIS' 
-              ? 'bg-indigo-600 text-white shadow font-black' 
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-slate-800 text-indigo-300 shadow-sm border border-slate-700 font-bold' 
+              : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <BarChart3 className="w-3.5 h-3.5 text-indigo-300" />
+          <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
           <span>📊 विश्लेषण</span>
         </button>
       </div>
@@ -584,53 +592,53 @@ export default function InsuranceDashboard() {
       {/* ========================================== */}
       {activeTab === 'ALL_REQUESTS' && (
         <>
-          {/* 📊 COMPACT SUMMARY CARDS */}
+          {/* 📊 SOBER STATS SUMMARY CARDS */}
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
             
-            {/* 💻 'एकूण अर्ज' फक्त डेस्कटॉपवरच दिसेल */}
+            {/* Desktop Only Total Card */}
             <div 
               onClick={() => { setStatusFilter('ALL'); setVisibleCount(10); }}
-              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center hidden sm:block ${statusFilter === 'ALL' ? 'bg-slate-800 border-amber-500/60' : 'bg-slate-900 border-slate-800'}`}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center hidden sm:block ${statusFilter === 'ALL' ? 'bg-slate-800/80 border-slate-600' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
             >
-              <p className="text-[9px] text-slate-400 font-bold uppercase truncate">एकूण अर्ज</p>
-              <p className="text-xs sm:text-sm font-black text-white font-mono">{stats.total}</p>
+              <p className="text-[9px] text-slate-400 font-medium uppercase truncate">एकूण अर्ज</p>
+              <p className="text-xs sm:text-sm font-bold text-white font-mono">{stats.total}</p>
             </div>
 
             <div 
               onClick={() => { setStatusFilter('Pending'); setVisibleCount(10); }}
-              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Pending' ? 'bg-amber-950/60 border-amber-500' : 'bg-slate-900 border-slate-800'}`}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Pending' ? 'bg-slate-800 border-amber-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
             >
-              <p className="text-[9px] text-amber-400 font-bold uppercase truncate">प्रलंबित</p>
-              <p className="text-xs sm:text-sm font-black text-amber-300 font-mono">{stats.pending}</p>
+              <p className="text-[9px] text-slate-400 font-medium uppercase truncate">प्रलंबित</p>
+              <p className="text-xs sm:text-sm font-bold text-amber-200/90 font-mono">{stats.pending}</p>
             </div>
 
             <div 
               onClick={() => { setStatusFilter('Approved'); setVisibleCount(10); }}
-              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Approved' ? 'bg-emerald-950/60 border-emerald-500' : 'bg-slate-900 border-slate-800'}`}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Approved' ? 'bg-slate-800 border-emerald-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
             >
-              <p className="text-[9px] text-emerald-400 font-bold uppercase truncate">मंजूर</p>
-              <p className="text-xs sm:text-sm font-black text-emerald-300 font-mono">{stats.approved}</p>
+              <p className="text-[9px] text-slate-400 font-medium uppercase truncate">मंजूर</p>
+              <p className="text-xs sm:text-sm font-bold text-emerald-300 font-mono">{stats.approved}</p>
             </div>
 
             <div 
               onClick={() => { setStatusFilter('Rejected'); setVisibleCount(10); }}
-              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Rejected' ? 'bg-rose-950/60 border-rose-500' : 'bg-slate-900 border-slate-800'}`}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Rejected' ? 'bg-slate-800 border-rose-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
             >
-              <p className="text-[9px] text-rose-400 font-bold uppercase truncate">नाकारलेले</p>
-              <p className="text-xs sm:text-sm font-black text-rose-300 font-mono">{stats.rejected}</p>
+              <p className="text-[9px] text-slate-400 font-medium uppercase truncate">नाकारलेले</p>
+              <p className="text-xs sm:text-sm font-bold text-rose-300 font-mono">{stats.rejected}</p>
             </div>
           </div>
 
-          {/* 🔍 ULTRA-COMPACT MOBILE FILTERS BAR */}
-          <div className="p-1.5 rounded-xl grid grid-cols-1 sm:grid-cols-4 gap-1.5 bg-slate-900 border border-slate-800">
+          {/* 🔍 COMPACT SOBER FILTERS BAR */}
+          <div className="p-1.5 rounded-xl grid grid-cols-1 sm:grid-cols-4 gap-1.5 bg-slate-900/80 border border-slate-800">
             <div className="sm:col-span-2 relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-500" />
               <input
                 type="text"
                 placeholder="नाव, App ID किंवा फोनने शोधा..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setVisibleCount(10); }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-2 py-1 text-[11px] text-white focus:outline-none focus:border-amber-400"
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-2 py-1 text-[11px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500"
               />
             </div>
 
@@ -638,21 +646,21 @@ export default function InsuranceDashboard() {
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setVisibleCount(10); }}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-white font-bold focus:outline-none"
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1 text-[11px] text-slate-200 font-medium focus:outline-none"
               >
-                <option value="ALL" className="bg-[#0c0d14]">सर्व स्टेटस</option>
-                <option value="Pending" className="bg-[#0c0d14]">प्रलंबित</option>
-                <option value="Approved" className="bg-[#0c0d14]">मंजूर</option>
-                <option value="Rejected" className="bg-[#0c0d14]">नाकारलेले</option>
+                <option value="ALL" className="bg-[#0f172a]">सर्व स्टेटस</option>
+                <option value="Pending" className="bg-[#0f172a]">प्रलंबित</option>
+                <option value="Approved" className="bg-[#0f172a]">मंजूर</option>
+                <option value="Rejected" className="bg-[#0f172a]">नाकारलेले</option>
               </select>
 
               <div className="relative flex items-center">
-                <Calendar className="w-3.5 h-3.5 absolute left-2 text-amber-400 pointer-events-none z-10" />
+                <Calendar className="w-3.5 h-3.5 absolute left-2 text-slate-400 pointer-events-none z-10" />
                 <input
                   type="date"
                   value={dateFilter}
                   onChange={(e) => { setDateFilter(e.target.value); setVisibleCount(10); }}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-7 pr-1 py-1 text-[11px] text-amber-300 focus:outline-none [color-scheme:dark]"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-7 pr-1 py-1 text-[11px] text-slate-300 focus:outline-none [color-scheme:dark]"
                 />
               </div>
             </div>
@@ -660,8 +668,8 @@ export default function InsuranceDashboard() {
 
           {/* Cards List */}
           {loading ? (
-            <div className="p-6 text-center text-amber-400 font-bold text-xs animate-pulse space-y-2">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-amber-400" />
+            <div className="p-6 text-center text-slate-400 font-medium text-xs animate-pulse space-y-2">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400" />
               <p>डेटा लोड होत आहे...</p>
             </div>
           ) : filteredRequests.length === 0 ? (
@@ -671,7 +679,7 @@ export default function InsuranceDashboard() {
           ) : (
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[10px] text-slate-400 px-1">
-                <span>दाखवलेले अर्ज: <b className="text-amber-400">{displayedRequests.length}</b> / {filteredRequests.length}</span>
+                <span>दाखवलेले अर्ज: <b className="text-slate-200">{displayedRequests.length}</b> / {filteredRequests.length}</span>
               </div>
 
               {displayedRequests.map((item) => {
@@ -682,41 +690,41 @@ export default function InsuranceDashboard() {
                 return (
                   <div 
                     key={item.id}
-                    className="p-3 rounded-xl border border-slate-800 bg-[#0e1017] hover:border-slate-700 transition shadow flex flex-col md:flex-row md:items-center justify-between gap-2.5"
+                    className="p-3 rounded-xl border border-slate-800/90 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 transition shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2.5"
                   >
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-700/40">
+                        <span className="text-[10px] font-mono font-semibold text-slate-300 bg-slate-800 px-1.5 py-0.2 rounded border border-slate-700">
                           #{item.appId}
                         </span>
                         
                         {getStatusBadge(item.status)}
 
                         {item.policyNumber && (
-                          <span className="text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-700/40">
+                          <span className="text-[10px] font-mono font-medium text-slate-300 bg-slate-950 px-1.5 py-0.2 rounded border border-slate-700/80">
                             पॉलिसी: {item.policyNumber}
                           </span>
                         )}
                       </div>
 
-                      <h3 className="font-extrabold text-xs sm:text-sm text-white leading-snug">
+                      <h3 className="font-bold text-xs sm:text-sm text-slate-100 leading-snug">
                         {item.teamName}
                       </h3>
 
-                      <div className="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap font-sans">
-                        <span><MapPin className="w-3 h-3 inline text-slate-400"/> {item.district} ({item.pincode || '-'})</span>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400 flex-wrap font-sans">
+                        <span><MapPin className="w-3 h-3 inline text-slate-500"/> {item.district} ({item.pincode || '-'})</span>
                         {mandalAddressText && (
-      <span className="text-[11px] text-amber-300/90 font-sans ml-1 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-        📍 {mandalAddressText}
-      </span>
-    )}
-                        <span className="text-amber-300 font-bold font-mono"><ShieldCheck className="w-3 h-3 inline text-amber-400"/> {item.govindaCount} गोविंदा</span>
+                          <span className="text-[11px] text-slate-300 font-sans ml-0.5 bg-slate-950 px-1.5 py-0.2 rounded border border-slate-800">
+                            📍 {mandalAddressText}
+                          </span>
+                        )}
+                        <span className="text-slate-300 font-semibold font-mono"><ShieldCheck className="w-3 h-3 inline text-slate-400"/> {item.govindaCount} गोविंदा</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between md:justify-end gap-2 pt-1 md:pt-0 border-t md:border-t-0 border-slate-800">
+                    <div className="flex items-center justify-between md:justify-end gap-2 pt-1 md:pt-0 border-t md:border-t-0 border-slate-800/80">
                       <div className="text-left md:text-right">
-                        <p className="font-bold text-xs text-white">{item.contactPerson}</p>
+                        <p className="font-medium text-xs text-slate-200">{item.contactPerson}</p>
                         <p className="font-mono text-[10px] text-slate-400">{item.whatsappNumber}</p>
                       </div>
 
@@ -725,14 +733,16 @@ export default function InsuranceDashboard() {
                           href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
                           target="_blank" 
                           rel="noreferrer" 
-                          className="p-1.5 bg-slate-800 text-emerald-400 rounded-lg border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
+                          className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-white transition"
+                          title="WhatsApp"
                         >
                           <MessageSquare className="w-3.5 h-3.5" />
                         </a>
 
                         <a 
                           href={`tel:${item.whatsappNumber}`} 
-                          className="p-1.5 bg-slate-800 text-blue-400 rounded-lg border border-slate-700 hover:bg-blue-600 hover:text-white transition"
+                          className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-white transition"
+                          title="कॉल करा"
                         >
                           <Phone className="w-3.5 h-3.5" />
                         </a>
@@ -740,7 +750,7 @@ export default function InsuranceDashboard() {
                         {item.fileUrl && (
                           <button 
                             onClick={() => { setViewPdfTitle('मंडळाची अपलोड केलेली लेटरहेड PDF यादी'); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
-                            className="p-1.5 bg-slate-800 text-amber-300 rounded-lg border border-slate-700 hover:bg-amber-500 hover:text-black cursor-pointer" 
+                            className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-white cursor-pointer" 
                             title="यादी PDF पहा"
                           >
                             <FileText className="w-3.5 h-3.5" />
@@ -749,20 +759,20 @@ export default function InsuranceDashboard() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-start md:justify-end gap-1.5 pt-1.5 md:pt-0 border-t md:border-t-0 border-slate-800 w-full md:w-auto">
+                    <div className="flex flex-wrap items-center justify-start md:justify-end gap-1.5 pt-1.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 w-full md:w-auto">
                       <button 
                         onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                        className="px-2.5 py-1 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-lg text-[11px] font-semibold transition flex items-center gap-0.5 cursor-pointer shrink-0"
+                        className="px-2.5 py-1 bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 rounded-lg text-[11px] font-medium transition flex items-center gap-0.5 cursor-pointer shrink-0"
                       >
-                        रिमार्क्स <ChevronRight className="w-3 h-3" />
+                        रिमार्क्स <ChevronRight className="w-3 h-3 text-slate-400" />
                       </button>
 
                       {isApproved && (
                         <button 
                           onClick={() => setPrintReqData(item)}
-                          className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-black rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                          className="px-2.5 py-1 bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 hover:text-white rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                         >
-                          <Printer className="w-3.5 h-3.5" />
+                          <Printer className="w-3.5 h-3.5 text-slate-400" />
                           <span>प्रिंट</span>
                         </button>
                       )}
@@ -771,7 +781,7 @@ export default function InsuranceDashboard() {
                         hasCertificate ? (
                           <button 
                             onClick={() => { setViewPdfTitle(`${item.teamName} - जोडलेली पॉलिसी कॉपी`); setViewPdfUrl(item.certificateUrl); setZoomLevel(100); }} 
-                            className="px-2.5 py-1 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                            className="px-2.5 py-1 bg-slate-800 text-emerald-300 border border-slate-700 hover:bg-slate-700 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                           >
                             <Eye className="w-3.5 h-3.5 text-emerald-400" />
                             <span>पॉलिसी कॉपी</span>
@@ -779,9 +789,9 @@ export default function InsuranceDashboard() {
                         ) : (
                           <button 
                             onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                            className="px-2.5 py-1 bg-slate-800 text-amber-300 border border-slate-700 hover:bg-amber-500 hover:text-black rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                            className="px-2.5 py-1 bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                           >
-                            <Camera className="w-3.5 h-3.5 text-amber-400" />
+                            <Camera className="w-3.5 h-3.5 text-slate-400" />
                             <span>अपलोड पॉलिसी</span>
                           </button>
                         )
@@ -790,16 +800,16 @@ export default function InsuranceDashboard() {
                           <>
                             <button 
                               onClick={() => { setSelectedReq(item); setPolicyNo(item.policyNumber || ''); setEditableGovindaCount(item.govindaCount || ''); }} 
-                              className="px-2.5 py-1 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                              className="px-2.5 py-1 bg-emerald-950/40 text-emerald-300 border border-emerald-800/80 hover:bg-emerald-900/60 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                             >
-                              <CheckCircle className="w-3.5 h-3.5" /> Approve
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Approve
                             </button>
 
                             <button 
                               onClick={() => setRejectModalReq(item)} 
-                              className="px-2.5 py-1 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                              className="px-2.5 py-1 bg-rose-950/40 text-rose-300 border border-rose-800/80 hover:bg-rose-900/60 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                             >
-                              <XCircle className="w-3.5 h-3.5" /> Reject
+                              <XCircle className="w-3.5 h-3.5 text-rose-400" /> Reject
                             </button>
                           </>
                         )
@@ -815,7 +825,7 @@ export default function InsuranceDashboard() {
                   <button
                     type="button"
                     onClick={loadMoreData}
-                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-300 font-bold text-xs rounded-lg transition cursor-pointer"
+                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-xs rounded-lg transition cursor-pointer"
                   >
                     + आणखी १० अर्ज पाहा
                   </button>
@@ -859,22 +869,22 @@ export default function InsuranceDashboard() {
       {/* #SECTION 13: MODALS (PDF, REJECT & APPROVE) */}
       {/* ========================================== */}
 
-      {/* 📄 समोरासमोर २ PDF ची तुलना करण्याचा Full Screen Modal */}
+      {/* 📄 Side-by-Side Comparison Modal */}
       {comparePdfs && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 font-sans">
-          <div className="bg-[#0c0d14] border border-slate-700 w-full max-w-7xl h-[94vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 font-sans">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-7xl h-[94vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
             
-            <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between gap-2 flex-wrap">
+            <div className="p-3 border-b border-slate-800 bg-slate-950 flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-400 shrink-0" />
-                <h3 className="font-extrabold text-xs sm:text-sm text-white">
+                <FileText className="w-4 h-4 text-slate-300 shrink-0" />
+                <h3 className="font-bold text-xs sm:text-sm text-white">
                   दुबार यादी पडताळणी (Side-by-Side PDF Comparison)
                 </h3>
               </div>
 
               <button 
                 onClick={() => setComparePdfs(null)} 
-                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold cursor-pointer transition flex items-center gap-1"
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium cursor-pointer transition flex items-center gap-1"
               >
                 <X className="w-4 h-4" /> बंद करा
               </button>
@@ -884,7 +894,7 @@ export default function InsuranceDashboard() {
               
               <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div className="bg-slate-950 px-3 py-1.5 border-b border-slate-800 flex justify-between items-center">
-                  <span className="text-xs font-bold text-amber-400 truncate">
+                  <span className="text-xs font-semibold text-slate-200 truncate">
                     १. {comparePdfs.title1 || 'पहिला अर्ज'}
                   </span>
                   <a 
@@ -907,9 +917,9 @@ export default function InsuranceDashboard() {
                 />
               </div>
 
-              <div className="flex flex-col h-full bg-slate-900 border border-rose-900/40 rounded-xl overflow-hidden">
+              <div className="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div className="bg-slate-950 px-3 py-1.5 border-b border-slate-800 flex justify-between items-center">
-                  <span className="text-xs font-bold text-rose-400 truncate">
+                  <span className="text-xs font-semibold text-rose-300 truncate">
                     २. {comparePdfs.title2 || 'दुसरा दुबार अर्ज'}
                   </span>
                   <a 
@@ -940,8 +950,8 @@ export default function InsuranceDashboard() {
 
       {/* Reject Modal */}
       {rejectModalReq && canApproveOrReject && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#0c0d14] border border-slate-700 rounded-3xl w-full max-w-md p-5 space-y-4 text-white shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-5 space-y-4 text-white shadow-xl">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2">
                 <XCircle className="w-4 h-4" /> विमा अर्ज नाकारण्याचे कारण
@@ -952,19 +962,19 @@ export default function InsuranceDashboard() {
             </div>
 
             <div className="space-y-3 text-xs sm:text-sm">
-              <p className="text-slate-200">
-                मंडळ: <strong className="text-white font-bold">{rejectModalReq.teamName}</strong> (App ID: <span className="font-mono text-amber-300">{rejectModalReq.appId}</span>)
+              <p className="text-slate-300">
+                मंडळ: <strong className="text-white font-bold">{rejectModalReq.teamName}</strong> (App ID: <span className="font-mono text-slate-200">{rejectModalReq.appId}</span>)
               </p>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1">कारण निवडा (Select Reason) *</label>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">कारण निवडा (Select Reason) *</label>
                 <select
                   value={selectedReason}
                   onChange={(e) => setSelectedReason(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-slate-500"
                 >
                   {PREDEFINED_REJECT_REASONS.map((reason, idx) => (
-                    <option key={idx} value={reason} className="bg-[#0c0d14]">
+                    <option key={idx} value={reason} className="bg-[#0f172a]">
                       {reason}
                     </option>
                   ))}
@@ -973,26 +983,26 @@ export default function InsuranceDashboard() {
 
               {selectedReason.includes("Duplicate Entry") && (
                 <div>
-                  <label className="text-xs font-bold text-amber-300 block mb-1">पहिल्या मूळ अर्जाचा App ID *</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">पहिल्या मूळ अर्जाचा App ID *</label>
                   <input
                     type="text"
                     placeholder="उदा. MRDGA-INS-2026-8899"
                     value={duplicateRefId}
                     onChange={(e) => setDuplicateRefId(e.target.value)}
-                    className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-slate-500"
                   />
                 </div>
               )}
 
               {selectedReason === "इतर कारण (कस्टम टाईप करा)" && (
                 <div>
-                  <label className="text-xs font-bold text-slate-300 block mb-1">विशिष्ट कारण टाईप करा *</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">विशिष्ट कारण टाईप करा *</label>
                   <textarea
                     rows={2}
                     placeholder="उदा. फोटो अस्पष्ट आहे, सही जुळत नाही..."
                     value={customReason}
                     onChange={(e) => setCustomReason(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-slate-500"
                   />
                 </div>
               )}
@@ -1010,7 +1020,7 @@ export default function InsuranceDashboard() {
                 type="button"
                 disabled={submitting}
                 onClick={handleConfirmReject}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm rounded-xl transition cursor-pointer"
+                className="flex-1 py-2 bg-rose-700 hover:bg-rose-600 text-white font-semibold text-xs sm:text-sm rounded-xl transition cursor-pointer"
               >
                 {submitting ? 'सबमिट होत आहे...' : 'खात्री करा व Reject करा'}
               </button>
@@ -1022,15 +1032,15 @@ export default function InsuranceDashboard() {
 
       {/* Approve / Review Modal */}
       {selectedReq && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#0c0d14] border border-slate-700 rounded-3xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto text-white relative shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto text-white relative shadow-2xl">
             
             <div className="flex justify-between items-start border-b border-slate-800 pb-3">
               <div>
-                <span className="text-xs font-mono text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-700/40">
+                <span className="text-xs font-mono text-slate-300 font-semibold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
                   #{selectedReq.appId}
                 </span>
-                <h3 className="text-base font-extrabold text-white mt-1">{selectedReq.teamName}</h3>
+                <h3 className="text-base font-bold text-white mt-1">{selectedReq.teamName}</h3>
               </div>
               <button onClick={() => setSelectedReq(null)} className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl cursor-pointer">
                 <X className="w-5 h-5" />
@@ -1038,31 +1048,31 @@ export default function InsuranceDashboard() {
             </div>
 
             <div className="space-y-3 text-xs sm:text-sm">
-              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 grid grid-cols-2 gap-2">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs text-slate-400">संपर्क व्यक्ती</p>
-                  <p className="font-bold text-white">{selectedReq.contactPerson}</p>
-                  <p className="font-mono text-slate-300">{selectedReq.whatsappNumber}</p>
+                  <p className="font-semibold text-white">{selectedReq.contactPerson}</p>
+                  <p className="font-mono text-slate-400">{selectedReq.whatsappNumber}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">पर्यायी नंबर</p>
-                  <p className="font-bold text-white">{selectedReq.alternateNumber || '-'}</p>
+                  <p className="font-semibold text-white">{selectedReq.alternateNumber || '-'}</p>
                 </div>
                 <div className="mt-2 col-span-2">
                   <p className="text-xs text-slate-400">जिल्हा, पिनकोड & पत्ता</p>
-                  <p className="font-bold text-white">{selectedReq.district} ({selectedReq.pincode || '-'})</p>
+                  <p className="font-semibold text-white">{selectedReq.district} ({selectedReq.pincode || '-'})</p>
                   <p className="text-xs text-slate-300 font-sans mt-0.5">{selectedReq.address || selectedReq.mandalAddress || ''}</p>
                 </div>
                 
-                <div className="mt-2 bg-slate-950 p-2.5 rounded-xl border border-slate-700 col-span-2">
-                  <label className="text-xs font-bold text-amber-300 block mb-1 flex items-center gap-1">
-                    <Edit3 className="w-4 h-4" /> विमा गोविंदा संख्या (यादीनुसार तपासून सुधारा) *
+                <div className="mt-2 bg-slate-900 p-2.5 rounded-xl border border-slate-800 col-span-2">
+                  <label className="text-xs font-semibold text-slate-200 block mb-1 flex items-center gap-1">
+                    <Edit3 className="w-4 h-4 text-slate-400" /> विमा गोविंदा संख्या (यादीनुसार तपासून सुधारा) *
                   </label>
                   <input
                     type="number"
                     value={editableGovindaCount}
                     onChange={(e) => setEditableGovindaCount(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono font-bold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-mono font-bold focus:outline-none focus:border-slate-500"
                     placeholder="उदा. 100"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
@@ -1072,8 +1082,8 @@ export default function InsuranceDashboard() {
               </div>
 
               {/* Policy Number */}
-              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-1.5">
-                <label className="text-xs font-bold text-amber-300 block">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-xs font-semibold text-slate-200 block">
                   विमा पॉलिसी / सर्टिफिकेट नंबर (Policy No.) *
                 </label>
                 <input
@@ -1081,41 +1091,41 @@ export default function InsuranceDashboard() {
                   placeholder="उदा. POL-2026-987654"
                   value={policyNo}
                   onChange={(e) => setPolicyNo(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400 font-mono"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-slate-500 font-mono"
                   required
                 />
               </div>
 
               {/* Policy Certificate Upload */}
-              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-1.5">
-                <label className="text-xs font-bold text-amber-300 block">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-xs font-semibold text-slate-200 block">
                   पॉलिसी कॉपी (PDF / Image/Photo) अपलोड करा:
                 </label>
                 <input 
                   type="file" 
                   accept="application/pdf,image/*"
                   onChange={(e) => setPolicyCopyFile(e.target.files[0])}
-                  className="text-xs text-slate-300 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-black cursor-pointer w-full"
+                  className="text-xs text-slate-300 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 cursor-pointer w-full"
                 />
                 {selectedReq.certificateUrl && (
-                  <p className="text-xs text-emerald-400 font-bold mt-1">
+                  <p className="text-xs text-emerald-400 font-semibold mt-1">
                     ✓ पॉलिसी कॉपी आधीच जोडलेली आहे. (नवीन निवडल्यास अपडेट होईल)
                   </p>
                 )}
               </div>
 
               {/* Officer Remarks */}
-              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-2">
-                <p className="text-xs font-bold text-amber-300 border-b border-slate-800 pb-1">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <p className="text-xs font-semibold text-slate-200 border-b border-slate-800 pb-1">
                   अधिकारी ट्रॅकिंग नोट्स / रिमार्क्स ({selectedReq.comments?.length || 0})
                 </p>
 
                 <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
                   {selectedReq.comments && selectedReq.comments.length > 0 ? (
                     selectedReq.comments.map((c, i) => (
-                      <div key={c.id || i} className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs">
+                      <div key={c.id || i} className="bg-slate-900 p-2 rounded-lg border border-slate-800 text-xs">
                         <div className="flex justify-between items-center text-[10px] text-slate-400">
-                          <span className="font-bold text-amber-300">{c.byName} ({c.role})</span>
+                          <span className="font-semibold text-slate-300">{c.byName} ({c.role})</span>
                           <span>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('mr-IN') : ''}</span>
                         </div>
                         <p className="text-slate-200 mt-0.5">{c.text}</p>
@@ -1132,7 +1142,7 @@ export default function InsuranceDashboard() {
                     placeholder="उदा. प्रिमियम भरला, पॉलिसी जनरेट झाली..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-white focus:outline-none focus:border-slate-500"
                   />
                 </div>
               </div>
@@ -1143,7 +1153,7 @@ export default function InsuranceDashboard() {
                   <button
                     onClick={() => handleUpdateInsurance('Approved')}
                     disabled={submitting}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
                     {selectedReq.status === 'Approved' || selectedReq.status === 'मंजूर' ? 'अपडेट करा' : 'मंजूर करा'}
@@ -1152,7 +1162,7 @@ export default function InsuranceDashboard() {
                   <button
                     onClick={() => handleUpdateInsurance('Pending')}
                     disabled={submitting}
-                    className="flex-1 py-2.5 bg-amber-500 text-black hover:bg-amber-400 font-extrabold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-2.5 bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-700"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
                     रिमार्क / पॉलिसी कॉपी अपडेट करा
@@ -1168,22 +1178,22 @@ export default function InsuranceDashboard() {
 
       {/* Single PDF View Modal */}
       {viewPdfUrl && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-[#0c0d14] border border-slate-700 w-full max-w-5xl h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-5xl h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
             
-            <div className="p-3 border-b border-slate-800 bg-slate-900 flex items-center justify-between flex-wrap gap-2">
+            <div className="p-3 border-b border-slate-800 bg-slate-950 flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 text-slate-200 font-bold text-xs sm:text-sm">
-                <FileText className="w-4 h-4 text-amber-400" /> {viewPdfTitle}
+                <FileText className="w-4 h-4 text-slate-300" /> {viewPdfTitle}
               </div>
 
-              <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1">
-                <button onClick={handleZoomOut} title="Zoom Out" className="p-1 text-slate-300 hover:text-amber-400 transition cursor-pointer">
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2 py-1">
+                <button onClick={handleZoomOut} title="Zoom Out" className="p-1 text-slate-300 hover:text-white transition cursor-pointer">
                   <ZoomOut className="w-4 h-4" />
                 </button>
-                <span className="font-mono text-xs text-amber-300 font-bold px-1 min-w-[45px] text-center">
+                <span className="font-mono text-xs text-slate-200 font-bold px-1 min-w-[45px] text-center">
                   {zoomLevel}%
                 </span>
-                <button onClick={handleZoomIn} title="Zoom In" className="p-1 text-slate-300 hover:text-amber-400 transition cursor-pointer">
+                <button onClick={handleZoomIn} title="Zoom In" className="p-1 text-slate-300 hover:text-white transition cursor-pointer">
                   <ZoomIn className="w-4 h-4" />
                 </button>
                 <button onClick={handleResetZoom} title="Reset Zoom" className="p-1 text-slate-400 hover:text-white transition cursor-pointer border-l border-slate-800 ml-1 pl-1.5">
@@ -1192,7 +1202,7 @@ export default function InsuranceDashboard() {
               </div>
 
               <div className="flex items-center gap-2">
-                <a href={viewPdfUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl flex items-center gap-1 transition">
+                <a href={viewPdfUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl flex items-center gap-1 transition border border-slate-700">
                   <Download className="w-3.5 h-3.5" /> डाऊनलोड
                 </a>
                 <button onClick={() => { setViewPdfUrl(null); setZoomLevel(100); }} className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer">

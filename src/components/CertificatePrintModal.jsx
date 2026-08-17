@@ -182,7 +182,7 @@ export default function CertificatePrintModal({ reqData, onClose }) {
 
                     <tr>
                       <td className="border border-black p-2 font-bold text-black">Type of Insurance</td>
-                      <td className="border border-black p-2 text-black font-semibold">Group Personal Accident Insurance Policy</td>
+                      <td className="border border-black p-2 text-black font-semibold">Special Contingency Insurance Policy</td>
                     </tr>
                     <tr>
                       <td className="border border-black p-2 font-bold text-black">Policy Period From</td>

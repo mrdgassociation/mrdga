@@ -25,10 +25,13 @@ import AdminLayout from './components/AdminLayout';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import Helpdesk from './pages/Helpdesk';
+import EventsGallery from './pages/EventsGallery';
 
 // 🔒 Security & Feature Guards
 import ProtectedRoute from './components/ProtectedRoute';
 import ModuleGuard from './components/ModuleGuard';
+
+import UserProfilePage from './pages/UserProfilePage';
 
 export default function App() {
   const currentYear = new Date().getFullYear();
@@ -70,6 +73,17 @@ export default function App() {
           element={
             <ModuleGuard pageKey="contactPage">
               <Helpdesk />
+            </ModuleGuard>
+          } 
+        />
+
+        {/* 📸 उपक्रम & फोटो गॅलरी (Navbar & Layout सह) */}
+        <Route 
+          path="/gallery" 
+          element={
+            <ModuleGuard pageKey="galleryPage">
+                            <EventsGallery />
+            
             </ModuleGuard>
           } 
         />
@@ -150,6 +164,18 @@ export default function App() {
             <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
               <AdminLayout>
                 <MandalDirectory />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+      {/* 👤 📋 माझे प्रोफाईल & कार्य अहवाल (सर्व अधिकृत डिपार्टमेंट्ससाठी) */}
+        <Route 
+          path="/admin/profile" 
+          element={
+            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
+              <AdminLayout>
+                <UserProfilePage />
               </AdminLayout>
             </ProtectedRoute>
           } 

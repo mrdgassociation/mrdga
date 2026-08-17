@@ -168,6 +168,7 @@ export default function Navbar() {
             <Link to="/competitions" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Competitions</Link>
             <Link to="/insurance-info" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Insurance Info</Link>
             <Link to="/contact" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Contact</Link>
+            <Link to="/gallery" className="text-sm font-medium text-slate-300 hover:text-amber-400 transition">Gallery</Link>
           </div>
 
           {/* 🎯 RIGHT SECTION: BELL ICON + PROFILE / LOGIN / MOBILE TOGGLE */}

@@ -61,8 +61,8 @@ export default function AdminLayout({ children }) {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 🔐 १. Super Admin Check
-  const isSuperAdminUser = (userDepartment === 'SUPER' && userRole === 'Super Admin') || userRole === 'Super Admin';
+  // 🔐 १. Strict Super Admin Check (फक्त Department 'SUPER' आणि Role 'Super Admin' असणाऱ्यालाच)
+const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin';
 
   // 🔒 २. मेनू व्हिजिबिलिटी
   const canSeeInsurance = 
@@ -86,6 +86,13 @@ export default function AdminLayout({ children }) {
   (isSuperAdminUser || allowedModules.includes('REPORTS')) &&
   userDepartment !== 'INSURANCE' &&
   pageConfig.showReportsMenu !== false;
+
+  // 👤 प्रोफाइल व कार्य अहवाल (फक्त MRDGA आणि SUPER साठी)
+ const canSeeProfile = 
+    isSuperAdminUser || 
+    (userDepartment !== 'INSURANCE' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER') && pageConfig.showProfileMenu !== false);
+
+
 
   // 🎯 ३. ऑटो-रिडायरेक्शन
   useEffect(() => {
@@ -261,6 +268,21 @@ export default function AdminLayout({ children }) {
                 }`}
               >
                 <FileText className="w-4 h-4" /> रिपोर्ट्स & एक्सपोर्ट
+              </Link>
+            )}
+
+            {/* 👤 माझे प्रोफाईल & कार्य अहवाल */}
+            {canSeeProfile && (
+              <Link
+                to="/admin/profile"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/profile'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <User className="w-4 h-4 text-amber-400" /> माझे प्रोफाईल & कार्य अहवाल
               </Link>
             )}
 

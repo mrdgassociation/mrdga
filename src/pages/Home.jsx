@@ -79,16 +79,7 @@ export default function Home() {
             {/* CTA Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
 
-              {/* 🏆 १. स्पर्धा नोंदणी करा बटण */}
-              <button
-                onClick={() => navigate('/form/COMP-2026-01')}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-extrabold text-sm sm:text-base rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-105 transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Trophy className="w-5 h-5 text-black shrink-0" />
-                दहीहंडी स्पर्धा नोंदणी करा <ChevronRight className="w-5 h-5" />
-              </button>
-
-              {/* 🛡️ २. विमा अर्ज बटण */}
+              {/* 🛡️ १. विमा अर्ज बटण (आधी आणले) */}
               <div className="relative w-full sm:w-auto">
                 <span className="absolute -top-2.5 right-3 z-10 px-2 py-0.5 bg-amber-500 text-black font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md animate-pulse">
                   लवकरच सुरू होत आहे
@@ -111,6 +102,15 @@ export default function Home() {
                   ऑनलाइन विमा अर्ज (Coming Soon)
                 </button>
               </div>
+
+              {/* 🏆 २. स्पर्धा नोंदणी बटण (Disable / नोंदणी थांबवली) */}
+              <button
+                disabled
+                className="w-full sm:w-auto px-8 py-4 bg-slate-800 border border-slate-700 text-slate-500 font-extrabold text-sm sm:text-base rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+              >
+                <Trophy className="w-5 h-5 text-slate-500 shrink-0" />
+                दहीहंडी स्पर्धा नोंदणी (नोंदणी बंद)
+              </button>
 
               {/* ℹ️ ३. असोसिएशन बद्दल */}
               <Link

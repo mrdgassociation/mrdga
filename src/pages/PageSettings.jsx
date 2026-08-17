@@ -1,26 +1,34 @@
+// ==========================================
+// #SECTION: PAGE & MENU VISIBILITY SETTINGS
+// ==========================================
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/dataService';
 import Swal from 'sweetalert2';
-import { ToggleLeft, ToggleRight, Shield, Save, LayoutDashboard, Trophy, FileText, Calendar, Users } from 'lucide-react';
+import { 
+  ToggleLeft, ToggleRight, Shield, Save, LayoutDashboard, 
+  Trophy, FileText, Calendar, Users, Image as ImageIcon, User 
+} from 'lucide-react';
 
 export default function PageSettings() {
   const [config, setConfig] = useState({
-    // Public Pages Visibility
+    // 🌐 Public Pages Visibility
     aboutPage: false,
     insurancePage: false,
     contactPage: false,
     competitionPage: true,
+    galleryPage: true, // 📸 🆕 गॅलरी पेज ऑन/ऑफ
 
     // 🎯 📝 Form Acceptance Toggles (फॉर्म ऑन/ऑफ सेटिंग्ज)
-    insuranceForm: true, // गोविंदा विमा अर्ज स्वीकृती (ON/OFF)
-    meetingRsvpForm: true, // १६ ऑगस्ट बैठक RSVP अर्ज (ON/OFF)
-    maxRsvpMembers: 2, // 👈 🚩 प्रतिनिधी मर्यादा (Default: 2)
+    insuranceForm: true, 
+    meetingRsvpForm: true, 
+    maxRsvpMembers: 2, 
 
     // 🔒 Admin Menu Visibility Toggles
     showDahiHandiScoringMenu: true,
     showCompetitionsMenu: true,
     showInsuranceMenu: true,
-    showReportsMenu: true
+    showReportsMenu: true,
+    showProfileMenu: true // 👤 🆕 माझे प्रोफाईल & कार्य अहवाल मेन्यू ऑन/ऑफ
   });
 
   const [loading, setLoading] = useState(true);
@@ -63,6 +71,7 @@ export default function PageSettings() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 font-sans p-2 text-white">
+      
       {/* Header Bar */}
       <div className="flex justify-between items-center bg-black/50 border border-amber-500/20 p-4 rounded-2xl">
         <div className="flex items-center gap-3">
@@ -112,7 +121,6 @@ export default function PageSettings() {
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {/* ⚙️ प्रतिनिधी संख्या निवड ड्रॉपडाऊन */}
             <div className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/40 px-2.5 py-1 rounded-xl">
               <Users className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-[10px] text-slate-300 font-bold">मर्यादा:</span>
@@ -139,6 +147,19 @@ export default function PageSettings() {
       {/* 🌐 2. Public Pages Control */}
       <div className="bg-black/40 border border-amber-500/15 rounded-2xl p-4 space-y-3">
         <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider mb-2">🌐 सार्वजनिक वेबसाईट पेजेस</h3>
+
+        {/* 📸 Gallery Page Toggle */}
+        <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-amber-500/30">
+          <div>
+            <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5" /> उपक्रम & फोटो गॅलरी (Events Gallery)
+            </h4>
+            <p className="text-[10px] text-gray-400">{config.galleryPage !== false ? 'सार्वजनिक लोकांसाठी चालू आहे' : 'बंद (Coming Soon दिसेल)'}</p>
+          </div>
+          <button onClick={() => handleToggle('galleryPage')} className="text-amber-400 cursor-pointer">
+            {config.galleryPage !== false ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
+          </button>
+        </div>
 
         {/* Competition Page */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
@@ -191,11 +212,26 @@ export default function PageSettings() {
           <LayoutDashboard className="w-4 h-4" /> ॲडमिन मेन्यू कंट्रोल (Sidebar Menus)
         </h3>
 
-        {/* Dahi Handi Scoring Manager Menu */}
+        {/* 👤 My Profile & Work Report Menu Toggle */}
         <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-amber-500/30">
           <div>
             <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5" /> दहीहंडी स्पर्धा मेन्यू (Scoring)
+              <User className="w-3.5 h-3.5" /> माझे प्रोफाईल & कार्य अहवाल मेन्यू (My Profile)
+            </h4>
+            <p className="text-[10px] text-gray-400">
+              {config.showProfileMenu !== false ? 'ॲडमिन साइडबारमध्ये दिसेल' : 'लपवले (Hide)'}
+            </p>
+          </div>
+          <button onClick={() => handleToggle('showProfileMenu')} className="text-amber-400 cursor-pointer">
+            {config.showProfileMenu !== false ? <ToggleRight className="w-8 h-8 text-emerald-400" /> : <ToggleLeft className="w-8 h-8 text-gray-600" />}
+          </button>
+        </div>
+
+        {/* Dahi Handi Scoring Manager Menu */}
+        <div className="flex justify-between items-center p-3 bg-black/60 rounded-xl border border-white/5">
+          <div>
+            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5 text-amber-400" /> दहीहंडी स्पर्धा मेन्यू (Scoring)
             </h4>
             <p className="text-[10px] text-gray-400">
               {config.showDahiHandiScoringMenu !== false ? 'ॲडमिनला दिसेल' : 'लपवले (Hide)'}

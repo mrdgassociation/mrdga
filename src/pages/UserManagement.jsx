@@ -8,11 +8,21 @@ import { authService } from '../services/authService';
 import Swal from 'sweetalert2';
 import { 
   UserPlus, UserCheck, Mail, Edit, RefreshCw, Lock, X, 
-  Search, Phone, MessageSquare, CheckSquare, Square
+  Search, Phone, MessageSquare, CheckSquare, Square, Award
 } from 'lucide-react';
 
 // 🎯 Central Modules Import
 import { SYSTEM_MODULES, ALL_MODULE_KEYS } from '../constants/modules';
+
+// 🚩 अधिकृत MRDGA संघटना पदे
+const MRDGA_DESIGNATIONS = [
+  "President",
+  "Working President",
+  "Vice President",
+  "Secretary",
+  "Treasurer",
+  "Member"
+];
 
 export default function UserManagement() {
   // ==========================================
@@ -36,6 +46,7 @@ export default function UserManagement() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [designation, setDesignation] = useState('Member');
   const [role, setRole] = useState('Reviewer');
   const [department, setDepartment] = useState('MRDGA');
   const [customDepartment, setCustomDepartment] = useState('');
@@ -93,6 +104,7 @@ export default function UserManagement() {
     setEmail('');
     setName('');
     setPhone('');
+    setDesignation('Member');
     setRole('Reviewer');
     setDepartment('MRDGA');
     setCustomDepartment('');
@@ -104,14 +116,14 @@ export default function UserManagement() {
   const handleEditClick = (u) => {
     setIsEditing(true);
     setEmail(u.email || u.id);
-    setName(u.name || '');
+    setName(u.name || u.fullName || '');
     setPhone(u.phone || '');
+    setDesignation(u.designation || 'Member');
     setRole(u.role || 'Reviewer');
     setDepartment(u.department || 'MRDGA');
     setCustomDepartment('');
     setIsCustomDept(false);
     
-    // 🎯 जर आधी ॲरे असेल तर तोच घ्या (Empty असेल तरी ओव्हरराईट नको)
     if (u.allowedModules !== undefined && Array.isArray(u.allowedModules)) {
       setAllowedModules(u.allowedModules);
     } else {
@@ -145,11 +157,17 @@ export default function UserManagement() {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+
+    // 🚩 फक्त MRDGA आणि SUPER साठीच संघटना पद सेव्ह करणे
+    const isMrdgaOrSuper = finalDepartment === 'MRDGA' || finalDepartment === 'SUPER';
+    const finalDesignation = isMrdgaOrSuper ? (designation || 'Member') : '-';
     
     const userPayload = {
       email: cleanEmail,
       name: name.trim(),
+      fullName: name.trim(),
       phone: phone.trim(),
+      designation: finalDesignation,
       role: role,
       department: finalDepartment,
       allowedModules: allowedModules,
@@ -191,7 +209,7 @@ export default function UserManagement() {
 
   // Filter Logic
   const filteredUsers = users.filter(u => {
-    const uName = u.name || '';
+    const uName = u.name || u.fullName || '';
     const uEmail = u.email || '';
     const uPhone = u.phone || '';
     const uDept = u.department || 'MRDGA';
@@ -210,6 +228,9 @@ export default function UserManagement() {
 
     return matchesSearch && matchesDept && matchesRole && matchesStatus;
   });
+
+  // सध्या निवडलेला विभाग MRDGA किंवा SUPER आहे का?
+  const isSelectedDeptMrdgaOrSuper = !isCustomDept && (department === 'MRDGA' || department === 'SUPER');
 
   if (!loading && currentRole !== 'Super Admin') {
     return (
@@ -309,6 +330,8 @@ export default function UserManagement() {
           {filteredUsers.map((u) => {
             const isUserActive = u.isActive !== false && u.status !== 'Inactive';
             const userMods = u.allowedModules !== undefined && Array.isArray(u.allowedModules) ? u.allowedModules : ALL_MODULE_KEYS;
+            const isMrdgaDept = u.department === 'MRDGA' || u.department === 'SUPER';
+            const hasDesignation = isMrdgaDept && u.designation && u.designation !== '-';
 
             return (
               <div 
@@ -317,9 +340,18 @@ export default function UserManagement() {
               >
                 <div className="flex justify-between items-start gap-2">
                   <div>
-                    <h4 className="font-bold text-xs sm:text-sm text-white leading-tight">
-                      {u.name || 'नाव दिलेले नाही'}
-                    </h4>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-xs sm:text-sm text-white leading-tight">
+                        {u.name || u.fullName || 'नाव दिलेले नाही'}
+                      </h4>
+                      {/* 🚩 MRDGA संघटना पद बॅज (फक्त MRDGA / SUPER साठी) */}
+                      {hasDesignation && (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                          ⭐ {u.designation}
+                        </span>
+                      )}
+                    </div>
+                    
                     <p className="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1">
                       <Mail className="w-3 h-3 text-amber-400/70 shrink-0" /> {u.email || u.id}
                     </p>
@@ -340,7 +372,7 @@ export default function UserManagement() {
                   </div>
                 </div>
 
-                {/* 🎯 सेव्ह झालेले मॉड्यूल्स टॅग्ज (Dynamic from SYSTEM_MODULES) */}
+                {/* 🎯 सेव्ह झालेले मॉड्यूल्स टॅग्ज */}
                 <div className="flex items-center gap-1 flex-wrap pt-0.5">
                   <span className="text-[9px] text-gray-400 font-semibold">ॲक्सेस:</span>
                   {userMods.length === 0 ? (
@@ -440,6 +472,7 @@ export default function UserManagement() {
                 />
               </div>
 
+              {/* 🚩 विभाग (Department) आणि युझर रोल */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] text-gray-300 font-semibold">विभाग (Department)*</label>
@@ -492,7 +525,27 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {/* 🎯 डायनॅमिक Checkboxes Grid (Driven by SYSTEM_MODULES) */}
+              {/* 🚩 MRDGA संघटना पद (फक्त MRDGA किंवा SUPER साठीच दिसेल) */}
+              {isSelectedDeptMrdgaOrSuper && (
+                <div>
+                  <label className="text-[10px] text-amber-300 font-bold block mb-1">
+                    MRDGA संघटना पद (Association Designation) *
+                  </label>
+                  <select
+                    value={designation}
+                    onChange={(e) => setDesignation(e.target.value)}
+                    className="w-full bg-black/60 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none"
+                  >
+                    {MRDGA_DESIGNATIONS.map(d => (
+                      <option key={d} value={d} className="bg-[#0c0d14] text-white">
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* 🎯 डायनॅमिक Checkboxes Grid */}
               <div className="space-y-1.5 bg-slate-950 p-2.5 rounded-2xl border border-amber-500/20">
                 <label className="text-[10px] text-amber-300 font-bold block">
                   परवानगी मॉड्यूल्स (Allowed Modules Access) *

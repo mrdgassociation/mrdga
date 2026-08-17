@@ -1,3 +1,6 @@
+// ==========================================
+// #SECTION: INSURANCE DUPLICATES TAB (HIGH READABILITY & SOBER UI)
+// ==========================================
 import React, { useState, useMemo } from 'react';
 import { 
   AlertTriangle, Phone, MessageSquare, MapPin, 
@@ -98,40 +101,43 @@ export default function InsuranceDuplicatesTab({
   }, [filteredGroups, visibleGroupCount]);
 
   return (
-    <div className="space-y-4 font-sans">
+    <div className="space-y-4 font-sans text-slate-200">
       
-      {/* Header Bar */}
-      <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl">
+      {/* 🔹 Header Bar (Clear & Readable) */}
+      <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl shrink-0">
             <Copy className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-extrabold text-sm sm:text-base text-rose-400 flex items-center gap-2">
-              दुबार अर्ज तपासणी तक्ता ({duplicateGroups.length} गट आढळले)
+            <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+              दुबार अर्ज तपासणी तक्ता 
+              <span className="text-amber-400 font-mono text-sm bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20">
+                {duplicateGroups.length} संशयित गट
+              </span>
             </h3>
-            <p className="text-[11px] text-slate-400">
-              समान नाव + पिनकोड, मोबाईल किंवा ईमेल जुळलेले अर्ज
+            <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+              समान नाव + पिनकोड, मोबाईल किंवा ईमेल जुळलेले सर्व अर्ज
             </p>
           </div>
         </div>
 
-        <div className="relative w-full sm:w-72">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
           <input
             type="text"
             placeholder="संघाचे नाव किंवा App ID ने शोधा..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-400"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-slate-600"
           />
         </div>
       </div>
 
-      {/* Duplicate Groups List */}
+      {/* 🔹 Duplicate Groups List */}
       {displayedGroups.length === 0 ? (
-        <div className="bg-slate-900/50 border border-dashed border-slate-800 p-12 text-center rounded-2xl">
-          <p className="text-slate-400 text-xs font-medium">कोणताही दुबार (Duplicate) विमा अर्ज सापडला नाही.</p>
+        <div className="bg-slate-900/40 border border-dashed border-slate-800 p-12 text-center rounded-2xl">
+          <p className="text-slate-400 text-sm font-medium">कोणताही दुबार (Duplicate) विमा अर्ज सापडला नाही.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -139,28 +145,28 @@ export default function InsuranceDuplicatesTab({
             const pdfReqs = (group.reqs || []).filter(r => r && r.fileUrl);
 
             return (
-              <div key={groupIdx} className="bg-slate-900/90 border border-rose-500/30 rounded-2xl p-3.5 space-y-3 shadow-xl">
+              <div key={groupIdx} className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-sm">
                 
                 {/* Group Title Bar */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 px-3 py-1 rounded-full flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> संशयित गट #{groupIdx + 1}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs font-mono font-bold bg-slate-800 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> गट #{groupIdx + 1}
                     </span>
-                    <h4 className="font-extrabold text-sm text-white">
+                    <h4 className="font-bold text-sm sm:text-base text-white">
                       {String(group.matchKey || '')}
                     </h4>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-rose-400 font-bold bg-rose-950/80 px-2.5 py-1 rounded-lg border border-rose-800/50">
+                    <span className="text-xs text-slate-300 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
                       {String(group.matchReason || '')}
                     </span>
                     <span className="text-xs text-amber-300 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold">
                       {group.reqs?.length || 0} अर्ज
                     </span>
 
-                    {/* 🔍 समोरासमोर २ याद्या कंपेअर करण्याचे मुख्य बटण */}
+                    {/* 🔍 समोरासमोर २ याद्या कंपेअर करण्याचे बटण */}
                     {pdfReqs.length >= 2 && (
                       <button
                         type="button"
@@ -170,16 +176,16 @@ export default function InsuranceDuplicatesTab({
                           pdf2: pdfReqs[1].fileUrl,
                           title2: `${pdfReqs[1].teamName} (#${pdfReqs[1].appId})`
                         })}
-                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-lg shadow transition cursor-pointer flex items-center gap-1.5 ml-auto sm:ml-0"
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 ml-auto sm:ml-0 shadow-sm"
                       >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>समोरासमोर यादी तपासा (Compare PDFs)</span>
+                        <Eye className="w-4 h-4 text-amber-400" />
+                        <span>PDF समोरासमोर तपासा</span>
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* 🎯 २-२ चे Side-by-Side Comparison Cards Grid */}
+                {/* 🎯 Side-by-Side Cards Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {group.reqs && group.reqs.map((req, rIdx) => {
                     if (!req) return null;
@@ -190,75 +196,103 @@ export default function InsuranceDuplicatesTab({
                     const isRejected = reqStatus.toLowerCase().includes('rejected') || reqStatus.includes('नामंजूर');
 
                     return (
-                      <div key={rIdx} className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5 hover:border-amber-500/40 transition flex flex-col justify-between">
+                      <div key={rIdx} className="bg-slate-950/90 p-4 rounded-xl border border-slate-800 space-y-3 flex flex-col justify-between hover:border-slate-700 transition">
                         
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
+                            <span className="text-xs font-mono font-bold text-slate-200 bg-slate-900 px-2.5 py-0.5 rounded-md border border-slate-800">
                               App ID: #{String(req.appId || 'N/A')}
                             </span>
                             
-                            <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded border ${
-                              isApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
-                              isRejected ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                              'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${
+                              isApproved ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40' :
+                              isRejected ? 'bg-rose-950/40 text-rose-300 border-rose-800/40' :
+                              'bg-slate-900 text-slate-300 border-slate-700'
                             }`}>
                               {reqStatus}
                             </span>
                           </div>
 
-                          <h5 className="font-extrabold text-xs sm:text-sm text-white leading-tight">{String(req.teamName || 'नाव नाही')}</h5>
+                          <h5 className="font-bold text-sm sm:text-base text-white leading-snug">
+                            {String(req.teamName || 'नाव नाही')}
+                          </h5>
 
-                          <div className="text-xs text-slate-300 space-y-1 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 font-sans">
-                            <p className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0"/> <b>{String(req.district || 'N/A')}</b> (पिनकोड: <b className="text-amber-300">{String(req.pincode || '-')}</b>)</p>
-                            <p><span className="text-slate-400">संपर्क:</span> <b>{String(req.contactPerson || '-')}</b> ({cPhone || '-'})</p>
-                            {req.email && <p className="flex items-center gap-1 text-slate-400"><Mail className="w-3.5 h-3.5 text-slate-500"/> {req.email}</p>}
-                            <p className="flex items-center gap-1 font-mono text-amber-400 font-bold"><ShieldCheck className="w-3.5 h-3.5"/> {req.govindaCount || 0} गोविंदा विमा</p>
+                          {/* 📋 स्पष्ट आणि सुटसुटीत माहिती बॉक्स */}
+                          <div className="text-xs sm:text-sm text-slate-300 space-y-1.5 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 font-sans leading-relaxed">
+                            <p className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-slate-400 shrink-0"/> 
+                              <span>{String(req.district || 'N/A')} (पिनकोड: <b className="text-amber-300 font-mono">{String(req.pincode || '-')}</b>)</span>
+                            </p>
+                            <p className="flex items-center gap-2">
+                              <span className="text-slate-400">संपर्क:</span> 
+                              <b className="text-white">{String(req.contactPerson || '-')}</b> 
+                              <span className="font-mono text-slate-300">({cPhone || '-'})</span>
+                            </p>
+                            {req.email && (
+                              <p className="flex items-center gap-2 text-slate-400 truncate">
+                                <Mail className="w-4 h-4 text-slate-500 shrink-0"/> 
+                                <span className="truncate">{req.email}</span>
+                              </p>
+                            )}
+                            <p className="flex items-center gap-2 font-mono text-slate-200 font-bold pt-1 border-t border-slate-800/60">
+                              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0"/> 
+                              <span>{req.govindaCount || 0} गोविंदा विमा</span>
+                            </p>
                           </div>
                         </div>
 
-                        {/* 🎯 उपयुक्त Action Buttons (PDF Viewer + Reject Button) */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 mt-2 gap-1.5 flex-wrap">
+                        {/* 🎯 Action Buttons (मोठे आणि ठळक) */}
+                        <div className="flex items-center justify-between pt-2.5 border-t border-slate-800 mt-1 gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5">
                             {cPhone && (
-                              <a href={`tel:${cPhone}`} className="p-2 bg-slate-800 text-blue-400 hover:bg-blue-600 hover:text-white border border-slate-700 rounded-xl transition" title="कॉल करा">
-                                <Phone className="w-4 h-4" />
+                              <a 
+                                href={`tel:${cPhone}`} 
+                                className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl transition" 
+                                title="कॉल करा"
+                              >
+                                <Phone className="w-4 h-4 text-amber-400" />
                               </a>
                             )}
 
                             {cPhone && (
-                              <a href={`https://wa.me/91${cPhone}`} target="_blank" rel="noreferrer" className="p-2 bg-slate-800 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-slate-700 rounded-xl transition" title="WhatsApp मेसेज पाठवा">
-                                <MessageSquare className="w-4 h-4" />
+                              <a 
+                                href={`https://wa.me/91${cPhone}`} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl transition" 
+                                title="WhatsApp मेसेज पाठवा"
+                              >
+                                <MessageSquare className="w-4 h-4 text-emerald-400" />
                               </a>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1.5">
-                            {/* 📄 १. एकल PDF यादी पाहणे */}
+                          <div className="flex items-center gap-2">
+                            {/* 📄 एकल PDF यादी पाहणे */}
                             {req.fileUrl ? (
                               <button
                                 type="button"
                                 onClick={() => onViewPdf(req.fileUrl, `${String(req.teamName || '')} - यादी PDF`)}
-                                className="px-3 py-1.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-600 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                                 title="यादी PDF पहा"
                               >
-                                <FileText className="w-4 h-4 text-amber-400" />
-                                <span>यादी PDF पहा</span>
+                                <FileText className="w-4 h-4 text-slate-300" />
+                                <span>PDF पहा</span>
                               </button>
                             ) : (
-                              <span className="text-[10px] text-slate-500 italic">यादी फाईल नाही</span>
+                              <span className="text-xs text-slate-500 italic">फाईल नाही</span>
                             )}
 
-                            {/* 🚫 २. दुबार अर्ज Reject करणे */}
+                            {/* 🚫 दुबार अर्ज Reject करणे */}
                             {!isRejected && (
                               <button
                                 type="button"
                                 onClick={() => onTriggerReject(req)}
-                                className="px-3 py-1.5 bg-rose-900/60 text-rose-300 border border-rose-700/50 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+                                className="px-3 py-1.5 bg-slate-900 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-rose-900/50 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shrink-0"
                                 title="दुबार अर्ज म्हणून Reject करा"
                               >
-                                <XCircle className="w-3.5 h-3.5" />
-                                <span>Reject करा</span>
+                                <XCircle className="w-4 h-4 text-rose-400" />
+                                <span>Reject</span>
                               </button>
                             )}
                           </div>
@@ -278,7 +312,7 @@ export default function InsuranceDuplicatesTab({
               <button
                 type="button"
                 onClick={() => setVisibleGroupCount(prev => prev + 10)}
-                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-300 font-bold text-xs rounded-xl shadow-lg transition cursor-pointer"
+                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl transition cursor-pointer shadow-md"
               >
                 + आणखी १० दुबार गट पाहा
               </button>
