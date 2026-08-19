@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { db } from '../firebase/config';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
@@ -64,6 +65,7 @@ const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const pincodeRegex = /^[1-9][0-9]{5}$/;
 
 export default function InsuranceInfo() {
+  const navigate = useNavigate(); // 👈 नेव्हिगेशन हुक
   const [activeTab, setActiveTab] = useState('info');
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -123,17 +125,16 @@ export default function InsuranceInfo() {
 
   const sampleFormatImgUrl = "https://i.ibb.co/N2FXL0R6/Whats-App-Image-2026-07-20-at-11-48-52-2.jpg"; 
 
-  // 🎯 🆕 अद्ययावत सीक्वेन्शियल आयडी जनरेटर (फॉरमॅट: MRDGA-INS-YYYYMMDD-0001)
+  // 🎯 सीक्वेन्शियल आयडी जनरेटर (फॉरमॅट: MRDGA-INS-YYYYMMDD-0001)
   const generateUniqueAppId = async () => {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
-    const dateFormatted = `${year}${month}${day}`; // 20260810
+    const dateFormatted = `${year}${month}${day}`;
 
     let serialNo = '0001';
     try {
-      // डेटाबेसमधील एकूण अर्जांची संख्या + १
       const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
       const count = querySnapshot.size + 1;
       serialNo = String(count).padStart(4, '0');
@@ -321,6 +322,7 @@ export default function InsuranceInfo() {
     }
   };
 
+  // 💾 फॉर्म सबमिट करणे आणि थेट लॉगिन स्क्रीनवर पाठवणे
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -337,7 +339,6 @@ export default function InsuranceInfo() {
     setLoading(true);
 
     try {
-      // 🎯 क्रमवार नवीन App ID तयार केला
       const appId = await generateUniqueAppId();
       let uploadedFileUrl = "";
 
@@ -392,16 +393,37 @@ export default function InsuranceInfo() {
         createdAt: serverTimestamp()
       });
 
+      // 🎯 फॉर्म मोडल बंद करणे
+      setShowFormModal(false);
+
+      // 🎯 SweetAlert मध्ये फक्त १ बटण: "🔑 लॉगिन करा"
       Swal.fire({
         icon: 'success',
-        title: 'अर्ज सबमिट झाला!',
-        text: `तुमचा विमा ॲप्लिकेशन आयडी: ${appId}`,
+        title: 'विमा अर्ज यशस्वीरीत्या सबमिट झाला!',
+        html: `
+          <div style="text-align: center; margin-top: 10px; font-size: 13px;">
+            <p style="color: #9ca3af;">तुमचा ॲप्लिकेशन आयडी:</p>
+            <p style="font-size: 20px; font-weight: bold; color: #f59e0b; font-family: monospace; margin: 8px 0;">${appId}</p>
+            <p style="color: #9ca3af; margin-top: 10px;">अर्जाची स्थिती तपासण्यासाठी कृपया लॉगिन करा.</p>
+          </div>
+        `,
+        confirmButtonText: '🔑 लॉगिन करा',
         confirmButtonColor: '#f59e0b',
         background: '#0c0d14',
-        color: '#fff'
+        color: '#fff',
+        allowOutsideClick: false
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // 👉 थेट लॉगिन स्क्रीनवर रिडायरेक्ट
+          navigate('/login');
+          // फॉलबॅक:
+          setTimeout(() => {
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+          }, 200);
+        }
       });
-
-      setSubmittedId(appId);
 
     } catch (err) {
       console.error("Submission Error:", err);
@@ -580,359 +602,334 @@ export default function InsuranceInfo() {
             </div>
 
             <div className="p-3.5 sm:p-6 overflow-y-auto space-y-5">
-              {submittedId ? (
-                <div className="text-center py-8 space-y-4">
-                  <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle className="w-10 h-10" />
+              <div className="space-y-5">
+                
+                {/* 🎯 STEP PROGRESS INDICATOR */}
+                <div className="flex items-center justify-between px-1 sm:px-6">
+                  <div className={`flex items-center gap-1.5 text-xs sm:text-sm font-bold ${currentStep >= 1 ? 'text-amber-400' : 'text-slate-500'}`}>
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep >= 1 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'}`}>१</span>
+                    <span className="hidden sm:inline">मंडळ माहिती</span>
                   </div>
-                  <div className="space-y-1">
-                    <h4 className="text-xl font-black text-white">अर्ज यशस्वीरीत्या सादर झाला!</h4>
-                    <p className="text-sm text-slate-300">तुमचा अर्ज पुढील पडताळणीसाठी पाठवण्यात आला आहे.</p>
+                  <div className={`h-0.5 flex-1 mx-2 ${currentStep >= 2 ? 'bg-amber-500' : 'bg-slate-800'}`}></div>
+                  <div className={`flex items-center gap-1.5 text-xs sm:text-sm font-bold ${currentStep >= 2 ? 'text-amber-400' : 'text-slate-500'}`}>
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep >= 2 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'}`}>२</span>
+                    <span className="hidden sm:inline">संपर्क व पत्ता</span>
                   </div>
-                  <div className="p-4 bg-slate-900 rounded-2xl border border-amber-500/30 max-w-sm mx-auto space-y-1">
-                    <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">तुमचा विमा अर्ज आयडी</span>
-                    <p className="text-xl font-mono font-bold text-amber-400">{submittedId}</p>
+                  <div className={`h-0.5 flex-1 mx-2 ${currentStep >= 3 ? 'bg-amber-500' : 'bg-slate-800'}`}></div>
+                  <div className={`flex items-center gap-1.5 text-xs sm:text-sm font-bold ${currentStep >= 3 ? 'text-amber-400' : 'text-slate-500'}`}>
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep >= 3 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'}`}>३</span>
+                    <span className="hidden sm:inline">थरांचे प्रमाण व फाईल</span>
                   </div>
-                  <p className="text-xs text-amber-400/90 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 max-w-sm mx-auto">
-                    💡 अर्जाची स्थिती पाहण्यासाठी युझर पोर्टलवरील <strong>"My Status"</strong> या टॅबवर जा.
-                  </p>
-                  <button
-                    onClick={resetFormModal}
-                    className="px-6 py-2.5 bg-amber-500 text-black font-extrabold text-sm rounded-xl cursor-pointer"
-                  >
-                    बंद करा
-                  </button>
                 </div>
-              ) : (
-                <div className="space-y-5">
-                  
-                  {/* 🎯 STEP PROGRESS INDICATOR */}
-                  <div className="flex items-center justify-between px-1 sm:px-6">
-                    <div className={`flex items-center gap-1.5 text-xs sm:text-sm font-bold ${currentStep >= 1 ? 'text-amber-400' : 'text-slate-500'}`}>
-                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep >= 1 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'}`}>१</span>
-                      <span className="hidden sm:inline">मंडळ माहिती</span>
+
+                {/* 📝 STEP 1: MANDAL DETAILS */}
+                {currentStep === 1 && (
+                  <div className="space-y-4 bg-slate-900/50 p-3.5 sm:p-5 rounded-2xl border border-slate-800">
+                    <h4 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-2.5 flex items-center gap-2">
+                      <Users className="w-4 h-4" /> टप्पा १: मंडळ व गट माहिती
+                    </h4>
+
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">मंडळाचे नाव *</label>
+                        <input 
+                          type="text" 
+                          name="teamName"
+                          required
+                          value={formData.teamName}
+                          onChange={handleInputChange}
+                          placeholder="उदा. Jai Bajrang Govinda Pathak"
+                          className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">मंडळाचा प्रकार (Type)</label>
+                          <select 
+                            name="type"
+                            value={formData.type}
+                            onChange={handleInputChange}
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-semibold"
+                          >
+                            <option value="Mandal">मंडळ (Mandal)</option>
+                            <option value="Trust">रजिस्टर्ड ट्रस्ट (Trust)</option>
+                            <option value="Association">असोसिएशन (Association)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पथक प्रकार (Category) *</label>
+                          <select 
+                            name="category"
+                            value={formData.category}
+                            onChange={handleInputChange}
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-bold"
+                          >
+                            <option value="Mens">पुरुष पथक (Mens Team)</option>
+                            <option value="Womens">महिला पथक (Womens Team)</option>
+                            <option value="Both">संयुक्त / दोन्ही (Both Mens & Womens)</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                    <div className={`h-0.5 flex-1 mx-2 ${currentStep >= 2 ? 'bg-amber-500' : 'bg-slate-800'}`}></div>
-                    <div className={`flex items-center gap-1.5 text-xs sm:text-sm font-bold ${currentStep >= 2 ? 'text-amber-400' : 'text-slate-500'}`}>
-                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep >= 2 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'}`}>२</span>
-                      <span className="hidden sm:inline">संपर्क व पत्ता</span>
-                    </div>
-                    <div className={`h-0.5 flex-1 mx-2 ${currentStep >= 3 ? 'bg-amber-500' : 'bg-slate-800'}`}></div>
-                    <div className={`flex items-center gap-1.5 text-xs sm:text-sm font-bold ${currentStep >= 3 ? 'text-amber-400' : 'text-slate-500'}`}>
-                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${currentStep >= 3 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'}`}>३</span>
-                      <span className="hidden sm:inline">थरांचे प्रमाण व फाईल</span>
+
+                    <div className="pt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleNextStep}
+                        className="w-full sm:w-auto px-6 py-3 bg-amber-500 text-black font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 hover:bg-amber-400 cursor-pointer shadow-lg shadow-amber-500/20"
+                      >
+                        पुढील टप्पा <ArrowRight className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  {/* 📝 STEP 1: MANDAL DETAILS */}
-                  {currentStep === 1 && (
-                    <div className="space-y-4 bg-slate-900/50 p-3.5 sm:p-5 rounded-2xl border border-slate-800">
-                      <h4 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-2.5 flex items-center gap-2">
-                        <Users className="w-4 h-4" /> टप्पा १: मंडळ व गट माहिती
-                      </h4>
+                {/* 📝 STEP 2: CONTACT & ADDRESS DETAILS */}
+                {currentStep === 2 && (
+                  <div className="space-y-4 bg-slate-900/50 p-3.5 sm:p-5 rounded-2xl border border-slate-800">
+                    <h4 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-2.5 flex items-center gap-2">
+                      <Phone className="w-4 h-4" /> टप्पा २: संपर्क, ई-मेल व पत्ता
+                    </h4>
 
-                      <div className="space-y-3.5">
+                    <div className="space-y-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">मंडळाचे नाव *</label>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">संपर्क व्यक्तीचे नाव *</label>
                           <input 
                             type="text" 
-                            name="teamName"
+                            name="contactPerson"
                             required
-                            value={formData.teamName}
+                            value={formData.contactPerson}
                             onChange={handleInputChange}
-                            placeholder="उदा. Jai Bajrang Govinda Pathak"
+                            placeholder="अध्यक्ष / सचिव यांचे नाव (In English)"
                             className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
                           />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">मंडळाचा प्रकार (Type)</label>
-                            <select 
-                              name="type"
-                              value={formData.type}
-                              onChange={handleInputChange}
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-semibold"
-                            >
-                              <option value="Mandal">मंडळ (Mandal)</option>
-                              <option value="Trust">रजिस्टर्ड ट्रस्ट (Trust)</option>
-                              <option value="Association">असोसिएशन (Association)</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पथक प्रकार (Category) *</label>
-                            <select 
-                              name="category"
-                              value={formData.category}
-                              onChange={handleInputChange}
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-bold"
-                            >
-                              <option value="Mens">पुरुष पथक (Mens Team)</option>
-                              <option value="Womens">महिला पथक (Womens Team)</option>
-                              <option value="Both">संयुक्त / दोन्ही (Both Mens & Womens)</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={handleNextStep}
-                          className="w-full sm:w-auto px-6 py-3 bg-amber-500 text-black font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 hover:bg-amber-400 cursor-pointer shadow-lg shadow-amber-500/20"
-                        >
-                          पुढील टप्पा <ArrowRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 📝 STEP 2: CONTACT & ADDRESS DETAILS */}
-                  {currentStep === 2 && (
-                    <div className="space-y-4 bg-slate-900/50 p-3.5 sm:p-5 rounded-2xl border border-slate-800">
-                      <h4 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-2.5 flex items-center gap-2">
-                        <Phone className="w-4 h-4" /> टप्पा २: संपर्क, ई-मेल व पत्ता
-                      </h4>
-
-                      <div className="space-y-3.5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">संपर्क व्यक्तीचे नाव *</label>
-                            <input 
-                              type="text" 
-                              name="contactPerson"
-                              required
-                              value={formData.contactPerson}
-                              onChange={handleInputChange}
-                              placeholder="अध्यक्ष / सचिव यांचे नाव (In English)"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">व्हॉट्सॲप नंबर (मुख्य) *</label>
-                            <input 
-                              type="tel" 
-                              name="whatsappNumber"
-                              required
-                              maxLength={10}
-                              value={formData.whatsappNumber}
-                              onChange={(e) => {
-                                const onlyNums = e.target.value.replace(/[^0-9]/g, '');
-                                setFormData(prev => ({ ...prev, whatsappNumber: onlyNums }));
-                              }}
-                              placeholder="10 digit WhatsApp number"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono font-bold"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पर्यायी फोन नंबर (Alternate No.)</label>
-                            <input 
-                              type="tel" 
-                              name="alternateNumber"
-                              maxLength={10}
-                              value={formData.alternateNumber}
-                              onChange={(e) => {
-                                const onlyNums = e.target.value.replace(/[^0-9]/g, '');
-                                setFormData(prev => ({ ...prev, alternateNumber: onlyNums }));
-                              }}
-                              placeholder="पर्यायी कॉल / व्हॉट्सॲप नंबर"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono font-bold"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">ई-मेल आयडी (लॉगिन ई-मेल) *</label>
-                            <input 
-                              type="email" 
-                              name="email"
-                              required
-                              value={formData.email}
-                              onChange={handleInputChange}
-                              placeholder="example@gmail.com"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">जिल्हा *</label>
-                            <select 
-                              name="district"
-                              value={formData.district}
-                              onChange={handleInputChange}
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-semibold"
-                            >
-                              <optgroup label="प्रमुख जिल्हे (Priority Districts)">
-                                {priorityDistricts.map((d) => (
-                                  <option key={d.val} value={d.val}>{d.label}</option>
-                                ))}
-                              </optgroup>
-                              <optgroup label="इतर सर्व जिल्हे (Other Districts)">
-                                {otherDistricts.map((d) => (
-                                  <option key={d.val} value={d.val}>{d.label}</option>
-                                ))}
-                              </optgroup>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पिनकोड (Pincode) *</label>
-                            <input 
-                              type="text" 
-                              name="pincode"
-                              required
-                              maxLength={6}
-                              value={formData.pincode}
-                              onChange={(e) => {
-                                const onlyNums = e.target.value.replace(/[^0-9]/g, '');
-                                setFormData(prev => ({ ...prev, pincode: onlyNums }));
-                              }}
-                              placeholder="उदा. 400601"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-mono font-bold"
-                            />
-                          </div>
                         </div>
 
                         <div>
-                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पत्रव्यवहाराचा पत्ता *</label>
-                          <textarea 
-                            name="address"
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">व्हॉट्सॲप नंबर (मुख्य) *</label>
+                          <input 
+                            type="tel" 
+                            name="whatsappNumber"
                             required
-                            rows={2}
-                            value={formData.address}
+                            maxLength={10}
+                            value={formData.whatsappNumber}
+                            onChange={(e) => {
+                              const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                              setFormData(prev => ({ ...prev, whatsappNumber: onlyNums }));
+                            }}
+                            placeholder="10 digit WhatsApp number"
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पर्यायी फोन नंबर (Alternate No.)</label>
+                          <input 
+                            type="tel" 
+                            name="alternateNumber"
+                            maxLength={10}
+                            value={formData.alternateNumber}
+                            onChange={(e) => {
+                              const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                              setFormData(prev => ({ ...prev, alternateNumber: onlyNums }));
+                            }}
+                            placeholder="पर्यायी कॉल / व्हॉट्सॲप नंबर"
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">ई-मेल आयडी (लॉगिन ई-मेल) *</label>
+                          <input 
+                            type="email" 
+                            name="email"
+                            required
+                            value={formData.email}
                             onChange={handleInputChange}
-                            placeholder="पूर्ण पत्ता टाका (In English)"
-                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                            placeholder="example@gmail.com"
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 font-mono"
                           />
                         </div>
                       </div>
 
-                      <div className="pt-3 flex justify-between gap-3">
-                        <button
-                          type="button"
-                          onClick={handlePrevStep}
-                          className="px-4 py-3 bg-slate-800 text-slate-300 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-1.5 hover:bg-slate-700 cursor-pointer"
-                        >
-                          <ArrowLeft className="w-4 h-4" /> मागील
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleNextStep}
-                          className="px-6 py-3 bg-amber-500 text-black font-extrabold text-xs sm:text-sm rounded-xl flex items-center gap-1.5 hover:bg-amber-400 cursor-pointer shadow-lg shadow-amber-500/20"
-                        >
-                          पुढील टप्पा <ArrowRight className="w-4 h-4" />
-                        </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">जिल्हा *</label>
+                          <select 
+                            name="district"
+                            value={formData.district}
+                            onChange={handleInputChange}
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-semibold"
+                          >
+                            <optgroup label="प्रमुख जिल्हे (Priority Districts)">
+                              {priorityDistricts.map((d) => (
+                                <option key={d.val} value={d.val}>{d.label}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="इतर सर्व जिल्हे (Other Districts)">
+                              {otherDistricts.map((d) => (
+                                <option key={d.val} value={d.val}>{d.label}</option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पिनकोड (Pincode) *</label>
+                          <input 
+                            type="text" 
+                            name="pincode"
+                            required
+                            maxLength={6}
+                            value={formData.pincode}
+                            onChange={(e) => {
+                              const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                              setFormData(prev => ({ ...prev, pincode: onlyNums }));
+                            }}
+                            placeholder="उदा. 400601"
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पत्रव्यवहाराचा पत्ता *</label>
+                        <textarea 
+                          name="address"
+                          required
+                          rows={2}
+                          value={formData.address}
+                          onChange={handleInputChange}
+                          placeholder="पूर्ण पत्ता टाका (In English)"
+                          className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+                        />
                       </div>
                     </div>
-                  )}
 
-                  {/* 📝 STEP 3: PYRAMID, COUNT & PDF FILE UPLOAD */}
-                  {currentStep === 3 && (
-                    <form onSubmit={handleSubmit} className="space-y-4 bg-slate-900/50 p-3.5 sm:p-5 rounded-2xl border border-slate-800">
-                      <h4 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-2.5 flex items-center gap-2">
-                        <FileText className="w-4 h-4" /> टप्पा ३: थरांचे प्रमाण, संख्या व फाईल
-                      </h4>
+                    <div className="pt-3 flex justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={handlePrevStep}
+                        className="px-4 py-3 bg-slate-800 text-slate-300 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-1.5 hover:bg-slate-700 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" /> मागील
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextStep}
+                        className="px-6 py-3 bg-amber-500 text-black font-extrabold text-xs sm:text-sm rounded-xl flex items-center gap-1.5 hover:bg-amber-400 cursor-pointer shadow-lg shadow-amber-500/20"
+                      >
+                        पुढील टप्पा <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                      <div className="space-y-3.5">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">थर क्षमता (Pyramid Capacity)</label>
-                            <select 
-                              name="pyramidCapacity"
-                              value={formData.pyramidCapacity}
-                              onChange={handleInputChange}
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-semibold"
-                            >
-                              <option value="4 Layer">४ थर</option>
-                              <option value="5 Layer">५ थर</option>
-                              <option value="6 Layer">६ थर</option>
-                              <option value="7 Layer">७ थर</option>
-                              <option value="8 Layer">८ थर</option>
-                              <option value="9 Layer">९ थर</option>
-                              <option value="10 Layer">१० थर</option>
-                            </select>
-                          </div>
+                {/* 📝 STEP 3: PYRAMID, COUNT & PDF FILE UPLOAD */}
+                {currentStep === 3 && (
+                  <form onSubmit={handleSubmit} className="space-y-4 bg-slate-900/50 p-3.5 sm:p-5 rounded-2xl border border-slate-800">
+                    <h4 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider border-b border-slate-800 pb-2.5 flex items-center gap-2">
+                      <FileText className="w-4 h-4" /> टप्पा ३: थरांचे प्रमाण, संख्या व फाईल
+                    </h4>
 
-                          <div>
-                            <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">विमा करावयाच्या गोविंदांची संख्या *</label>
-                            <input 
-                              type="number" 
-                              name="govindaCount"
-                              required
-                              min={1}
-                              value={formData.govindaCount}
-                              onChange={handleInputChange}
-                              placeholder="उदा. 100"
-                              className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-mono font-bold"
-                            />
-                          </div>
-                        </div>
-
-                        <label className="flex items-start gap-2.5 p-3 bg-slate-900/80 rounded-xl border border-slate-800 cursor-pointer">
-                          <input 
-                            type="checkbox"
-                            name="isAbove14"
-                            checked={formData.isAbove14}
+                    <div className="space-y-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">थर क्षमता (Pyramid Capacity)</label>
+                          <select 
+                            name="pyramidCapacity"
+                            value={formData.pyramidCapacity}
                             onChange={handleInputChange}
-                            className="w-5 h-5 accent-amber-500 rounded mt-0.5 shrink-0"
-                          />
-                          <span className="text-xs sm:text-sm text-slate-200 leading-snug">
-                            मी खात्री देतो की सर्व विमाधारक गोविंदांचे वय १४ वर्षांपेक्षा जास्त आहे.
-                          </span>
-                        </label>
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-semibold"
+                          >
+                            <option value="4 Layer">४ थर</option>
+                            <option value="5 Layer">५ थर</option>
+                            <option value="6 Layer">६ थर</option>
+                            <option value="7 Layer">७ थर</option>
+                            <option value="8 Layer">८ थर</option>
+                            <option value="9 Layer">९ थर</option>
+                            <option value="10 Layer">१० थर</option>
+                          </select>
+                        </div>
 
-                        <div className="p-4 border-2 border-dashed border-slate-800 hover:border-amber-500/50 rounded-2xl bg-slate-900/50 text-center space-y-2.5">
-                          <UploadCloud className="w-8 h-8 text-amber-400 mx-auto" />
-                          <div className="space-y-1">
-                            <p className="text-xs sm:text-sm font-bold text-slate-200">लेटरहेडवरील सही-शिक्क्यासह यादी अपलोड करा</p>
-                            <p className="text-xs text-amber-400 font-bold">फक्त PDF फाईल (Max 10 MB)</p>
-                          </div>
+                        <div>
+                          <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">विमा करावयाच्या गोविंदांची संख्या *</label>
                           <input 
-                            type="file" 
-                            accept="application/pdf"
+                            type="number" 
+                            name="govindaCount"
                             required
-                            onChange={handleFileChange}
-                            className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-amber-500 file:text-black hover:file:bg-amber-400 cursor-pointer"
+                            min={1}
+                            value={formData.govindaCount}
+                            onChange={handleInputChange}
+                            placeholder="उदा. 100"
+                            className="w-full px-3.5 py-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500 font-mono font-bold"
                           />
                         </div>
                       </div>
 
-                      <div className="pt-3 flex justify-between items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={handlePrevStep}
-                          className="px-4 py-3 bg-slate-800 text-slate-300 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-1.5 hover:bg-slate-700 cursor-pointer"
-                        >
-                          <ArrowLeft className="w-4 h-4" /> मागील
-                        </button>
+                      <label className="flex items-start gap-2.5 p-3 bg-slate-900/80 rounded-xl border border-slate-800 cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          name="isAbove14"
+                          checked={formData.isAbove14}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 accent-amber-500 rounded mt-0.5 shrink-0"
+                        />
+                        <span className="text-xs sm:text-sm text-slate-200 leading-snug">
+                          मी खात्री देतो की सर्व विमाधारक गोविंदांचे वय १४ वर्षांपेक्षा जास्त आहे.
+                        </span>
+                      </label>
 
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs sm:text-sm rounded-xl transition shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                        >
-                          {loading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              सबमिट होत आहे...
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck className="w-5 h-5" />
-                              विमा अर्ज सबमिट करा
-                            </>
-                          )}
-                        </button>
+                      <div className="p-4 border-2 border-dashed border-slate-800 hover:border-amber-500/50 rounded-2xl bg-slate-900/50 text-center space-y-2.5">
+                        <UploadCloud className="w-8 h-8 text-amber-400 mx-auto" />
+                        <div className="space-y-1">
+                          <p className="text-xs sm:text-sm font-bold text-slate-200">लेटरहेडवरील सही-शिक्क्यासह यादी अपलोड करा</p>
+                          <p className="text-xs text-amber-400 font-bold">फक्त PDF फाईल (Max 10 MB)</p>
+                        </div>
+                        <input 
+                          type="file" 
+                          accept="application/pdf"
+                          required
+                          onChange={handleFileChange}
+                          className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-amber-500 file:text-black hover:file:bg-amber-400 cursor-pointer"
+                        />
                       </div>
-                    </form>
-                  )}
+                    </div>
 
-                </div>
-              )}
+                    <div className="pt-3 flex justify-between items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handlePrevStep}
+                        className="px-4 py-3 bg-slate-800 text-slate-300 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-1.5 hover:bg-slate-700 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" /> मागील
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs sm:text-sm rounded-xl transition shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            सबमिट होत आहे...
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-5 h-5" />
+                            विमा अर्ज सबमिट करा
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+              </div>
             </div>
 
           </div>

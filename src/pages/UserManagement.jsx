@@ -21,7 +21,8 @@ const MRDGA_DESIGNATIONS = [
   "Vice President",
   "Secretary",
   "Treasurer",
-  "Member"
+  "Member",
+  "Non Member"
 ];
 
 export default function UserManagement() {

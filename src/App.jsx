@@ -33,6 +33,9 @@ import ModuleGuard from './components/ModuleGuard';
 
 import UserProfilePage from './pages/UserProfilePage';
 
+
+import TournamentScoringHub from './pages/TournamentScoringHub';
+
 export default function App() {
   const currentYear = new Date().getFullYear();
   
@@ -156,6 +159,18 @@ export default function App() {
             </ProtectedRoute>
           } 
         />
+
+        {/* 🎯 मॅनेज करा वर क्लिक केल्यावर उघडणारे पेज (हा राऊट मिसिंग असेल तर एरर येतो) */}
+  <Route 
+    path="/admin/tournaments/:tournamentId" 
+    element={
+      <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
+        <AdminLayout>
+          <TournamentScoringHub />
+        </AdminLayout>
+      </ProtectedRoute>
+    } 
+  />
 
         {/* 🔐 📖 गोविंदा पथक डिरेक्टरी (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
         <Route 

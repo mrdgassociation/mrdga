@@ -244,9 +244,11 @@ export default function Navbar() {
         <div className="md:hidden bg-[#0c0d14] border-b border-white/10 px-4 pt-2 pb-6 space-y-3">
           <Link to="/" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Home</Link>
           <Link to="/about" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">About</Link>
-          <Link to="/competitions" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Competitions</Link>
+          <Link to="/competitions" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Competitions</Link>      
           <Link to="/insurance-info" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Insurance Info</Link>
           <Link to="/contact" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Contact</Link>
+          {/* 📸 🆕 Gallery Link */}
+          <Link to="/gallery" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Gallery</Link>
 
           {/* MOBILE: LOGGED-IN STATE */}
           {user ? (
