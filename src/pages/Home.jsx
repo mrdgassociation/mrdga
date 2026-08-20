@@ -79,29 +79,17 @@ export default function Home() {
             {/* CTA Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
 
-              {/* 🛡️ १. विमा अर्ज बटण (आधी आणले) */}
-              <div className="relative w-full sm:w-auto">
-                <span className="absolute -top-2.5 right-3 z-10 px-2 py-0.5 bg-amber-500 text-black font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md animate-pulse">
-                  लवकरच सुरू होत आहे
-                </span>
-
-                <button
-                  onClick={() => {
-                    Swal.fire({
-                      icon: 'info',
-                      title: 'विमा अर्ज लवकरच सुरू होत आहेत!',
-                      text: 'गोविंदा विमा अर्ज नोंदणी प्रक्रिया येत्या ४ दिवसांत सार्वजनिकरीत्या सुरू केली जाईल.',
-                      confirmButtonColor: '#f59e0b',
-                      background: '#0c0d14',
-                      color: '#fff'
-                    });
-                  }}
-                  className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 border border-amber-500/30 text-slate-300 font-bold text-sm rounded-2xl transition flex items-center justify-center gap-2 opacity-80 hover:opacity-100 cursor-pointer"
-                >
-                  <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                  ऑनलाइन विमा अर्ज (Coming Soon)
-                </button>
-              </div>
+              {/* 🛡️ १. दहीहंडी विमा माहिती बटण (Redirect to Insurance Info) */}
+<div className="relative w-full sm:w-auto">
+  <button
+    type="button"
+    onClick={() => navigate('/insurance-info')} // तुमच्या विमा माहिती पेजचा route
+    className="w-full sm:w-auto px-6 py-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 hover:from-amber-500/20 hover:to-orange-500/20 border border-amber-500/40 hover:border-amber-400 text-amber-300 hover:text-white font-extrabold text-sm rounded-2xl transition flex items-center justify-center gap-2.5 shadow-lg shadow-amber-500/10 cursor-pointer group"
+  >
+    <ShieldCheck className="w-5 h-5 text-amber-400 group-hover:scale-110 transition shrink-0" />
+    <span>🛡️ गोविंदा विमा माहिती</span>
+  </button>
+</div>
 
               {/* 🏆 २. स्पर्धा नोंदणी बटण (Disable / नोंदणी थांबवली) */}
               <button

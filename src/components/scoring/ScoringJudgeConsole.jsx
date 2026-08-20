@@ -1,16 +1,16 @@
 // ==========================================
-// #SECTION: DAHI HANDI JUDGE SCORING CONSOLE (ALL FORMATS 100% COMPLETE & DYNAMIC)
+// #SECTION: DAHI HANDI LIVE SCORING JUDGE CONSOLE (DYNAMIC RANK-BASED POINTS SYSTEM)
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
 import { 
   collection, doc, getDocs, setDoc, deleteDoc, 
-  serverTimestamp, onSnapshot, writeBatch, query, where 
+  serverTimestamp, onSnapshot, writeBatch 
 } from 'firebase/firestore';
 import Swal from 'sweetalert2';
 import { 
   CheckCircle2, Trash2, Clock, Award, AlertTriangle, 
-  Layers, Users, Swords, Trophy
+  Layers, Users, Swords, Trophy, Sparkles, Network
 } from 'lucide-react';
 
 export default function ScoringJudgeConsole({ tournamentId }) {
@@ -27,9 +27,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
   const [selectedDuelMatchNo, setSelectedDuelMatchNo] = useState(1);
   const [fopStates, setFopStates] = useState({});
   const [savingAll, setSavingAll] = useState(false);
-  const [leaderboardTab, setLeaderboardTab] = useState('ROUND'); // 'ROUND' | 'CUMULATIVE'
 
-  // 1️⃣ Initial Data Load
+  // 1️⃣ डेटा लोड करणे
   useEffect(() => {
     if (!tournamentId) return;
     const fetchInitial = async () => {
@@ -37,7 +36,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
       try {
         const rSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds'));
         const rList = rSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        rList.sort((a, b) => (Number(a.roundNumber) || 0) - (Number(b.roundNumber) || 0));
+        rList.sort((a, b) => parseFloat(a.roundNumber) - parseFloat(b.roundNumber));
         setRounds(rList);
 
         if (rList.length > 0) {
@@ -48,7 +47,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         const tList = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         setTeams(tList);
 
-        const r1Id = rList.find(r => Number(r.roundNumber) === 1)?.id || rList[0]?.id;
+        const r1Id = rList.find(r => parseFloat(r.roundNumber) === 1)?.id || rList[0]?.id;
         if (r1Id) {
           const r1FixSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds', r1Id, 'fixtures'));
           const r1Map = {};
@@ -64,7 +63,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     fetchInitial();
   }, [tournamentId]);
 
-  // 2️⃣ Realtime Scores
+  // 2️⃣ रिअल-टाइम स्कोअर
   useEffect(() => {
     if (!tournamentId) return;
     const unsub = onSnapshot(collection(db, 'dahi_handi_tournaments', tournamentId, 'scores'), (snap) => {
@@ -77,10 +76,10 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     return () => unsub();
   }, [tournamentId, selectedRoundId]);
 
-  // 3️⃣ Fixtures Load & FOP Card Setup
+  // 3️⃣ Fixtures लोड करणे व FOP कार्ड्स तयार करणे
   useEffect(() => {
     if (!tournamentId || !selectedRoundId) return;
-    const loadFixtures = async () => {
+    const loadFixturesAndSync = async () => {
       try {
         const fixSnap = await getDocs(
           collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds', selectedRoundId, 'fixtures')
@@ -92,36 +91,63 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         const currentR = rounds.find(r => r.id === selectedRoundId);
         initDynamicFops(currentR, teams, fMap);
       } catch (e) {
-        console.error("Fixture load error:", e);
+        console.error("Fixture sync error:", e);
       }
     };
-    loadFixtures();
+    loadFixturesAndSync();
   }, [tournamentId, selectedRoundId, activeGroup, selectedDuelMatchNo]);
 
-  // 🎯 Format-aware FOP Setup
+  // फॉरमॅट फ्लॅग्ज
+  const currentRound = rounds.find(r => r.id === selectedRoundId);
+  const isPureDuelFormat = currentRound?.matchFormat === 'DUEL';
+  const isGroupDuel = currentRound?.matchFormat === 'GROUP_DUEL' || (currentRound?.matchFormat === 'GROUP' && currentRound?.groupExecutionType === 'DUEL');
+  const isDuelFormat = isPureDuelFormat || isGroupDuel;
+
+  const isFormationRound = currentRound?.matchFormat === 'FORMATION_DIFFICULTY';
+  const isSingleFormat = currentRound?.matchFormat === 'SINGLE' || isFormationRound;
+  const isGroupFormat = currentRound?.matchFormat === 'GROUP' || currentRound?.matchFormat === 'GROUP_DUEL';
+  const isGroupSyncFormat = currentRound?.matchFormat === 'GROUP' && !isGroupDuel;
+  const isKnockout = currentRound?.type === 'KNOCKOUT';
+
+  const roundQualifiedTeamsCount = Number(currentRound?.qualifiedTeamsCount) || teams.length;
+  const totalDuelMatchesCount = Math.max(1, Math.floor(roundQualifiedTeamsCount / 2));
+
+  // 🎯 FOP सेटअप
   const initDynamicFops = (currentR, tList = teams, fMap = fixtures) => {
     if (!currentR) return;
     const format = currentR.matchFormat;
+    const isGrpDuel = format === 'GROUP_DUEL' || (format === 'GROUP' && currentR.groupExecutionType === 'DUEL');
     const newStates = {};
 
-    if (format === 'DUEL') {
-      // ⚔️ DUEL (R3, R5, R7): FOP 1 vs FOP 2
-      const t1 = tList.find(t => fMap[t.id]?.duelMatchNo === selectedDuelMatchNo && fMap[t.id]?.duelSide === 'FOP1');
-      const t2 = tList.find(t => fMap[t.id]?.duelSide === 'FOP2' && fMap[t.id]?.duelMatchNo === selectedDuelMatchNo);
+    if (format === 'DUEL' || isGrpDuel) {
+      let t1, t2;
+      if (isGrpDuel) {
+        t1 = tList.find(t => fMap[t.id]?.group === activeGroup && fMap[t.id]?.duelMatchNo === selectedDuelMatchNo && fMap[t.id]?.duelSide === 'FOP1');
+        t2 = tList.find(t => fMap[t.id]?.group === activeGroup && fMap[t.id]?.duelMatchNo === selectedDuelMatchNo && fMap[t.id]?.duelSide === 'FOP2');
+      } else {
+        t1 = tList.find(t => fMap[t.id]?.duelMatchNo === selectedDuelMatchNo && fMap[t.id]?.duelSide === 'FOP1');
+        t2 = tList.find(t => fMap[t.id]?.duelMatchNo === selectedDuelMatchNo && fMap[t.id]?.duelSide === 'FOP2');
+      }
+
       newStates['FOP 1'] = createEmptyFopState(t1?.id || '', currentR);
       newStates['FOP 2'] = createEmptyFopState(t2?.id || '', currentR);
+
     } else if (format === 'GROUP') {
-      // 👥 GROUP: 4 Cards (FOP 1 te FOP 4)
-      const groupTeams = tList.filter(t => (r1Fixtures[t.id]?.group || fMap[t.id]?.group || 'Group A') === activeGroup);
+      const groupTeams = tList
+        .filter(t => (fMap[t.id]?.group || r1Fixtures[t.id]?.group || 'Group A') === activeGroup)
+        .sort((a, b) => (fMap[a.id]?.slotNumber || 0) - (fMap[b.id]?.slotNumber || 0));
+
       const count = groupTeams.length > 0 ? groupTeams.length : 4;
       for (let i = 0; i < count; i++) {
         newStates[`FOP ${i + 1}`] = createEmptyFopState(groupTeams[i]?.id || '', currentR);
       }
+
     } else {
-      // ⏱️ SINGLE / FORMATION_DIFFICULTY: 1 Single Card
-      const defaultTeam = tList[0]?.id || '';
-      newStates['FOP 1'] = createEmptyFopState(defaultTeam, currentR);
+      const assignedIds = Object.keys(fMap);
+      const defaultTeamId = assignedIds.length > 0 ? assignedIds[0] : (tList[0]?.id || '');
+      newStates['FOP 1'] = createEmptyFopState(defaultTeamId, currentR);
     }
+
     setFopStates(newStates);
   };
 
@@ -139,19 +165,6 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     };
   };
 
-  const currentRound = rounds.find(r => r.id === selectedRoundId);
-
-  // 🎯 Format Flags
-  const isDuelFormat = currentRound?.matchFormat === 'DUEL';
-  const isFormationRound = currentRound?.matchFormat === 'FORMATION_DIFFICULTY';
-  const isSingleFormat = (currentRound?.matchFormat === 'SINGLE' || currentRound?.matchFormat === 'MULTI' || isFormationRound) && !isDuelFormat;
-  const isGroupFormat = currentRound?.matchFormat === 'GROUP' && !isDuelFormat && !isSingleFormat;
-  const isKnockout = currentRound?.type === 'KNOCKOUT';
-  
-  const isDuelWithGroups = isDuelFormat && (Number(currentRound?.roundNumber) <= 3 || currentRound?.hasGroups === true);
-  const isDuelOverall16 = isDuelFormat && !isDuelWithGroups;
-
-  // Carregat Auto-penalty
   const handleSituationChange = (fopKey, sit) => {
     setFopStates(prev => {
       const current = prev[fopKey];
@@ -251,20 +264,52 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     return { totalPenaltySec, totalDeductedPts };
   };
 
-  // 💾 Save Scores
+  // 💾 निकाल सेव्ह करणे (रँकनुसार अचूक गुण वाटप)
   const handleSaveScores = async () => {
     const activeFopKeys = Object.keys(fopStates).filter(f => fopStates[f].teamId);
 
     if (activeFopKeys.length === 0) {
-      Swal.fire({ icon: 'warning', title: 'Krupaya aadhi sangh nivada!' });
+      Swal.fire({
+        icon: 'warning',
+        title: 'संघ निवडलेला नाही!',
+        text: 'निकाल नोंदवण्यासाठी कृपया आधी संघ निवडा.',
+        confirmButtonColor: '#f59e0b',
+        background: '#0c0d14',
+        color: '#fff'
+      });
       return;
+    }
+
+    // ⏱️ अनिवार्य वेळ तपासणी (केवळ गैर-इन्टेंट व गैर-फॉर्मेशनसाठी)
+    if (!isFormationRound) {
+      for (const fopKey of activeFopKeys) {
+        const data = fopStates[fopKey];
+        if (data.situation !== 'INTENT') {
+          const m = Number(data.min) || 0;
+          const s = Number(data.sec) || 0;
+          const milli = Number(data.ms) || 0;
+          const rawTimeMs = (m * 60 * 1000) + (s * 1000) + (milli * 10);
+
+          if (rawTimeMs === 0) {
+            const teamObj = teams.find(t => t.id === data.teamId);
+            Swal.fire({
+              icon: 'warning',
+              title: 'वेळ (Time) भरणे अनिवार्य आहे!',
+              text: `कृपया ${fopKey} (${teamObj?.teamName || 'संघ'}) साठी अचूक स्टॉपवॉच वेळ भरा.`,
+              confirmButtonColor: '#f59e0b',
+              background: '#0c0d14',
+              color: '#fff'
+            });
+            return;
+          }
+        }
+      }
     }
 
     setSavingAll(true);
     try {
-      const batch = writeBatch(db);
-
-      for (const fopKey of activeFopKeys) {
+      // १. सर्व सक्रिय FOPs चा डेटा तयार करणे
+      const calculatedFops = activeFopKeys.map(fopKey => {
         const data = fopStates[fopKey];
         const teamObj = teams.find(t => t.id === data.teamId);
 
@@ -275,10 +320,50 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
         const { totalPenaltySec, totalDeductedPts } = calculateFopPenalties(data);
         const finalTimingMs = rawTimeMs + (totalPenaltySec * 1000);
+        const teamOriginalGroup = fixtures[data.teamId]?.group || r1Fixtures[data.teamId]?.group || activeGroup;
 
-        const teamOriginalGroup = r1Fixtures[data.teamId]?.group || fixtures[data.teamId]?.group || activeGroup;
+        return {
+          fopKey,
+          data,
+          teamObj,
+          m, s, milli,
+          rawTimeMs,
+          totalPenaltySec,
+          totalDeductedPts,
+          finalTimingMs,
+          teamOriginalGroup
+        };
+      });
+
+      // 🎯 २. रँकिंग व गुण वाटप लॉजिक (Rank Evaluation)
+      const pointsList = currentRound?.pointsList || [
+        { label: 'Rank 1', points: 1000 },
+        { label: 'Rank 2', points: 700 },
+        { label: 'Rank 3', points: 500 },
+        { label: 'Rank 4', points: 300 }
+      ];
+      const configuredIntentPts = Number(currentRound?.intentPoints !== undefined ? currentRound.intentPoints : 200);
+
+      // ज्या संघांनी यशस्वी थर लावले (DESCARREGAT / CARREGAT) त्यांना वेळेनुसार सॉर्ट करणे
+      const sitOrder = { DESCARREGAT: 1, CARREGAT: 2, INTENT: 3 };
+      
+      const sortedSuccessful = calculatedFops
+        .filter(item => item.data.situation !== 'INTENT')
+        .sort((a, b) => {
+          if (sitOrder[a.data.situation] !== sitOrder[b.data.situation]) {
+            return sitOrder[a.data.situation] - sitOrder[b.data.situation];
+          }
+          return a.finalTimingMs - b.finalTimingMs;
+        });
+
+      const batch = writeBatch(db);
+
+      for (const item of calculatedFops) {
+        const { fopKey, data, teamObj, m, s, milli, rawTimeMs, totalPenaltySec, totalDeductedPts, finalTimingMs, teamOriginalGroup } = item;
 
         let basePts = 0;
+        let assignedRank = 1;
+        let isWinner = false;
         let selectedFormationName = '';
         let selectedFormationStructure = '';
 
@@ -290,28 +375,55 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           selectedFormationName = chosenFmt?.name || '';
           selectedFormationStructure = chosenFmt?.structure || '';
 
-          if (data.situation === 'DESCARREGAT') {
-            basePts = Number(chosenFmt?.descarregat) || 0;
-          } else if (data.situation === 'CARREGAT') {
-            basePts = Number(chosenFmt?.carregat) || 0;
-          } else {
-            basePts = Number(chosenFmt?.intent) || 0;
-          }
+          if (data.situation === 'DESCARREGAT') basePts = Number(chosenFmt?.descarregat) || 0;
+          else if (data.situation === 'CARREGAT') basePts = Number(chosenFmt?.carregat) || 0;
+          else basePts = Number(chosenFmt?.intent) || 0;
+
         } else if (isKnockout) {
           basePts = 0;
         } else if (data.situation === 'INTENT') {
-          basePts = Number(currentRound?.intentPoints) || 0;
+          // ❌ इन्टेंट गुण
+          basePts = configuredIntentPts;
+          assignedRank = pointsList.length; // शेवटचा रँक
         } else {
-          basePts = currentRound?.pointsList?.[0]?.points || 1000;
+          // 🏆 यशस्वी थरांसाठी वेळेनुसार अचूक रँक गुण (Rank 1 = 1000, Rank 2 = 700, Rank 3 = 500, Rank 4 = 300)
+          const rankIndex = sortedSuccessful.findIndex(sItem => sItem.data.teamId === data.teamId);
+          assignedRank = rankIndex !== -1 ? rankIndex + 1 : 1;
+          
+          const rankPointConfig = pointsList[rankIndex] || pointsList[pointsList.length - 1];
+          basePts = Number(rankPointConfig?.points) || 1000;
+        }
+
+        // DUEL फॉरमॅट असल्यास विजेता ठरवणे
+        if (isDuelFormat && activeFopKeys.length === 2) {
+          const d1 = calculatedFops.find(f => f.fopKey === 'FOP 1');
+          const d2 = calculatedFops.find(f => f.fopKey === 'FOP 2');
+
+          if (d1 && d2) {
+            if (sitOrder[d1.data.situation] !== sitOrder[d2.data.situation]) {
+              isWinner = fopKey === 'FOP 1' 
+                ? sitOrder[d1.data.situation] < sitOrder[d2.data.situation] 
+                : sitOrder[d2.data.situation] < sitOrder[d1.data.situation];
+            } else {
+              isWinner = fopKey === 'FOP 1' 
+                ? d1.finalTimingMs <= d2.finalTimingMs 
+                : d2.finalTimingMs < d1.finalTimingMs;
+            }
+
+            assignedRank = isWinner ? 1 : 2;
+            if (!isKnockout && !isFormationRound && data.situation !== 'INTENT') {
+              basePts = isWinner ? (Number(pointsList[0]?.points) || 1000) : (Number(pointsList[1]?.points) || 700);
+            }
+          }
         }
 
         const finalAwardedPts = isKnockout ? 0 : Math.max(0, basePts - totalDeductedPts);
 
         const currentScorePayload = {
           roundId: selectedRoundId,
-          roundNumber: currentRound?.roundNumber || 1,
+          roundNumber: currentRound?.roundNumber || '1',
           roundName: currentRound?.roundName || '',
-          matchFormat: currentRound?.matchFormat || 'SINGLE',
+          matchFormat: currentRound?.matchFormat || 'GROUP',
           roundType: currentRound?.type || 'LEAGUE',
           teamId: data.teamId,
           teamName: teamObj?.teamName || '',
@@ -320,6 +432,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           fopNo: fopKey,
           duelMatchNo: selectedDuelMatchNo,
           duelSide: fopKey === 'FOP 1' ? 'FOP1' : 'FOP2',
+          roundRank: assignedRank,
+          isWinner,
           formationName: selectedFormationName,
           formationStructure: selectedFormationStructure,
           situation: data.situation,
@@ -342,41 +456,10 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
       await batch.commit();
 
-      // DUEL / Knockout Winner Decision (FOP 1 vs FOP 2)
-      if (isDuelFormat && activeFopKeys.length === 2) {
-        const d1 = fopStates['FOP 1'];
-        const d2 = fopStates['FOP 2'];
-
-        const m1 = (Number(d1.min) || 0) * 60000 + (Number(d1.sec) || 0) * 1000 + (Number(d1.ms) || 0) * 10 + (calculateFopPenalties(d1).totalPenaltySec * 1000);
-        const m2 = (Number(d2.min) || 0) * 60000 + (Number(d2.sec) || 0) * 1000 + (Number(d2.ms) || 0) * 10 + (calculateFopPenalties(d2).totalPenaltySec * 1000);
-
-        const sitOrder = { DESCARREGAT: 1, CARREGAT: 2, INTENT: 3 };
-        let isFop1Winner = true;
-
-        if (sitOrder[d1.situation] !== sitOrder[d2.situation]) {
-          isFop1Winner = sitOrder[d1.situation] < sitOrder[d2.situation];
-        } else {
-          isFop1Winner = m1 <= m2;
-        }
-
-        const duelBatch = writeBatch(db);
-        duelBatch.update(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', `SCORE_${selectedRoundId}_${d1.teamId}`), {
-          roundRank: isFop1Winner ? 1 : 2,
-          isWinner: isFop1Winner,
-          pointsAwarded: isKnockout ? 0 : (isFop1Winner ? (currentRound?.pointsList?.[0]?.points || 1000) : (currentRound?.pointsList?.[1]?.points || 700))
-        });
-        duelBatch.update(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', `SCORE_${selectedRoundId}_${d2.teamId}`), {
-          roundRank: isFop1Winner ? 2 : 1,
-          isWinner: !isFop1Winner,
-          pointsAwarded: isKnockout ? 0 : (isFop1Winner ? (currentRound?.pointsList?.[1]?.points || 700) : (currentRound?.pointsList?.[0]?.points || 1000))
-        });
-        await duelBatch.commit();
-      }
-
       Swal.fire({
         icon: 'success',
-        title: 'Nikaal save jhala!',
-        text: 'Nikaal taktyat record update jhala ahe.',
+        title: 'निकाल रँकनुसार सेव्ह झाला!',
+        text: 'प्रत्येक संघाला त्याच्या वेळेनुसार आणि रँकनुसार अचूक गुण वाटप झाले आहेत.',
         timer: 1500,
         showConfirmButton: false,
         background: '#0c0d14',
@@ -385,7 +468,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
     } catch (err) {
       console.error("Save error:", err);
-      Swal.fire({ icon: 'error', title: 'Truti!', text: 'Nikaal save karta aala nahi.' });
+      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'निकाल सेव्ह करता आला नाही.' });
     } finally {
       setSavingAll(false);
     }
@@ -393,12 +476,12 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
   const handleDeleteScore = async (id, name) => {
     const res = await Swal.fire({
-      title: 'Nikaal hatvaycha ahe ka?',
-      text: `"${name}" chi nond hatavli jaail.`,
+      title: 'निकाल हटवायचा आहे का?',
+      text: `"${name}" या संघाची नोंद हटवली जाईल.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Hoy, hatva',
-      cancelButtonText: 'Radd',
+      confirmButtonText: 'होय, हटवा',
+      cancelButtonText: 'रद्द करा',
       confirmButtonColor: '#ef4444',
       background: '#0c0d14',
       color: '#fff'
@@ -411,72 +494,57 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     }
   };
 
-  // 🎯 Cumulative Standings
-  const currentRoundNumber = Number(currentRound?.roundNumber) || 1;
-  const targetCumulativeRounds = rounds.filter(r => Number(r.roundNumber) <= currentRoundNumber).map(r => r.id);
-
-  const cumulativeLeaderboard = teams.map(t => {
-    const teamScores = allTournamentScores.filter(s => s.teamId === t.id && targetCumulativeRounds.includes(s.roundId));
-    const totalPts = teamScores.reduce((sum, s) => sum + (Number(s.pointsAwarded) || 0), 0);
-    const totalTimingMs = teamScores.reduce((sum, s) => sum + (Number(s.finalTimingMs) || 0), 0);
-    
-    return {
-      ...t,
-      totalPts,
-      totalTimingMs,
-      completedRounds: teamScores.length,
-      group: r1Fixtures[t.id]?.group || fixtures[t.id]?.group || 'Group A'
-    };
-  }).sort((a, b) => {
-    if (b.totalPts !== a.totalPts) return b.totalPts - a.totalPts;
-    return a.totalTimingMs - b.totalTimingMs;
-  });
-
   const activeGroups = currentRound?.groupList?.length ? currentRound.groupList : ['Group A', 'Group B', 'Group C', 'Group D'];
 
   return (
-    <div className="space-y-4 text-white font-sans w-full">
+    <div className="space-y-5 text-white font-sans w-full">
       
-      {/* Top Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-[#0c0d14] border border-amber-500/20 p-3 sm:p-4 rounded-2xl shadow-xl">
+      {/* 🔝 हेडर व कंट्रोल्स */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-[#0c0d14] border border-amber-500/20 p-3.5 sm:p-4 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3">
-          <Layers className="w-5 h-5 text-amber-400" />
+          <Layers className="w-5 h-5 text-amber-400 shrink-0" />
           <div>
             <h3 className="text-sm font-black text-white flex items-center gap-2">
               📋 जज स्कोअरशीट कन्सोल — {currentRound?.roundName || 'फेरी'}
             </h3>
             <p className="text-[10px] text-gray-400">
-              फॉरमॅट: <b className="text-amber-400">{currentRound?.matchFormat}</b> • {isFormationRound ? 'काठिण्य पातळी चॅलेंज' : isKnockout ? 'नॉकआउट थेट पात्रता' : `थर: ${currentRound?.tierHeight || 5}`}
+              फॉरमॅट: <b className="text-amber-400">{currentRound?.matchFormat}</b> • {isGroupDuel ? '⚔️ ग्रुप अंतर्गत डुएल सामने' : isGroupSyncFormat ? '👥 ग्रुप सिंक (रँकनुसार गुण वाटप)' : isFormationRound ? 'काठिण्य पातळी' : isKnockout ? 'नॉकआउट बाद फेरी' : `थर: ${currentRound?.tierHeight || 5}`}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Round Selector */}
-          <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-xl border border-white/10">
+          <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/10">
             <span className="text-[11px] font-bold text-gray-300">फेरी:</span>
             <select
               value={selectedRoundId}
-              onChange={(e) => setSelectedRoundId(e.target.value)}
+              onChange={(e) => {
+                setSelectedRoundId(e.target.value);
+                setSelectedDuelMatchNo(1);
+              }}
               className="bg-transparent text-amber-400 font-bold text-xs focus:outline-none cursor-pointer"
             >
               {rounds.map(r => (
                 <option key={r.id} value={r.id} className="bg-slate-900 text-white">
-                  फेरी #{r.roundNumber}: {r.roundName} ({r.matchFormat})
+                  फेरी #{r.roundNumber}: {r.roundName}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Group Selector (फक्त Group स्टेज फेऱ्यांसाठी) */}
+          {/* Group Selector */}
           {isGroupFormat && (
             <div className="flex items-center gap-1 bg-black/60 p-1 rounded-xl border border-blue-500/30">
               {activeGroups.map(grp => (
                 <button
                   key={grp}
-                  onClick={() => setActiveGroup(grp)}
+                  onClick={() => {
+                    setActiveGroup(grp);
+                    setSelectedDuelMatchNo(1);
+                  }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    activeGroup === grp ? 'bg-blue-500 text-black shadow' : 'text-gray-400 hover:text-white'
+                    activeGroup === grp ? 'bg-blue-500 text-black shadow font-black' : 'text-gray-400 hover:text-white'
                   }`}
                 >
                   {grp}
@@ -485,9 +553,9 @@ export default function ScoringJudgeConsole({ tournamentId }) {
             </div>
           )}
 
-          {/* Duel Match Selector (द्वंद्व फेऱ्यांसाठी) */}
+          {/* Match Selector */}
           {isDuelFormat && (
-            <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-xl border border-orange-500/30">
+            <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1.5 rounded-xl border border-orange-500/30">
               <Swords className="w-3.5 h-3.5 text-orange-400" />
               <span className="text-[11px] font-bold text-gray-300">सामना:</span>
               <select
@@ -495,9 +563,9 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                 onChange={(e) => setSelectedDuelMatchNo(Number(e.target.value))}
                 className="bg-transparent text-orange-400 font-bold text-xs focus:outline-none cursor-pointer"
               >
-                {Array.from({ length: Math.ceil(teams.length / 2) || 8 }).map((_, idx) => (
+                {Array.from({ length: isGroupDuel ? 2 : totalDuelMatchesCount }).map((_, idx) => (
                   <option key={idx + 1} value={idx + 1} className="bg-slate-900 text-white">
-                    सामना #{idx + 1} {isDuelOverall16 ? `(Rank ${idx + 1} vs ${16 - idx})` : ''}
+                    सामना #{idx + 1} {isGroupDuel ? `(${activeGroup})` : ''}
                   </option>
                 ))}
               </select>
@@ -517,7 +585,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         </div>
       </div>
 
-      {/* FOP Score Entry Cards */}
+      {/* 🎯 FOP स्कोरिंग कार्ड्स */}
       <div className={`grid gap-3.5 ${
         isDuelFormat 
           ? 'grid-cols-1 md:grid-cols-2' 
@@ -538,10 +606,15 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           const fmtList = currentRound?.formationList || [];
           const currentChosenFmt = fmtList.find(f => f.name === (fData.selectedFormation || fmtList[0]?.name));
           let currentPreviewPts = 0;
+
           if (isFormationRound && currentChosenFmt) {
             if (fData.situation === 'DESCARREGAT') currentPreviewPts = Number(currentChosenFmt.descarregat) || 0;
             else if (fData.situation === 'CARREGAT') currentPreviewPts = Number(currentChosenFmt.carregat) || 0;
             else currentPreviewPts = Number(currentChosenFmt.intent) || 0;
+          } else if (fData.situation === 'INTENT') {
+            currentPreviewPts = Number(currentRound?.intentPoints !== undefined ? currentRound.intentPoints : 200);
+          } else {
+            currentPreviewPts = currentRound?.pointsList?.[0]?.points || 1000;
           }
 
           return (
@@ -551,13 +624,13 @@ export default function ScoringJudgeConsole({ tournamentId }) {
             >
               <div className="space-y-3">
                 
-                {/* FOP Header */}
+                {/* Header */}
                 <div className="flex justify-between items-center bg-black/60 p-2 rounded-2xl border border-white/5">
                   <span className="text-xs font-black text-amber-400 font-mono flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-400"></span> {fopKey} {isDuelFormat ? (fopKey === 'FOP 1' ? '(Team A)' : '(Team B)') : ''}
                   </span>
                   <span className="text-[10px] text-gray-400 font-bold">
-                    {isDuelFormat ? `सामना #${selectedDuelMatchNo}` : isFormationRound ? 'रचना काठिण्य' : 'जज स्कोअरशीट'}
+                    {isDuelFormat ? `सामना #${selectedDuelMatchNo}` : isFormationRound ? 'काठिण्य पातळी' : 'जज कन्सोल'}
                   </span>
                 </div>
 
@@ -571,21 +644,19 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                   >
                     <option value="">-- संघ निवडा --</option>
                     {teams.map(t => (
-                      <option key={t.id} value={t.id}>{t.teamName} ({t.city})</option>
+                      <option key={t.id} value={t.id}>#{t.chestNumber || '-'} {t.teamName} ({t.city})</option>
                     ))}
                   </select>
                 </div>
 
-                {/* 🏆 Formation Selector (Round 6) */}
+                {/* काठिण्य पातळी रचना निवड */}
                 {isFormationRound && (
                   <div className="bg-black/50 p-3 rounded-2xl border border-amber-500/30 space-y-2">
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-amber-400 font-bold flex items-center gap-1">
-                        <Trophy className="w-3.5 h-3.5" /> रचना निवडा (Selected Formation):
+                        <Trophy className="w-3.5 h-3.5" /> रचना निवडा:
                       </span>
-                      <span className="text-gray-400 font-mono">
-                        {currentChosenFmt?.structure || ''}
-                      </span>
+                      <span className="text-gray-400 font-mono">{currentChosenFmt?.structure || ''}</span>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto pr-1">
@@ -649,12 +720,15 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                   </div>
                 </div>
 
-                {/* ⏱️ वेळ इनपुट (Formation फेरीत लपवले जाईल) */}
+                {/* ⏱️ स्टॉपवॉच वेळ */}
                 {!isFormationRound && (
                   <div className="bg-black/60 p-2.5 rounded-2xl border border-white/5 space-y-1">
-                    <span className="font-bold text-amber-400 text-[10px] flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> मूळ वेळ (Stopwatch Time):
-                    </span>
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-amber-400 text-[10px] flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> मूळ वेळ (Stopwatch Time) <span className="text-rose-400">*</span>:
+                      </span>
+                      <span className="text-[9px] text-gray-400">अनिवार्य</span>
+                    </div>
 
                     <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
                       <div>
@@ -782,7 +856,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                     {isKnockout ? 'निकाल प्रकार:' : 'अंतिम गुण:'}
                   </span>
                   <span className="text-xs font-mono font-black text-amber-400">
-                    {isKnockout ? 'Knockout Match' : `${Math.max(0, currentPreviewPts - totalDeductedPts)} pts`}
+                    {isKnockout ? 'नॉकआउट सामना' : `${Math.max(0, currentPreviewPts - totalDeductedPts)} pts`}
                   </span>
                 </div>
               </div>
@@ -793,253 +867,69 @@ export default function ScoringJudgeConsole({ tournamentId }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* 🏆 निकाल विभाग: Results Views                                            */}
+      {/* 🏆 निकाल विभाग: गटनिहाय थेट रँकिंग (Group-Wise Live Standings)              */}
       {/* ========================================================================= */}
-      <div className="bg-[#0c0d14] border border-amber-500/20 rounded-3xl p-4 space-y-3 shadow-xl">
-        <div className="flex justify-between items-center border-b border-white/10 pb-2.5">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setLeaderboardTab('ROUND')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                leaderboardTab === 'ROUND' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              🚩 या फेरीचा निकाल ({scores.length})
-            </button>
-            <button
-              onClick={() => setLeaderboardTab('CUMULATIVE')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                leaderboardTab === 'CUMULATIVE' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              🏆 एकूण एकत्रित गुणतक्ता (R1 ते R{currentRoundNumber})
-            </button>
+      <div className="bg-[#0c0d14] border border-amber-500/20 rounded-3xl p-4 sm:p-5 space-y-4 shadow-xl">
+        
+        <div className="flex justify-between items-center border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <h4 className="text-xs sm:text-sm font-black text-white">
+              {currentRound?.roundName} — {isGroupFormat ? 'गटनिहाय चालू निकाल व रँकिंग (Group-Wise Live Standings)' : 'या फेरीचा थेट निकाल'}
+            </h4>
           </div>
+          <span className="text-[10px] font-mono text-gray-400">{scores.length} नोंद पूर्ण</span>
         </div>
 
-        {leaderboardTab === 'ROUND' ? (
-          
-          /* ⚔️ १. DUEL (Round 5 / Round 7 Knockout) */
-          isDuelFormat ? (
-            <div className="space-y-3">
-              <div className="flex justify-between items-center px-1">
-                <span className="text-xs font-black text-orange-400 flex items-center gap-1.5">
-                  <Swords className="w-4 h-4" /> द्वंद्व निकाल ({isKnockout ? 'नॉकआउट थेट पात्रता' : 'समोरासमोरील सामने'})
-                </span>
-                <span className="text-[10px] text-gray-400 font-mono">{scores.length} नोंद</span>
-              </div>
+        {/* 👥 १. जर GROUP / GROUP_DUEL फेरी असेल तर गटनिहाय रँकिंग बोर्ड्स */}
+        {isGroupFormat ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {activeGroups.map(grpName => {
+              const grpScores = scores
+                .filter(s => (fixtures[s.teamId]?.group || r1Fixtures[s.teamId]?.group || s.group) === grpName)
+                .sort((a, b) => {
+                  if ((b.pointsAwarded || 0) !== (a.pointsAwarded || 0)) {
+                    return (b.pointsAwarded || 0) - (a.pointsAwarded || 0);
+                  }
+                  return (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999);
+                });
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                {Array.from({ length: Math.ceil(teams.length / 2) || 8 }).map((_, mIdx) => {
-                  const matchNo = mIdx + 1;
-                  const matchScores = scores.filter(s => Number(s.duelMatchNo) === matchNo);
-                  const t1Score = matchScores.find(s => s.duelSide === 'FOP1');
-                  const t2Score = matchScores.find(s => s.duelSide === 'FOP2');
+              return (
+                <div key={grpName} className="bg-black/50 border border-blue-500/30 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
+                  
+                  <div className="flex justify-between items-center text-xs font-black text-blue-300 border-b border-white/5 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Network className="w-3.5 h-3.5" /> {grpName}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">{grpScores.length} नोंद</span>
+                  </div>
 
-                  return (
-                    <div key={matchNo} className="bg-black/60 border border-orange-500/30 rounded-2xl p-3 space-y-2">
-                      <div className="flex justify-between items-center text-[10px] font-mono text-orange-400 border-b border-white/5 pb-1">
-                        <span className="font-bold">सामना #{matchNo}</span>
-                        <span>{isKnockout ? 'Knockout QF' : `Match ${matchNo}`}</span>
-                      </div>
-
-                      <div className="space-y-1.5 text-xs">
-                        {t1Score ? (
-                          <div className={`p-2 rounded-xl flex justify-between items-center border ${
-                            t1Score.roundRank === 1 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-slate-900 border-white/5'
-                          }`}>
-                            <div className="truncate">
-                              <span className="block truncate">{t1Score.teamName}</span>
-                              <span className="text-[9px] text-gray-400 font-mono">{t1Score.finalFormattedTime}</span>
-                            </div>
-                            <div className="text-right shrink-0">
-                              {isKnockout ? (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${t1Score.roundRank === 1 ? 'bg-emerald-500 text-black' : 'bg-rose-500/20 text-rose-400'}`}>
-                                  {t1Score.roundRank === 1 ? '🏆 WIN' : 'OUT'}
-                                </span>
-                              ) : (
-                                <span className="text-amber-400 font-bold font-mono">{t1Score.pointsAwarded} pts</span>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="bg-slate-900/50 p-2 rounded-xl text-center text-gray-600 text-[10px]">TBD (FOP 1)</div>
-                        )}
-
-                        <div className="text-center text-[9px] font-black text-gray-600">VS</div>
-
-                        {t2Score ? (
-                          <div className={`p-2 rounded-xl flex justify-between items-center border ${
-                            t2Score.roundRank === 1 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-slate-900 border-white/5'
-                          }`}>
-                            <div className="truncate">
-                              <span className="block truncate">{t2Score.teamName}</span>
-                              <span className="text-[9px] text-gray-400 font-mono">{t2Score.finalFormattedTime}</span>
-                            </div>
-                            <div className="text-right shrink-0">
-                              {isKnockout ? (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${t2Score.roundRank === 1 ? 'bg-emerald-500 text-black' : 'bg-rose-500/20 text-rose-400'}`}>
-                                  {t2Score.roundRank === 1 ? '🏆 WIN' : 'OUT'}
-                                </span>
-                              ) : (
-                                <span className="text-amber-400 font-bold font-mono">{t2Score.pointsAwarded} pts</span>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="bg-slate-900/50 p-2 rounded-xl text-center text-gray-600 text-[10px]">TBD (FOP 2)</div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-          /* 🏆 २. FORMATION_DIFFICULTY (Round 6) */
-          ) : isFormationRound ? (
-            <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-4 space-y-3">
-              <div className="flex justify-between items-center text-xs font-black text-amber-400 border-b border-white/5 pb-2">
-                <span className="flex items-center gap-1.5">
-                  <Trophy className="w-4 h-4" /> {currentRound?.roundName} (रचना काठिण्य निकाल)
-                </span>
-                <span className="text-[10px] text-gray-400 font-mono">{scores.length} नोंद पूर्ण</span>
-              </div>
-
-              {scores.length === 0 ? (
-                <div className="text-center py-6 text-gray-600 text-xs font-bold">या फेरीत अद्याप स्कोअर नोंदवला नाही</div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                  {scores
-                    .sort((a, b) => (Number(b.pointsAwarded) || 0) - (Number(a.pointsAwarded) || 0))
-                    .map((s, idx) => (
-                      <div key={s.id} className="bg-slate-900/90 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`w-6 h-6 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
-                            idx === 0 ? 'bg-amber-400 text-black shadow' : 
-                            idx === 1 ? 'bg-slate-300 text-black' : 
-                            idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-gray-400'
-                          }`}>
-                            #{idx + 1}
-                          </span>
-                          <div className="truncate">
-                            <h5 className="font-bold text-white truncate">{s.teamName}</h5>
-                            <span className="text-[10px] text-amber-300 font-mono block">
-                              {s.formationName || 'रचना'} • {s.situation}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-mono text-sm font-black text-emerald-400 block">{s.pointsAwarded} pts</span>
-                          <button
-                            onClick={() => handleDeleteScore(s.id, s.teamName)}
-                            className="p-1 text-gray-500 hover:text-rose-400 transition"
-                            title="हटवा"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-
-          /* ⏱️ ३. SINGLE / MULTI (Round 4) */
-          ) : isSingleFormat ? (
-            <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-4 space-y-3">
-              <div className="flex justify-between items-center text-xs font-black text-amber-400 border-b border-white/5 pb-2">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" /> {currentRound?.roundName} (सिंगल रँकिंग निकाल)
-                </span>
-                <span className="text-[10px] text-gray-400 font-mono">{scores.length} नोंद पूर्ण</span>
-              </div>
-
-              {scores.length === 0 ? (
-                <div className="text-center py-6 text-gray-600 text-xs font-bold">या फेरीत अद्याप स्कोअर नोंदवला नाही</div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                  {scores
-                    .sort((a, b) => {
-                      if ((b.pointsAwarded || 0) !== (a.pointsAwarded || 0)) {
-                        return (b.pointsAwarded || 0) - (a.pointsAwarded || 0);
-                      }
-                      return (a.finalTimingMs || 0) - (b.finalTimingMs || 0);
-                    })
-                    .map((s, idx) => (
-                      <div key={s.id} className="bg-slate-900/90 border border-white/10 p-2.5 rounded-xl flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`w-6 h-6 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
-                            idx === 0 ? 'bg-amber-400 text-black shadow' : 
-                            idx === 1 ? 'bg-slate-300 text-black' : 
-                            idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-gray-400'
-                          }`}>
-                            #{idx + 1}
-                          </span>
-                          <div className="truncate">
-                            <h5 className="font-bold text-white truncate">{s.teamName}</h5>
-                            <span className="text-[9px] text-gray-400">{s.city} • {s.situation}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="text-right">
-                            <span className="font-mono text-xs font-bold text-emerald-400 block">{s.finalFormattedTime}</span>
-                            <span className="text-[10px] text-amber-400 font-bold">{s.pointsAwarded} pts</span>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteScore(s.id, s.teamName)}
-                            className="p-1 text-gray-500 hover:text-rose-400 transition"
-                            title="हटवा"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-
-          /* 👥 ४. GROUP STAGE (Round 1 / Round 2) */
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {activeGroups.map(grpName => {
-                const grpScores = scores
-                  .filter(s => (r1Fixtures[s.teamId]?.group || s.group) === grpName)
-                  .sort((a, b) => {
-                    if ((b.pointsAwarded || 0) !== (a.pointsAwarded || 0)) {
-                      return (b.pointsAwarded || 0) - (a.pointsAwarded || 0);
-                    }
-                    return (a.finalTimingMs || 0) - (b.finalTimingMs || 0);
-                  });
-
-                return (
-                  <div key={grpName} className="bg-black/50 border border-blue-500/30 rounded-2xl p-3 space-y-2">
-                    <div className="flex justify-between items-center text-xs font-black text-blue-300 border-b border-white/5 pb-1.5">
-                      <span>{grpName}</span>
-                      <span className="text-[10px] text-gray-400 font-mono">{grpScores.length} नोंद</span>
-                    </div>
-
-                    {grpScores.length === 0 ? (
-                      <div className="text-center py-4 text-gray-600 text-xs">नोंद झालेली नाही</div>
-                    ) : (
-                      grpScores.map((s, idx) => (
-                        <div key={s.id} className="bg-slate-900 p-2.5 rounded-xl flex items-center justify-between gap-1 text-xs">
+                  {grpScores.length === 0 ? (
+                    <div className="text-center py-5 text-gray-600 text-xs">या गटात स्कोअर नोंदवलेला नाही</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {grpScores.map((s, idx) => (
+                        <div key={s.id} className="bg-slate-900/90 border border-white/5 p-2 rounded-xl flex items-center justify-between gap-1 text-xs">
                           <div className="flex items-center gap-2 truncate">
                             <span className={`w-5 h-5 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
-                              idx === 0 ? 'bg-amber-400 text-black' : idx === 1 ? 'bg-slate-300 text-black' : 'bg-white/10 text-gray-400'
+                              idx === 0 ? 'bg-amber-400 text-black shadow' : 
+                              idx === 1 ? 'bg-slate-300 text-black' : 
+                              idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-gray-400'
                             }`}>
-                              {idx + 1}
+                              #{idx + 1}
                             </span>
-                            <span className="font-bold text-white truncate">{s.teamName}</span>
+                            <div className="truncate">
+                              <span className="font-bold text-white truncate block">{s.teamName}</span>
+                              <span className="text-[9px] text-gray-400 font-mono">
+                                {s.situation === 'INTENT' ? 'INTENT' : s.finalFormattedTime}
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <div className="text-right">
-                              <span className="font-mono text-xs font-bold text-emerald-400 block">{s.finalFormattedTime}</span>
-                              <span className="text-[10px] text-amber-400 font-bold">{s.pointsAwarded} pts</span>
+                              <span className="text-[11px] text-amber-400 font-black font-mono block">{s.pointsAwarded} pts</span>
+                              <span className="text-[8px] text-gray-500 uppercase">{s.situation}</span>
                             </div>
                             <button
                               onClick={() => handleDeleteScore(s.id, s.teamName)}
@@ -1050,46 +940,52 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                             </button>
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )
+                      ))}
+                    </div>
+                  )}
 
+                </div>
+              );
+            })}
+          </div>
         ) : (
 
-          /* 🏆 एकूण एकत्रित गुणतक्ता (Cumulative Standings) */
-          <div className="space-y-2">
-            <div className="text-[11px] text-amber-400 font-bold px-1 flex items-center justify-between">
-              <span>⚡ चालू फेरी क्र. {currentRoundNumber} पर्यंतचा एकत्रित गुणतक्ता:</span>
-              <span className="text-[10px] text-gray-400">जास्त गुणांना सर्वोच्च रँक</span>
-            </div>
+          /* ⚔️ २. OVERALL DUEL / SINGLE / FORMATION निकाल यादी */
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            {scores.length === 0 ? (
+              <div className="col-span-full py-6 text-center text-gray-500 text-xs">या फेरीत अद्याप कोणताही स्कोअर नोंदवलेला नाही.</div>
+            ) : (
+              scores
+                .sort((a, b) => (b.pointsAwarded || 0) - (a.pointsAwarded || 0) || (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999))
+                .map((s, idx) => (
+                  <div key={s.id} className="bg-slate-900/90 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-2 text-xs shadow">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className={`w-6 h-6 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
+                        idx === 0 ? 'bg-amber-400 text-black' : 'bg-white/10 text-gray-300'
+                      }`}>
+                        #{idx + 1}
+                      </span>
+                      <div className="truncate">
+                        <h5 className="font-bold text-white truncate">{s.teamName}</h5>
+                        <span className="text-[9px] text-gray-400 font-mono block">
+                          {s.situation} • {s.finalFormattedTime}
+                        </span>
+                      </div>
+                    </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-              {cumulativeLeaderboard.map((t, idx) => (
-                <div key={t.id} className="bg-black/50 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 truncate">
-                    <span className={`w-7 h-7 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
-                      idx === 0 ? 'bg-amber-400 text-black shadow' : 
-                      idx === 1 ? 'bg-slate-300 text-black' : 
-                      idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/5 text-gray-400'
-                    }`}>
-                      #{idx + 1}
-                    </span>
-                    <div className="truncate">
-                      <h5 className="text-xs font-bold text-white truncate">{t.teamName}</h5>
-                      <span className="text-[10px] text-gray-400">{t.city}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono text-xs font-black text-amber-400">{s.pointsAwarded} pts</span>
+                      <button
+                        onClick={() => handleDeleteScore(s.id, s.teamName)}
+                        className="p-1 text-gray-500 hover:text-rose-400 transition"
+                        title="हटवा"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs font-black text-amber-400 block">{t.totalPts} pts</span>
-                    <span className="text-[9px] text-gray-500">{t.completedRounds} फेऱ्या पूर्ण</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))
+            )}
           </div>
         )}
 

@@ -1,12 +1,12 @@
 // ==========================================
-// #SECTION: COMPETITION REPORT TAB
+// #SECTION: COMPETITION REPORT TAB (WITH COMBINED FILTER & LATEST STATUS IN PDF)
 // ==========================================
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
   FileSpreadsheet, Printer, Search, BarChart3, 
-  MapPin, Phone, MessageSquare, User, Users
+  MapPin, Phone, MessageSquare, User, Users, CheckCircle2, Clock
 } from 'lucide-react';
 
 export default function CompetitionReportTab({ 
@@ -14,7 +14,7 @@ export default function CompetitionReportTab({
   canExportAndPrint, selectedCompTitle 
 }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'APPROVED_PENDING' | 'Approved' | 'Pending' | 'Rejected'
   const [districtFilter, setDistrictFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
@@ -65,6 +65,7 @@ export default function CompetitionReportTab({
     return dupMap;
   }, [teams]);
 
+  // 🎯 डायनॅमिक स्टेटस फिल्टर (ज्यामध्ये Approved + Pending एकत्र फिल्टर चालेल)
   const filteredTeams = teams.filter(team => {
     const teamName = team.teamName || '';
     const regId = team.registrationId || '';
@@ -79,7 +80,14 @@ export default function CompetitionReportTab({
       captainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       managerName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'ALL' || team.status === statusFilter;
+    // ⚡ Approved + Pending एकत्र फिल्टरिंग लॉजिक
+    let matchesStatus = true;
+    if (statusFilter === 'APPROVED_PENDING') {
+      matchesStatus = team.status === 'Approved' || team.status === 'Pending' || !team.status;
+    } else if (statusFilter !== 'ALL') {
+      matchesStatus = team.status === statusFilter || (!team.status && statusFilter === 'Pending');
+    }
+
     const matchesDistrict = districtFilter === 'ALL' || team.district === districtFilter;
     const matchesCategory = categoryFilter === 'ALL' || team.category === categoryFilter;
     const matchesComp = competitionFilter === 'ALL' || team.competitionId === competitionFilter;
@@ -171,8 +179,8 @@ export default function CompetitionReportTab({
           .no-print { display: none !important; }
           .print-area { background: white !important; color: black !important; box-shadow: none !important; border: none !important; width: 100% !important; padding: 0 !important; }
           .print-page-break { page-break-before: always !important; break-before: page !important; padding-top: 10px !important; }
-          table { width: 100% !important; border-collapse: collapse !important; }
-          th, td { color: black !important; border: 1px solid #333 !important; }
+          table { width: 100% !important; border-collapse: collapse !important; font-size: 10px !important; }
+          th, td { color: black !important; border: 1px solid #444 !important; padding: 4px !important; }
           th { background-color: #f3f4f6 !important; }
         }
       `}</style>
@@ -287,15 +295,19 @@ export default function CompetitionReportTab({
             ))}
           </select>
 
+          {/* 🎯 स्टेटस फिल्टर (मंजूर व प्रलंबित एकत्र पर्यायासह) */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-black/60 border border-amber-500/10 rounded-xl px-2 py-1.5 text-[11px] text-white focus:outline-none"
+            className="bg-black/60 border border-amber-500/10 rounded-xl px-2 py-1.5 text-[11px] text-amber-300 font-bold focus:outline-none"
           >
-            <option value="ALL" className="bg-[#0c0d14]">सर्व स्टेटस</option>
-            <option value="Approved" className="bg-[#0c0d14]">मंजूर (Approved)</option>
-            <option value="Pending" className="bg-[#0c0d14]">प्रलंबित (Pending)</option>
-            <option value="Rejected" className="bg-[#0c0d14]">नाकारलेले (Rejected)</option>
+            <option value="ALL" className="bg-[#0c0d14] text-white">सर्व स्टेटस (All)</option>
+            <option value="APPROVED_PENDING" className="bg-[#0c0d14] text-emerald-300 font-black">
+              ✅ ⏳ मंजूर व प्रलंबित (Approved + Pending)
+            </option>
+            <option value="Approved" className="bg-[#0c0d14] text-emerald-400">मंजूर (Approved Only)</option>
+            <option value="Pending" className="bg-[#0c0d14] text-amber-400">प्रलंबित (Pending Only)</option>
+            <option value="Rejected" className="bg-[#0c0d14] text-rose-400">नाकारलेले (Rejected)</option>
           </select>
         </div>
       </div>
@@ -304,7 +316,7 @@ export default function CompetitionReportTab({
         <p className="p-8 text-center text-gray-400 text-xs font-medium">कोणतीही नोंदणी सापडली नाही.</p>
       ) : (
         <>
-          {/* 📱 MOBILE VIEW CARDS (No Horizontal Scroll, Numbers Hidden on Screen) */}
+          {/* 📱 MOBILE VIEW CARDS */}
           <div className="no-print grid grid-cols-1 md:hidden gap-3">
             {filteredTeams.map((team, idx) => {
               const rawC1Name = team.captain?.name || team.contact1?.name || 'संपर्क १ नाही';
@@ -314,6 +326,9 @@ export default function CompetitionReportTab({
               const rawC2Name = team.manager?.name || team.contact2?.name || '';
               const c2Name = toTitleCase(rawC2Name);
               const c2Phone = team.manager?.phone || team.contact2?.phone || '';
+
+              const comments = team.comments || [];
+              const lastComment = comments.length > 0 ? comments[comments.length - 1] : null;
 
               return (
                 <div key={team.registrationId || idx} className="p-3.5 rounded-2xl border border-amber-500/20 bg-black/40 space-y-2.5 shadow-md">
@@ -337,8 +352,17 @@ export default function CompetitionReportTab({
                     </span>
                   </div>
 
+                  {/* 🎯 मोबाईलवर शेवटचा रिमार्क / अपडेट */}
+                  {lastComment && (
+                    <div className="bg-amber-500/5 p-2 rounded-xl border border-amber-500/15 text-[11px] text-amber-200/90 flex items-start gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-400">शेवटचा रिमार्क:</span> {lastComment.text}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="bg-black/50 p-2.5 rounded-xl border border-white/5 space-y-2 text-xs">
-                    {/* संपर्क १ (कॅप्टन) */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 overflow-hidden">
                         <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -352,7 +376,6 @@ export default function CompetitionReportTab({
                       )}
                     </div>
 
-                    {/* संपर्क २ (मॅनेजर) */}
                     {c2Name && (
                       <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
                         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -385,7 +408,7 @@ export default function CompetitionReportTab({
                   🏆 {selectedCompTitle}
                 </h2>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  अधिकृत नोंदणीकृत पथकांची यादी | दिनांक: {new Date().toLocaleDateString('mr-IN')}
+                  अधिकृत नोंदणीकृत पथकांची यादी | दिनांक: {new Date().toLocaleDateString('mr-IN')} | फिल्टर: <b className="text-amber-400">{statusFilter === 'APPROVED_PENDING' ? 'मंजूर व प्रलंबित (Approved + Pending)' : statusFilter}</b>
                 </p>
               </div>
               <div className="text-right">
@@ -455,27 +478,30 @@ export default function CompetitionReportTab({
   );
 }
 
-// 🖨️ Reusable Category Table (Number printed on PDF, Hidden on Screen)
+// 🖨️ Reusable Category Table (With Latest Remark/Status in PDF)
 function CategoryTable({ teamsList, toTitleCase }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse text-xs">
         <thead>
           <tr className="bg-black/80 border-b border-amber-500/30 text-amber-400 font-extrabold uppercase text-[10px]">
-            <th className="p-2 border border-white/10 text-center">अ.क्र.</th>
-            <th className="p-2 border border-white/10">Reg ID</th>
+            <th className="p-2 border border-white/10 text-center w-10">अ.क्र.</th>
+            <th className="p-2 border border-white/10 w-24">Reg ID</th>
             <th className="p-2 border border-white/10">संघाचे नाव</th>
-            <th className="p-2 border border-white/10 text-center">खेळाडू</th>
+            <th className="p-2 border border-white/10 text-center w-14">खेळाडू</th>
             <th className="p-2 border border-white/10">जिल्हा / विभाग</th>
             <th className="p-2 border border-white/10">संपर्क १ (कॅप्टन)</th>
             <th className="p-2 border border-white/10">संपर्क २ (मॅनेजर)</th>
-            <th className="p-2 border border-white/10 text-center">स्टेटस</th>
+            <th className="p-2 border border-white/10">शेवटचा रिमार्क / अपडेट</th>
+            <th className="p-2 border border-white/10 text-center w-20">स्टेटस</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/10">
           {teamsList.map((team, idx) => {
             const c1Phone = team.captain?.phone || team.contact1?.phone || '';
             const c2Phone = team.manager?.phone || team.contact2?.phone || '';
+            const comments = team.comments || [];
+            const lastComment = comments.length > 0 ? comments[comments.length - 1] : null;
 
             return (
               <tr key={team.registrationId || idx} className="hover:bg-white/5 transition">
@@ -485,7 +511,7 @@ function CategoryTable({ teamsList, toTitleCase }) {
                 <td className="p-2 border border-white/5 text-gray-300 text-center font-bold">{team.playerCount || '-'}</td>
                 <td className="p-2 border border-white/5 text-gray-300">{toTitleCase(team.district)}, <span className="text-[10px] text-gray-400">{toTitleCase(team.vibhag)}</span></td>
                 
-                {/* 🎯 संपर्क १: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
+                {/* संपर्क १: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
                 <td className="p-2 border border-white/5">
                   <div className="flex items-center justify-between gap-1">
                     <div>
@@ -505,7 +531,7 @@ function CategoryTable({ teamsList, toTitleCase }) {
                   </div>
                 </td>
 
-                {/* 🎯 संपर्क २: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
+                {/* संपर्क २: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
                 <td className="p-2 border border-white/5">
                   <div className="flex items-center justify-between gap-1">
                     <div>
@@ -523,6 +549,23 @@ function CategoryTable({ teamsList, toTitleCase }) {
                       </div>
                     )}
                   </div>
+                </td>
+
+                {/* 🎯 🆕 शेवटचा रिमार्क / कॉल अपडेट (स्क्रीन व PDF दोन्हीमध्ये दिसेल) */}
+                <td className="p-2 border border-white/5 text-[11px]">
+                  {lastComment ? (
+                    <div>
+                      <p className="text-gray-200 font-medium line-clamp-2 print:line-clamp-none print:text-black">
+                        {lastComment.text}
+                      </p>
+                      <span className="text-[9px] text-gray-400 print:text-gray-600 block mt-0.5">
+                        {lastComment.byName || lastComment.name ? `${lastComment.byName || lastComment.name} • ` : ''}
+                        {lastComment.createdAt ? new Date(lastComment.createdAt).toLocaleDateString('mr-IN') : ''}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-500 italic text-[10px]">-</span>
+                  )}
                 </td>
 
                 <td className="p-2 border border-white/5 text-center">

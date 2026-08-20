@@ -1,5 +1,5 @@
 // ==========================================
-// #SECTION: TOURNAMENT MANAGER (MASTER ENGINE)
+// #SECTION: TOURNAMENT MANAGER (100% DYNAMIC TEAMS & MASTER CONTROL)
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +26,7 @@ export default function TournamentManager() {
     location: '',
     startDate: '',
     endDate: '',
-    totalTeams: 16,
+    totalTeams: 16, // १००% डायनॅमिक नंबर
     formatType: 'LEAGUE_KNOCKOUT', // 'LEAGUE_KNOCKOUT' | 'KNOCKOUT' | 'TIME_TRIAL'
     penaltyMode: 'ROUND_WISE',     // 'COMMON' | 'ROUND_WISE'
     organizer: 'MRDGA'
@@ -49,17 +49,32 @@ export default function TournamentManager() {
     return 'COMPLETED';
   };
 
-  // 1️⃣ Firestore मधून सर्व स्पर्धा फेच करणे
+  // 1️⃣ Firestore मधून सर्व स्पर्धा व त्यांच्या नोंदणीकृत संघांची संख्या फेच करणे
   const fetchTournaments = async () => {
     setLoading(true);
     try {
       const q = query(collection(db, 'dahi_handi_tournaments'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
-      const list = snap.docs.map(doc => {
-        const data = doc.data();
+      
+      const list = await Promise.all(snap.docs.map(async (docSnap) => {
+        const data = docSnap.data();
         const currentStatus = calculateAutoStatus(data.startDate, data.endDate);
-        return { id: doc.id, ...data, status: currentStatus };
-      });
+        
+        // त्या स्पर्धेत प्रत्यक्षात किती संघ जोडले आहेत ते मोजणे
+        let actualTeamsCount = 0;
+        try {
+          const teamsSnap = await getDocs(collection(db, 'dahi_handi_tournaments', docSnap.id, 'teams'));
+          actualTeamsCount = teamsSnap.size;
+        } catch (e) {}
+
+        return { 
+          id: docSnap.id, 
+          ...data, 
+          status: currentStatus,
+          actualTeamsCount 
+        };
+      }));
+
       setTournaments(list);
     } catch (err) {
       console.error("Error fetching tournaments:", err);
@@ -77,34 +92,62 @@ export default function TournamentManager() {
     e.preventDefault();
 
     if (!formData.tournamentName.trim()) {
-      Swal.fire({ icon: 'warning', title: 'अपूर्ण माहिती!', text: 'कृपया स्पर्धेचे नाव टाका.' });
+      Swal.fire({ 
+        icon: 'warning', 
+        title: 'अपूर्ण माहिती!', 
+        text: 'कृपया स्पर्धेचे नाव टाका.',
+        confirmButtonColor: '#f59e0b',
+        background: '#0c0d14',
+        color: '#fff'
+      });
       return;
     }
 
     if (!formData.startDate) {
-      Swal.fire({ icon: 'warning', title: 'तारीख आवश्यक!', text: 'कृपया सुरुवातीची तारीख निवडा.' });
+      Swal.fire({ 
+        icon: 'warning', 
+        title: 'तारीख आवश्यक!', 
+        text: 'कृपया सुरुवातीची तारीख निवडा.',
+        confirmButtonColor: '#f59e0b',
+        background: '#0c0d14',
+        color: '#fff'
+      });
       return;
     }
 
     const autoStatus = calculateAutoStatus(formData.startDate, formData.endDate);
 
     try {
+      const payload = {
+        ...formData,
+        totalTeams: Number(formData.totalTeams) || 16,
+        status: autoStatus,
+        updatedAt: serverTimestamp()
+      };
+
       if (editingTournament) {
-        // Update Existing
-        await updateDoc(doc(db, 'dahi_handi_tournaments', editingTournament.id), {
-          ...formData,
-          status: autoStatus,
-          updatedAt: serverTimestamp()
+        await updateDoc(doc(db, 'dahi_handi_tournaments', editingTournament.id), payload);
+        Swal.fire({ 
+          icon: 'success', 
+          title: 'स्पर्धा अद्ययावत झाली!', 
+          timer: 1500, 
+          showConfirmButton: false, 
+          background: '#0c0d14', 
+          color: '#fff' 
         });
-        Swal.fire({ icon: 'success', title: 'स्पर्धा अपडेट झाली!', timer: 1500, showConfirmButton: false, background: '#0c0d14', color: '#fff' });
       } else {
-        // Create New
         await addDoc(collection(db, 'dahi_handi_tournaments'), {
-          ...formData,
-          status: autoStatus,
+          ...payload,
           createdAt: serverTimestamp()
         });
-        Swal.fire({ icon: 'success', title: 'स्पर्धा नोंदवली गेली!', timer: 1500, showConfirmButton: false, background: '#0c0d14', color: '#fff' });
+        Swal.fire({ 
+          icon: 'success', 
+          title: 'नवीन स्पर्धा यशस्वीरीत्या नोंदवली गेली!', 
+          timer: 1500, 
+          showConfirmButton: false, 
+          background: '#0c0d14', 
+          color: '#fff' 
+        });
       }
 
       setFormData({
@@ -122,7 +165,14 @@ export default function TournamentManager() {
       fetchTournaments();
     } catch (err) {
       console.error("Save tournament error:", err);
-      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्पर्धा सेव्ह करताना अडचण आली.' });
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'त्रुटी!', 
+        text: 'स्पर्धा सेव्ह करताना अडचण आली.',
+        confirmButtonColor: '#ef4444',
+        background: '#0c0d14',
+        color: '#fff'
+      });
     }
   };
 
@@ -143,10 +193,24 @@ export default function TournamentManager() {
     if (res.isConfirmed) {
       try {
         await deleteDoc(doc(db, 'dahi_handi_tournaments', id));
-        Swal.fire({ icon: 'success', title: 'हटवले!', timer: 1200, showConfirmButton: false, background: '#0c0d14', color: '#fff' });
+        Swal.fire({ 
+          icon: 'success', 
+          title: 'हटवले!', 
+          timer: 1200, 
+          showConfirmButton: false, 
+          background: '#0c0d14', 
+          color: '#fff' 
+        });
         fetchTournaments();
       } catch (err) {
-        Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्पर्धा डिलीट करता आली नाही.' });
+        Swal.fire({ 
+          icon: 'error', 
+          title: 'त्रुटी!', 
+          text: 'स्पर्धा डिलीट करता आली नाही.',
+          confirmButtonColor: '#ef4444',
+          background: '#0c0d14',
+          color: '#fff'
+        });
       }
     }
   };
@@ -155,13 +219,13 @@ export default function TournamentManager() {
     <div className="space-y-6 text-white font-sans">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0c0d14] p-5 rounded-2xl border border-amber-500/20 shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0c0d14] p-4 sm:p-5 rounded-2xl border border-amber-500/20 shadow-xl">
         <div>
-          <h1 className="text-xl font-black text-white flex items-center gap-2.5">
-            <Trophy className="w-6 h-6 text-amber-400" /> दहीहंडी स्पर्धा व्यवस्थापन
+          <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+            <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" /> दहीहंडी स्पर्धा व्यवस्थापन
           </h1>
           <p className="text-xs text-gray-400 mt-1">
-            MRDGA आणि SUPER विभागासाठी मास्टर कंट्रोल व स्कोअरिंग मॅनेजर
+            MRDGA आणि असोसिएशन स्पर्धांचे मुख्य नियंत्रण व स्कोअरिंग मॅनेजर
           </p>
         </div>
 
@@ -187,17 +251,17 @@ export default function TournamentManager() {
       </div>
 
       {/* Tournaments Grid */}
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         <h2 className="text-xs font-bold text-amber-400 uppercase tracking-wider px-1">
           🚩 नोंदणीकृत स्पर्धा ({tournaments.length})
         </h2>
 
         {loading ? (
-          <div className="bg-[#0c0d14] border border-amber-500/10 rounded-2xl p-8 text-center text-gray-400 text-xs">
+          <div className="bg-[#0c0d14] border border-amber-500/10 rounded-2xl p-8 text-center text-gray-400 text-xs font-bold animate-pulse">
             स्पर्धा लोड होत आहेत...
           </div>
         ) : tournaments.length === 0 ? (
-          <div className="bg-[#0c0d14] border border-amber-500/10 rounded-2xl p-8 text-center text-gray-400 text-xs">
+          <div className="bg-[#0c0d14] border border-dashed border-amber-500/20 rounded-2xl p-8 text-center text-gray-400 text-xs font-bold">
             एकही स्पर्धा उपलब्ध नाही. "नवीन स्पर्धा जोडा" वर क्लिक करून पहिली स्पर्धा तयार करा.
           </div>
         ) : (
@@ -205,7 +269,7 @@ export default function TournamentManager() {
             {tournaments.map((t) => (
               <div 
                 key={t.id} 
-                className="bg-[#0c0d14] border border-amber-500/20 rounded-2xl p-5 hover:border-amber-500/50 transition flex flex-col justify-between shadow-lg space-y-4"
+                className="bg-[#0c0d14] border border-amber-500/20 rounded-2xl p-4 sm:p-5 hover:border-amber-500/50 transition flex flex-col justify-between shadow-lg space-y-4"
               >
                 <div>
                   <div className="flex justify-between items-start mb-3">
@@ -216,7 +280,7 @@ export default function TournamentManager() {
                         ? 'bg-gray-500/20 text-gray-400 border-gray-500/30'
                         : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                     }`}>
-                      ● {t.status}
+                      ● {t.status === 'LIVE' ? 'चालू स्पर्धा (LIVE)' : t.status === 'COMPLETED' ? 'पूर्ण झालेली' : 'आगामी (UPCOMING)'}
                     </span>
 
                     <div className="flex items-center gap-1">
@@ -235,14 +299,14 @@ export default function TournamentManager() {
                           });
                           setIsCreateModalOpen(true);
                         }}
-                        className="p-1 text-gray-400 hover:text-amber-400 rounded transition"
+                        className="p-1 text-gray-400 hover:text-amber-400 rounded transition cursor-pointer"
                         title="एडिट करा"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteTournament(t.id, t.tournamentName)}
-                        className="p-1 text-gray-400 hover:text-rose-400 rounded transition"
+                        className="p-1 text-gray-400 hover:text-rose-400 rounded transition cursor-pointer"
                         title="डिलीट करा"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -265,9 +329,16 @@ export default function TournamentManager() {
                         <span>{t.startDate} {t.endDate ? `ते ${t.endDate}` : ''}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-[11px] text-amber-300/80 pt-1">
-                      <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>{t.totalTeams || 16} संघ • {t.formatType === 'LEAGUE_KNOCKOUT' ? 'लीग + बाद फेरी' : t.formatType === 'KNOCKOUT' ? 'थेट बाद फेरी' : 'टाईम ट्रायल'}</span>
+                    
+                    {/* 🎯 डायनॅमिक संघ संख्या डिस्प्ले */}
+                    <div className="flex items-center justify-between text-[11px] bg-black/50 p-2 rounded-xl border border-white/5 mt-2">
+                      <div className="flex items-center gap-1.5 text-gray-300">
+                        <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>नोंदणीकृत संघ:</span>
+                      </div>
+                      <span className="font-mono font-bold text-amber-300">
+                        <b className="text-emerald-400">{t.actualTeamsCount || 0}</b> / {t.totalTeams || 16}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -278,19 +349,19 @@ export default function TournamentManager() {
                     <Layers className="w-3.5 h-3.5 text-amber-400" /> फेऱ्या & स्कोअरिंग
                   </span>
                   <button 
-    type="button"
-    onClick={() => {
-      if (!t.id) {
-        Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्पर्धेचा ID सापडला नाही.' });
-        return;
-      }
-      navigate(`/admin/tournaments/${t.id}`);
-    }}
-    className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500 hover:to-orange-500 hover:text-black text-amber-400 font-extrabold text-xs rounded-xl border border-amber-500/30 flex items-center gap-1.5 transition cursor-pointer"
-  >
-    <span>मॅनेज करा</span>
-    <ChevronRight className="w-3.5 h-3.5" />
-  </button>
+                    type="button"
+                    onClick={() => {
+                      if (!t.id) {
+                        Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्पर्धेचा ID सापडला नाही.' });
+                        return;
+                      }
+                      navigate(`/admin/tournaments/${t.id}`);
+                    }}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500 hover:to-orange-500 hover:text-black text-amber-400 font-extrabold text-xs rounded-xl border border-amber-500/30 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <span>मॅनेज करा</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -341,19 +412,19 @@ export default function TournamentManager() {
                   />
                 </div>
 
+                {/* 🎯 १००% डायनॅमिक संघ संख्या इनपुट */}
                 <div>
-                  <label className="block font-bold text-gray-300 mb-1">एकूण संघ (Total Teams)</label>
-                  <select
+                  <label className="block font-bold text-emerald-400 mb-1">अपेक्षित एकूण संघ (Total Teams) *</label>
+                  <input 
+                    type="number"
+                    required
+                    min={2}
+                    max={128}
+                    placeholder="उदा. 8, 16, 20, 32"
                     value={formData.totalTeams}
                     onChange={(e) => setFormData({ ...formData, totalTeams: Number(e.target.value) })}
-                    className="w-full bg-black/40 border border-amber-500/20 px-3 py-2 rounded-xl text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
-                  >
-                    <option value={8}>८ संघ (8 Teams)</option>
-                    <option value={12}>१२ संघ (12 Teams)</option>
-                    <option value={16}>१६ संघ (16 Teams)</option>
-                    <option value={24}>२४ संघ (24 Teams)</option>
-                    <option value={32}>३२ संघ (32 Teams)</option>
-                  </select>
+                    className="w-full bg-black/40 border border-emerald-500/30 px-3 py-2 rounded-xl text-emerald-400 font-mono font-bold focus:border-emerald-400 focus:outline-none"
+                  />
                 </div>
               </div>
 
@@ -387,7 +458,7 @@ export default function TournamentManager() {
                   <select
                     value={formData.formatType}
                     onChange={(e) => setFormData({ ...formData, formatType: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl text-white font-semibold focus:outline-none"
+                    className="w-full bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl text-white font-semibold focus:outline-none cursor-pointer"
                   >
                     <option value="LEAGUE_KNOCKOUT">गट सामने + बाद फेरी (League + Knockout)</option>
                     <option value="KNOCKOUT">थेट बाद फेरी (Pure Knockout Face-offs)</option>

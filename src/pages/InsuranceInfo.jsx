@@ -450,8 +450,8 @@ export default function InsuranceInfo() {
     if (!isFormActive) {
       Swal.fire({
         icon: 'info',
-        title: 'अर्ज स्वीकृती बंद आहे!',
-        text: 'गोविंदा विमा अर्ज सादर करण्याची प्रक्रिया सध्या बंद करण्यात आली आहे.',
+        title: 'विमा अर्ज लवकरच सुरू होत आहेत!',
+        text: 'गोविंदा विमा अर्ज नोंदणी प्रक्रिया लवकरच सुरू केली जाईल. कृपया आवश्यक माहिती व कागदपत्रे तयार ठेवावीत.', 
         confirmButtonColor: '#f59e0b',
         background: '#0c0d14',
         color: '#fff'
@@ -493,40 +493,71 @@ export default function InsuranceInfo() {
           </button>
         </div>
 
-        {/* 📄 PAGE HEADER */}
-        <div className="p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-[#0c0d14] to-[#0c0d14] border border-amber-500/30 space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 bg-amber-500 text-black font-extrabold text-[10px] rounded-lg uppercase tracking-wider">
-                अधिकृत विमा सुरक्षा माहिती
+       {/* 📄 PAGE HEADER & COMPACT STATS */}
+        <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-[#0c0d14] to-[#0c0d14] border border-amber-500/30 space-y-4">
+          
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-amber-500 text-black font-black text-[9px] sm:text-[10px] rounded-lg uppercase tracking-wider">
+                अधिकृत विमा सुरक्षा
               </span>
-              <span className="px-2.5 py-1 bg-slate-800 text-amber-400 font-mono text-[10px] font-bold rounded-lg border border-amber-500/20">
+              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-slate-800 text-amber-400 font-mono text-[9px] sm:text-[10px] font-bold rounded-lg border border-amber-500/20">
                 गोपाळकाला २०२६
               </span>
             </div>
 
+            {/* 🎯 १. कॉम्पॅक्ट मोबाईल-फ्रेंडली बटण */}
             <button
               onClick={handleOpenFormModal}
-              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-[11px] sm:text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1 cursor-pointer shrink-0"
             >
-              <PlusCircle className="w-4 h-4" /> नवीन विमा अर्ज करा
+              <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+              <span>नवीन अर्ज</span>
             </button>
           </div>
 
-          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-            <ShieldCheck className="w-7 h-7 text-amber-400 shrink-0" />
-            गोविंदा पथक व्यक्तिगत अपघात विमा योजना २०२६
+          <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-white flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 shrink-0" />
+            <span>गोविंदा पथक व्यक्तिगत अपघात विमा योजना २०२६</span>
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
             दि ओरिएंटल इन्शुरन्स कंपनी लि. (भारत सरकारचा उपक्रम) यांच्या सहकार्याने सर्व नोंदणीकृत गोविंदांना सामाजिक सुरक्षा व विमा संरक्षण देण्याचा उपक्रम.
           </p>
+
+          {/* 🎯 ३. १,६०,००० उद्दिष्ट आणि मंजूर संख्येचा कॉम्पॅक्ट बॉक्स */}
+          <div className="pt-2">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-4 bg-black/50 p-2.5 sm:p-3 rounded-2xl border border-white/5">
+              
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                  <Users className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 block font-medium">एकूण उद्दिष्ट</span>
+                  <span className="text-xs sm:text-sm font-mono font-black text-amber-400">१,६०,०००</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 border-l border-white/10 pl-2.5 sm:pl-4">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-400 block font-medium">मंजूर विमा (Approved)</span>
+                  <span className="text-xs sm:text-sm font-mono font-black text-emerald-400">०</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
         </div>
 
         {/* ---------------- TAB 1: INFO & BASIC WIDGET ---------------- */}
         {activeTab === 'info' && (
           <div className="space-y-6">
-            <InsuranceAnalysisWidget mode="basic" />
+           {/* <InsuranceAnalysisWidget mode="basic" />*/}
             <InsuranceInfoContent onOpenSampleModal={() => setShowSampleModal(true)} />
           </div>
         )}

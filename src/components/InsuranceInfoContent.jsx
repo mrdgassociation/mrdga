@@ -209,13 +209,13 @@ export default function InsuranceInfoContent({ onOpenSampleModal }) {
           </p>
           <p className="text-xs text-amber-300 font-semibold pt-1">शाखा प्रबंधक: सौ. शिल्पा पवार</p>
         </div>
-
-        <a 
+ 
+ {/*<a 
           href="tel:8422919066" 
           className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 shrink-0 cursor-pointer"
         >
           <PhoneCall className="w-4 h-4" /> कॉल करा: 8422919066
-        </a>
+        </a>*/}
       </div>
 
     </div>
