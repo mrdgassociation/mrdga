@@ -1,5 +1,5 @@
 // ==========================================
-// #SECTION: DAHI HANDI LIVE SCORING JUDGE CONSOLE (COMPLETE PRODUCTION COMPONENT)
+// #SECTION: DAHI HANDI LIVE SCORING JUDGE CONSOLE (WITH DYNAMIC ADVANCING WINNERS COUNT)
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
@@ -97,7 +97,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     loadFixturesAndSync();
   }, [tournamentId, selectedRoundId, activeGroup, selectedDuelMatchNo, selectedSlotNumber]);
 
-  // 🎯 फॉरमॅट व प्रकार निश्चिती (Auto-Detect Wildcard)
+  // 🎯 फॉरमॅट व प्रकार निश्चिती (Auto-Detect Wildcard / Dynamic Cutoff)
   const currentRound = rounds.find(r => r.id === selectedRoundId);
   const matchFormat = currentRound?.matchFormat || 'GROUP';
   const rawRoundType = currentRound?.type || 'LEAGUE';
@@ -115,6 +115,9 @@ export default function ScoringJudgeConsole({ tournamentId }) {
   const roundQualifiedTeamsCount = Number(currentRound?.qualifiedTeamsCount) || Object.keys(fixtures).length || teams.length;
   const totalDirectDuelMatches = Math.max(1, Math.floor(roundQualifiedTeamsCount / 2));
   const activeGroups = currentRound?.groupList?.length ? currentRound.groupList : (currentRound?.groupsConfig?.map(g => g.name) || ['Group A', 'Group B', 'Group C', 'Group D']);
+
+  // 👉 युझरने सेटअपमध्ये ठरवलेले "पुढील फेरीत जाणारे विजेते संघ" (उदा. २ किंवा ३)
+  const advancingCutoff = Number(currentRound?.advancingWinnersCount) || (isWildcard ? 1 : 2);
 
   // 🎯 Fixtures च्या रँकनुसार क्रमबद्ध संघांची यादी
   const getOrderedTeamsList = () => {
@@ -277,7 +280,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     return { totalPenaltySec, totalDeductedPts };
   };
 
-  // 💾 स्कोअर सेव्ह व रँकिंग/नॉकआउट/वाईल्डकार्ड फेरगणती
+  // 💾 स्कोअर सेव्ह व रँकिंग/नॉकआउट/डायलॅमिक कटऑफ फेरगणती
   const handleSaveScores = async () => {
     const activeFopKeys = Object.keys(fopStates).filter(f => fopStates[f].teamId);
 
@@ -397,8 +400,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         return 3;
       };
 
-      // 🎯 १. WILDCARD फेरी (Descarregat & Time Hierarchy -> Top 1 Winner)
-      if (isWildcard) {
+      // 🎯 १. WILDCARD किंवा Single Slot (ज्यामध्ये Advancing Winners द्वारे Top N ठरतात)
+      if (isWildcard || isSingleSlot) {
         const sortedList = Object.values(allRoundScoresMap).sort((a, b) => {
           const wA = getSitWeight(a.situation);
           const wB = getSitWeight(b.situation);
@@ -407,9 +410,9 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         });
 
         sortedList.forEach((s, idx) => {
-          const isTopWinner = idx === 0;
+          const isQualified = idx < advancingCutoff; // 👉 युझरने ठरवलेल्या संख्येनुसार (उदा. टॉप २ किंवा ३) पास
           s.roundRank = idx + 1;
-          s.isWinner = isTopWinner;
+          s.isWinner = isQualified;
           s.basePoints = 0;
           s.pointsAwarded = 0;
 
@@ -475,7 +478,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           }
         }
 
-      // 🎯 ४. Group Sync किंवा Single Slot (Descarregat > Carregat Dynamic Points)
+      // 🎯 ४. Group Sync
       } else {
         const groupWiseBuckets = {};
 
@@ -524,8 +527,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
       Swal.fire({
         icon: 'success',
-        title: isWildcard ? 'वाईल्डकार्ड निकाल सेव्ह झाला!' : isKnockout ? 'नॉकआउट निकाल सेव्ह झाला!' : 'निकाल यशस्वीरीत्या सेव्ह झाला!',
-        text: isWildcard ? 'Descarregat व वेळेनुसार रँक #1 विजेता संघ निवडला गेला आहे.' : 'संघाचे गुण व रँक अचूक अपडेट झाले आहेत.',
+        title: isWildcard ? 'निकाल सेव्ह झाला!' : isKnockout ? 'नॉकआउट निकाल सेव्ह झाला!' : 'निकाल यशस्वीरीत्या सेव्ह झाला!',
+        text: isWildcard ? `Top ${advancingCutoff} संघ पुढील फेरीसाठी पात्र ठरले आहेत.` : 'संघाचे गुण व रँक अचूक अपडेट झाले आहेत.',
         timer: 1500,
         showConfirmButton: false,
         background: '#0c0d14',
@@ -578,9 +581,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
               📋 जज स्कोअरशीट कन्सोल — {currentRound?.roundName || 'फेरी'}
             </h3>
             <p className="text-[10px] text-gray-400">
-              प्रकार: <b className={isWildcard ? 'text-purple-400' : isKnockout ? 'text-rose-400' : 'text-emerald-400'}>
-                {isWildcard ? '🛡️ वाईल्डकार्ड फेरी (Wildcard - 1 Winner)' : isKnockout ? '🔥 बाद फेरी (Knockout)' : '🏆 लीग फेरी (League Points)'}
-              </b> • फॉरमॅट: <b className="text-amber-400">{isFormationConcur ? 'Formation / Concur' : currentRound?.matchFormat}</b>
+              स्टेज: <b className="text-amber-400">{currentRound?.stage || 'LEAGUE'}</b> • पात्रता: <b className="text-emerald-400">Top {advancingCutoff} Winners</b>
             </p>
           </div>
         </div>
@@ -653,7 +654,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
             className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition cursor-pointer disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{savingAll ? 'नोंद होत आहे...' : isWildcard ? '✅ निकाल ठरवा' : isKnockout ? '✅ निकाल ठरवा' : '✅ निकाल सेव्ह करा'}</span>
+            <span>{savingAll ? 'नोंद होत आहे...' : '✅ निकाल सेव्ह करा'}</span>
           </button>
         </div>
       </div>
@@ -967,10 +968,10 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                 </div>
                 <div className="text-right">
                   <span className="text-[8px] text-gray-400 block">
-                    {isWildcard ? 'निकाल प्रकार:' : isKnockout ? 'फेरी प्रकार:' : 'पूर्वावलोकन गुण:'}
+                    {isSingleOrConcur ? `Top ${advancingCutoff} Qualified` : isKnockout ? 'फेरी प्रकार:' : 'पूर्वावलोकन गुण:'}
                   </span>
-                  <span className={`text-xs font-mono font-black ${isWildcard ? 'text-purple-400' : isKnockout ? 'text-rose-400' : 'text-amber-400'}`}>
-                    {isWildcard ? '🛡️ Wildcard (Top 1 Qualifies)' : isKnockout ? 'नॉकआउट (Win/Loss)' : `${Math.max(0, currentPreviewPts - totalDeductedPts)} pts`}
+                  <span className={`text-xs font-mono font-black ${isSingleOrConcur ? 'text-purple-400' : isKnockout ? 'text-rose-400' : 'text-amber-400'}`}>
+                    {isSingleOrConcur ? `Top ${advancingCutoff} Winners` : isKnockout ? 'नॉकआउट (Win/Loss)' : `${Math.max(0, currentPreviewPts - totalDeductedPts)} pts`}
                   </span>
                 </div>
               </div>
@@ -989,7 +990,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
             <Trophy className="w-4 h-4 text-amber-400" />
             <h4 className="text-xs sm:text-sm font-black text-white">
               {currentRound?.roundName} — {
-                isWildcard ? '🛡️ वाईल्डकार्ड थेट निकाल (Top 1 Team Qualifies)' :
+                isSingleOrConcur ? `🛡️ थेट निकाल (Top ${advancingCutoff} Teams Qualify)` :
                 isGroupDuel ? '⚔️ गट अंतर्गत १ vs १ द्वंद्व निकाल (Group Duel)' :
                 isPureGroupSync ? '👥 गटनिहाय निकाल (Group Standings)' :
                 isDirectDuel ? (isKnockout ? '🔥 १ विरुद्ध १ नॉकआउट निकाल (Knockout Duel Results)' : '⚔️ १ विरुद्ध १ द्वंद्व निकाल (Direct Duel Standings)') :
@@ -1234,7 +1235,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                         </span>
                       </div>
 
-                      {/* 🎯 नॉकआउट बॅज (WINNER/LOST) किंवा लीग गुण */}
+                      {/* 🎯 नॉकआउट बॅज (WINNER/LOST) */}
                       {isKnockout ? (
                         t1Score ? (
                           <span className={`px-2.5 py-0.5 rounded-md text-[9px] font-black font-mono tracking-wider ${
@@ -1279,7 +1280,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                         </span>
                       </div>
 
-                      {/* 🎯 नॉकआउट बॅज (WINNER/LOST) किंवा लीग गुण */}
+                      {/* 🎯 नॉकआउट बॅज (WINNER/LOST) */}
                       {isKnockout ? (
                         t2Score ? (
                           <span className={`px-2.5 py-0.5 rounded-md text-[9px] font-black font-mono tracking-wider ${
@@ -1315,8 +1316,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           </div>
         )}
 
-        {/* ------------------------------------------------------------- */}
-        {/* 🎯 प्रकार ४: SINGLE SLOT किंवा WILDCARD किंवा FORMATION निकाल */}
+     {/* ------------------------------------------------------------- */}
+        {/* 🎯 प्रकार ४: SINGLE SLOT / SEMIS / FINALS (DYNAMIC WINNER & RUNNER-UP LABELS) */}
         {/* ------------------------------------------------------------- */}
         {isSingleOrConcur && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
@@ -1328,20 +1329,46 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                   const getWeight = (sit) => (sit === 'DESCARREGAT' ? 1 : sit === 'CARREGAT' ? 2 : 3);
                   const wA = getWeight(a.situation);
                   const wB = getWeight(b.situation);
-                  if (wA !== wB) return wA - wB; // Descarregat नेहमी Carregat च्या आधी!
-                  if (isWildcard) {
-                    return (a.finalTimingMs || 0) - (b.finalTimingMs || 0); // कमी वेळ
-                  }
-                  return (b.pointsAwarded || 0) - (a.pointsAwarded || 0) || (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999);
+                  if (wA !== wB) return wA - wB; // Descarregat प्रथम!
+                  return (a.finalTimingMs || 0) - (b.finalTimingMs || 0); // कमी वेळ
                 })
                 .map((s, idx) => {
-                  const isTopWildcardWinner = isWildcard && idx === 0;
+                  const isQualifiedWinner = idx < advancingCutoff; 
+                  const currentStage = currentRound?.stage || '';
+
+                  // 🎯 फायनल, सेमीफायनल किंवा इतर टप्प्यानुसार अचूक पदके व बॅजेस ठरवणे
+                  let badgeText = isQualifiedWinner ? '🏆 QUALIFIED' : '❌ ELIMINATED';
+                  let badgeColor = isQualifiedWinner ? 'bg-emerald-500 text-black shadow-md' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30';
+
+                  if (currentStage === 'GRAND_FINAL') {
+                    if (idx === 0) {
+                      badgeText = '🥇 WINNER (विजेता)';
+                      badgeColor = 'bg-amber-400 text-black font-black shadow-lg shadow-amber-500/30';
+                    } else if (idx === 1) {
+                      badgeText = '🥈 RUNNER-UP (उपविजेता)';
+                      badgeColor = 'bg-slate-300 text-black font-black shadow-md';
+                    } else if (idx === 2) {
+                      badgeText = '🥉 2ND RUNNER-UP';
+                      badgeColor = 'bg-amber-600 text-white font-bold shadow-md';
+                    } else {
+                      badgeText = '🎖️ FINALIST';
+                      badgeColor = 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+                    }
+                  } else if (currentStage === 'SEMI_FINAL') {
+                    if (isQualifiedWinner) {
+                      badgeText = '🏆 FINALIST (फायनलमध्ये प्रवेश)';
+                      badgeColor = 'bg-amber-500 text-black font-black shadow-md';
+                    } else {
+                      badgeText = '🛡️ Wild Card Shootout';
+                      badgeColor = 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
+                    }
+                  }
 
                   return (
                     <div 
                       key={s.id} 
                       className={`p-3 rounded-2xl space-y-2 text-xs border shadow transition ${
-                        isTopWildcardWinner 
+                        isQualifiedWinner 
                           ? 'bg-emerald-500/10 border-emerald-500/60 shadow-lg shadow-emerald-500/20' 
                           : 'bg-slate-900/90 border-white/10'
                       }`}
@@ -1349,26 +1376,19 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                       <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center gap-2 truncate">
                           <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-black ${
-                            (isTopWildcardWinner || idx === 0) ? 'bg-amber-400 text-black font-black' : 'bg-white/10 text-gray-300'
+                            isQualifiedWinner ? 'bg-amber-400 text-black font-black' : 'bg-white/10 text-gray-300'
                           }`}>
                             #{idx + 1}
                           </span>
                           <h5 className="font-bold text-white truncate max-w-[120px]">{s.teamName}</h5>
                         </div>
 
-                        {/* गुण किंवा Wildcard Qualified बॅज */}
-                        {isWildcard ? (
-                          <span className={`px-2.5 py-0.5 rounded text-[9px] font-black font-mono tracking-wider ${
-                            isTopWildcardWinner ? 'bg-emerald-500 text-black shadow-md' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                          }`}>
-                            {isTopWildcardWinner ? '🏆 QUALIFIED' : '❌ ELIMINATED'}
-                          </span>
-                        ) : (
-                          <span className="font-mono text-xs font-black text-amber-400 shrink-0">{s.pointsAwarded} pts</span>
-                        )}
+                        {/* 👉 डायनॅमिक बॅज */}
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black font-mono tracking-wider ${badgeColor}`}>
+                          {badgeText}
+                        </span>
                       </div>
 
-                      {/* बारीक अक्षरातील स्थिती, वेळ व पेनल्टी */}
                       <div className="bg-black/50 p-1.5 rounded-xl border border-white/5 space-y-0.5 text-[9px] font-mono text-gray-400">
                         <div className="flex justify-between items-center">
                           <span className={`px-1 rounded font-bold ${
@@ -1378,7 +1398,6 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                             {s.situation} {s.formationName ? `(${s.formationName})` : ''}
                           </span>
                           {s.penaltySec > 0 && <span className="text-rose-400 font-bold">+{s.penaltySec}s पेनल्टी</span>}
-                          {s.deductedPts > 0 && <span className="text-rose-400 font-bold">-{s.deductedPts} pts</span>}
                         </div>
 
                         {s.finalFormattedTime !== '-' && (

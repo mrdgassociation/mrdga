@@ -503,27 +503,30 @@ export default function InsuranceInfo() {
         </div>
 
        {/* 📄 PAGE HEADER & COMPACT STATS */}
-        <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-[#0c0d14] to-[#0c0d14] border border-amber-500/30 space-y-4">
-          
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-amber-500 text-black font-black text-[9px] sm:text-[10px] rounded-lg uppercase tracking-wider">
-                अधिकृत विमा सुरक्षा
-              </span>
-              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-slate-800 text-amber-400 font-mono text-[9px] sm:text-[10px] font-bold rounded-lg border border-amber-500/20">
-                गोपाळकाला २०२६
-              </span>
-            </div>
+<div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-[#0c0d14] to-[#0c0d14] border border-amber-500/30 space-y-4">
+  
+  <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-amber-500 text-black font-black text-[9px] sm:text-[10px] rounded-lg uppercase tracking-wider">
+        अधिकृत विमा सुरक्षा
+      </span>
+      <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-slate-800 text-amber-400 font-mono text-[9px] sm:text-[10px] font-bold rounded-lg border border-amber-500/20">
+        गोपाळकाला २०२६
+      </span>
+    </div>
 
-            {/* 🎯 १. कॉम्पॅक्ट मोबाईल-फ्रेंडली बटण */}
-            <button
-              onClick={handleOpenFormModal}
-              className="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-[11px] sm:text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1 cursor-pointer shrink-0"
-            >
-              <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
-              <span>नवीन अर्ज</span>
-            </button>
-          </div>
+    {/* 🎯 बटण ग्रुप: InsuranceGuideModal + नवीन अर्ज */}
+    <div className="flex items-center gap-2">
+      <InsuranceGuideModal />
+      <button
+        onClick={handleOpenFormModal}
+        className="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-[11px] sm:text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1 cursor-pointer shrink-0"
+      >
+        <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+        <span>नवीन अर्ज</span>
+      </button>
+    </div>
+  </div>
 
           <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-white flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 shrink-0" />
@@ -577,9 +580,7 @@ export default function InsuranceInfo() {
           </div>
         )}
 
-        <div className="flex gap-2 items-center">
-          <InsuranceGuideModal />
-        </div>
+        
 
       </main>
 

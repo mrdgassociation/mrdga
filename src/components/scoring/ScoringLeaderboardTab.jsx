@@ -1,5 +1,5 @@
 // ==========================================
-// #SECTION: DAHI HANDI TOURNAMENT RANKINGS & CUMULATIVE STANDINGS (DYNAMIC ROUND & KNOCKOUT RANKINGS)
+// #SECTION: DAHI HANDI TOURNAMENT RANKINGS & CUMULATIVE STANDINGS (DYNAMIC ROUND & STAGE BADGES)
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
@@ -87,6 +87,8 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
   const isSelectedRoundDuel = currentSelectedRoundObj?.matchFormat === 'DUEL';
   const isKnockoutRound = currentSelectedRoundObj?.type === 'KNOCKOUT';
   const roundQualifiedCount = Number(currentSelectedRoundObj?.qualifiedTeamsCount) || (isKnockoutRound ? 8 : 16);
+  const advancingCutoff = Number(currentSelectedRoundObj?.advancingWinnersCount) || 2;
+  const currentStage = currentSelectedRoundObj?.stage || '';
 
   // निवडलेल्या फिल्टरनुसार स्कोअर फिल्टर करणे
   const getFilteredScores = () => {
@@ -103,9 +105,8 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
 
   const filteredScores = getFilteredScores();
 
-  // 🎯 रँकिंग आणि गुणतक्ता कॅल्क्युलेशन (फेरी ७ मध्ये फक्त ८ संघच येतील)
+  // 🎯 रँकिंग आणि गुणतक्ता कॅल्क्युलेशन
   const calculateStandings = () => {
-    // जर विशिष्ट फेरी निवडली असेल (उदा. Round 7), तर फक्त त्या फेरीतील पात्र/खेळणारे संघच घेणे
     let targetTeams = [...teams];
     const isSingleSpecificRound = selectedFilter !== 'ALL' && selectedFilter !== 'R1_R2';
 
@@ -116,7 +117,6 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
         return hasScore || inFixtures;
       });
 
-      // जर अद्याप निकाल किंवा फिक्सचर्स नसतील तर एकूण संख्येनुसार मर्यादित ठेवणे
       if (targetTeams.length === 0) {
         targetTeams = teams.slice(0, roundQualifiedCount);
       }
@@ -164,18 +164,16 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
   };
 
-  // 🎯 नॉकआउट व सर्वसाधारण रँक सॉर्टिंग (Knockout: Winners on Top, Losers at Bottom for Wild Card)
   const sortedStandings = [...standingsData].sort((a, b) => {
+    const getSitWeight = (sit) => (sit === 'DESCARREGAT' ? 1 : sit === 'CARREGAT' ? 2 : 3);
+    const wA = getSitWeight(a.lastSituation);
+    const wB = getSitWeight(b.lastSituation);
+    if (wA !== wB) return wA - wB;
+
     if (isKnockoutRound) {
-      // १. आधी विजयी संघ (Rank 1-4)
-      if (a.isWinner !== b.isWinner) {
-        return a.isWinner ? -1 : 1;
-      }
-      // २. मग कमी वेळेनुसार क्रमवारी
       return (a.totalTimingMs || 999999) - (b.totalTimingMs || 999999);
     }
 
-    // सर्वसाधारण फेरीसाठी गुणांनुसार
     if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
     return a.totalTimingMs - b.totalTimingMs;
   });
@@ -199,7 +197,6 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
           </div>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10">
             <Filter className="w-3.5 h-3.5 text-amber-400" />
@@ -241,88 +238,9 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
       </div>
 
       {/* ============================================================= */}
-      {/* ⚔️ १. DUEL FORMAT निकाल (सामन्यांनुसार)                        */}
+      {/* 👥 २. ग्रुपनिहाय रँकिंग (Group A, B, C, D) */}
       {/* ============================================================= */}
-      {isSelectedRoundDuel && activeViewType === 'GROUP' ? (
-        <div className="space-y-3">
-          <div className="flex justify-between items-center px-1">
-            <span className="text-xs font-black text-orange-400 flex items-center gap-1.5">
-              <Swords className="w-4 h-4" /> {currentSelectedRoundObj?.roundName} — समोरासमोरील सामने ({Math.floor(roundQualifiedCount / 2)} सामने • {standingsData.length} संघ)
-            </span>
-            <span className="text-[10px] text-gray-400 font-mono">{filteredScores.length} नोंद पूर्ण</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            {Array.from({ length: Math.floor(roundQualifiedCount / 2) || 4 }).map((_, mIdx) => {
-              const matchNo = mIdx + 1;
-              const matchScores = filteredScores.filter(s => Number(s.duelMatchNo) === matchNo);
-              const t1Score = matchScores.find(s => s.duelSide === 'FOP1');
-              const t2Score = matchScores.find(s => s.duelSide === 'FOP2');
-
-              return (
-                <div key={matchNo} className="bg-[#0c0d14] border border-orange-500/30 rounded-2xl p-3 space-y-2.5 shadow-xl">
-                  <div className="flex justify-between items-center text-[10px] font-mono text-orange-400 border-b border-white/5 pb-1">
-                    <span className="font-bold">सामना #{matchNo}</span>
-                    <span>{isKnockoutRound ? 'नॉकआउट' : `Match ${matchNo}`}</span>
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    {t1Score ? (
-                      <div className={`p-2 rounded-xl flex justify-between items-center border ${
-                        t1Score.roundRank === 1 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-slate-900 border-white/5'
-                      }`}>
-                        <div className="truncate">
-                          <span className="block truncate">{t1Score.teamName}</span>
-                          <span className="text-[9px] text-gray-400 font-mono">{t1Score.finalFormattedTime}</span>
-                        </div>
-                        <div className="text-right shrink-0">
-                          {isKnockoutRound ? (
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-black ${t1Score.roundRank === 1 ? 'bg-emerald-500 text-black' : 'bg-rose-500/20 text-rose-400'}`}>
-                              {t1Score.roundRank === 1 ? '🏆 WIN' : 'OUT (Wild Card)'}
-                            </span>
-                          ) : (
-                            <span className="text-amber-400 font-bold font-mono">{t1Score.pointsAwarded} pts</span>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-900/50 p-2 rounded-xl text-center text-gray-600 text-[10px]">प्रलंबित (FOP 1)</div>
-                    )}
-
-                    <div className="text-center text-[9px] font-black text-gray-600">VS</div>
-
-                    {t2Score ? (
-                      <div className={`p-2 rounded-xl flex justify-between items-center border ${
-                        t2Score.roundRank === 1 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-slate-900 border-white/5'
-                      }`}>
-                        <div className="truncate">
-                          <span className="block truncate">{t2Score.teamName}</span>
-                          <span className="text-[9px] text-gray-400 font-mono">{t2Score.finalFormattedTime}</span>
-                        </div>
-                        <div className="text-right shrink-0">
-                          {isKnockoutRound ? (
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-black ${t2Score.roundRank === 1 ? 'bg-emerald-500 text-black' : 'bg-rose-500/20 text-rose-400'}`}>
-                              {t2Score.roundRank === 1 ? '🏆 WIN' : 'OUT (Wild Card)'}
-                            </span>
-                          ) : (
-                            <span className="text-amber-400 font-bold font-mono">{t2Score.pointsAwarded} pts</span>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-900/50 p-2 rounded-xl text-center text-gray-600 text-[10px]">प्रलंबित (FOP 2)</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : activeViewType === 'GROUP' ? (
-
-        /* ============================================================= */
-        /* 👥 २. ग्रुपनिहाय रँकिंग (Group A, B, C, D)                    */
-        /* ============================================================= */
+      {activeViewType === 'GROUP' && !isSelectedRoundDuel ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {activeGroups.map((grpName) => {
             const groupTeams = standingsData
@@ -342,9 +260,7 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
                     <h4 className="text-xs font-black text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-blue-400"></span> {grpName}
                     </h4>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {selectedFilter === 'R1_R2' ? 'R1+R2 Seed' : 'Standings'}
-                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">Standings</span>
                   </div>
 
                   <div className="space-y-2">
@@ -385,14 +301,6 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
                               <span className="text-[8px] text-gray-400">{t.completedMatches} सामने</span>
                             </div>
                           </div>
-
-                          <div className="flex items-center justify-between text-[9px] text-gray-400 pt-1 border-t border-white/5 font-mono">
-                            <span>⏱️ {formatMs(t.totalTimingMs)}</span>
-                            <div className="flex gap-1.5">
-                              {t.totalPenaltySec > 0 && <span className="text-amber-400">+{t.totalPenaltySec}s</span>}
-                              {t.totalDeductedPts > 0 && <span className="text-rose-400">-{t.totalDeductedPts}pts</span>}
-                            </div>
-                          </div>
                         </div>
                       );
                     })}
@@ -405,22 +313,10 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
       ) : (
 
         /* ============================================================= */
-        /* 🏆 ३. OVERALL STANDINGS TABLE (उदा. फेरी ७ मधील १ ते ८ संघ)    */
+        /* 🏆 ३. OVERALL STANDINGS TABLE (WINNER / RUNNER-UP / FINALIST BADGES) */
         /* ============================================================= */
         <div className="bg-[#0c0d14] border border-amber-500/20 rounded-3xl p-4 shadow-xl space-y-3">
           
-          {/* नॉकआउट सूचना व वाइल्ड कार्ड हायलाइट */}
-          {isKnockoutRound && (
-            <div className="bg-orange-500/10 border border-orange-500/30 p-2.5 rounded-2xl flex items-center justify-between text-xs">
-              <span className="text-orange-400 font-bold flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" /> फेरी #{currentSelectedRoundObj?.roundNumber} नॉकआउट रँकिंग निकाल:
-              </span>
-              <span className="text-[11px] text-gray-300">
-                <b className="text-emerald-400">Rank 1 ते 4 = Semi-Finals</b> | <b className="text-rose-400">Rank 5 ते 8 = Wild Card Shootout</b>
-              </span>
-            </div>
-          )}
-
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -428,37 +324,53 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
                   <th className="p-2.5 text-center">रँक</th>
                   <th className="p-2.5">गोविंदा पथक</th>
                   <th className="p-2.5">गट (Group)</th>
-                  <th className="p-2.5 text-center">सामने</th>
                   <th className="p-2.5 text-center">अंतिम वेळ</th>
                   <th className="p-2.5 text-center">पेनल्टी (+sec)</th>
-                  <th className="p-2.5 text-center">वजावट (-pts)</th>
-                  {isKnockoutRound ? (
-                    <th className="p-2.5 text-right font-black text-orange-400">पुढील फेरी पात्रता (Status)</th>
-                  ) : (
-                    <th className="p-2.5 text-right font-black text-amber-400">एकूण गुण (Points)</th>
-                  )}
+                  <th className="p-2.5 text-right font-black text-amber-400">निकाल व पात्रता (Status)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {sortedStandings.map((t, idx) => {
-                  const isTopHalf = idx < Math.floor(standingsData.length / 2);
+                  const isQualified = idx < advancingCutoff;
+
+                  // 🎯 स्टेजनुसार अचूक बॅजेस (Grand Final किंवा Semi Final किंवा League)
+                  let badgeText = isQualified ? '🏆 QUALIFIED' : '❌ ELIMINATED';
+                  let badgeColor = isQualified ? 'bg-emerald-500 text-black shadow' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+
+                  if (currentStage === 'GRAND_FINAL') {
+                    if (idx === 0) {
+                      badgeText = '🥇 WINNER (विजेता)';
+                      badgeColor = 'bg-amber-400 text-black font-black shadow-lg shadow-amber-500/30';
+                    } else if (idx === 1) {
+                      badgeText = '🥈 RUNNER-UP (उपविजेता)';
+                      badgeColor = 'bg-slate-300 text-black font-black shadow-md';
+                    } else if (idx === 2) {
+                      badgeText = '🥉 2ND RUNNER-UP';
+                      badgeColor = 'bg-amber-600 text-white font-bold shadow-md';
+                    } else {
+                      badgeText = '🎖️ FINALIST';
+                      badgeColor = 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+                    }
+                  } else if (currentStage === 'SEMI_FINAL') {
+                    if (isQualified) {
+                      badgeText = '🏆 FINALIST (फायनलमध्ये प्रवेश)';
+                      badgeColor = 'bg-amber-500 text-black font-black shadow-md';
+                    } else {
+                      badgeText = '🛡️ Wild Card Shootout';
+                      badgeColor = 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
+                    }
+                  } else if (isKnockoutRound) {
+                    badgeText = t.isWinner ? '🏆 Semi-Finals' : '🃏 Wild Card Shootout';
+                    badgeColor = t.isWinner ? 'bg-emerald-500 text-black shadow' : 'bg-orange-500/20 text-orange-300 border border-orange-500/30';
+                  }
 
                   return (
-                    <tr 
-                      key={t.id} 
-                      className={`hover:bg-white/5 transition ${
-                        isKnockoutRound 
-                          ? (isTopHalf ? 'bg-emerald-500/5' : 'bg-rose-500/5') 
-                          : ''
-                      }`}
-                    >
+                    <tr key={t.id} className="hover:bg-white/5 transition">
                       <td className="p-2.5 text-center">
                         <span className={`w-6 h-6 rounded-lg text-[10px] font-black inline-flex items-center justify-center ${
                           idx === 0 ? 'bg-amber-400 text-black shadow' :
                           idx === 1 ? 'bg-slate-300 text-black' :
-                          idx === 2 ? 'bg-amber-700 text-white' : 
-                          isKnockoutRound && !isTopHalf ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                          'bg-white/5 text-gray-400'
+                          idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/5 text-gray-400'
                         }`}>
                           #{idx + 1}
                         </span>
@@ -472,23 +384,13 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
                           {t.group}
                         </span>
                       </td>
-                      <td className="p-2.5 text-center font-mono">{t.completedMatches}</td>
                       <td className="p-2.5 text-center font-mono text-emerald-400">{formatMs(t.totalTimingMs)}</td>
                       <td className="p-2.5 text-center font-mono text-amber-400">+{t.totalPenaltySec}s</td>
-                      <td className="p-2.5 text-center font-mono text-rose-400">-{t.totalDeductedPts}pts</td>
                       
                       <td className="p-2.5 text-right font-mono font-black text-sm">
-                        {isKnockoutRound ? (
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                            t.isWinner 
-                              ? 'bg-emerald-500 text-black shadow' 
-                              : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
-                          }`}>
-                            {t.isWinner ? '🏆 Semi-Finals' : '🃏 Wild Card Shootout'}
-                          </span>
-                        ) : (
-                          <span className="text-amber-400">{t.totalPoints} pts</span>
-                        )}
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold inline-block ${badgeColor}`}>
+                          {badgeText}
+                        </span>
                       </td>
                     </tr>
                   );

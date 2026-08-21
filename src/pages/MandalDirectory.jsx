@@ -68,7 +68,7 @@ export default function MandalDirectory() {
   const [selectedType, setSelectedType] = useState('ALL');
   const [remarkFilter, setRemarkFilter] = useState('ALL');
   
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState('MEETING_16AUG');
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState('INSURANCE');
 
   const [remarks, setRemarks] = useState({});
   const [rawRemarksList, setRawRemarksList] = useState({}); // लीडरबोर्डसाठी कच्चा डेटा

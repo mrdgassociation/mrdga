@@ -1,22 +1,28 @@
 import React, { useState } from 'react';
 import { 
   HelpCircle, X, CheckCircle2, AlertTriangle, 
-  FileText, ShieldCheck, Mail, Phone, Upload, Info 
+  FileText, ShieldCheck, Mail, Phone, Upload, Info, PlaySquare 
 } from 'lucide-react';
 
 export default function InsuranceGuideModal() {
   const [isOpen, setIsOpen] = useState(false);
 
+  // 🎯 इथे तुझी YouTube व्हिडिओची लिंक टाक (उदा. https://www.youtube.com/embed/YOUR_VIDEO_ID)
+  const youtubeVideoEmbedUrl = "https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE";
+
   return (
     <>
-      {/* 🔘 माहिती उघडण्याचे मुख्य बटण */}
+     {/* 🔘 माहिती उघडण्याचे मुख्य बटण */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500 hover:to-orange-500 hover:text-black text-amber-300 font-extrabold text-xs rounded-xl border border-amber-500/40 flex items-center gap-2 transition shadow-lg shadow-amber-500/10 cursor-pointer"
+        className="px-2.5 py-1.5 sm:px-4 sm:py-2.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500 hover:to-orange-500 hover:text-black text-amber-300 font-extrabold text-[10px] sm:text-xs rounded-xl border border-amber-500/40 flex items-center gap-1 transition shadow-lg shadow-amber-500/10 cursor-pointer shrink-0"
       >
-        <HelpCircle className="w-4 h-4 text-amber-400" />
-        <span>📝 फॉर्म कसा भरावा? (मार्गदर्शक सूचना)</span>
+        <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+        <span className="whitespace-nowrap">
+          <span className="inline sm:hidden">Help</span>
+          <span className="hidden sm:inline">फॉर्म कसा भरावा?</span>
+        </span>
       </button>
 
       {/* 🪟 पॉपअप मोडल (Modal) */}
@@ -32,10 +38,10 @@ export default function InsuranceGuideModal() {
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-white">
-                    गोविंदा पथक विमा अर्ज — मार्गदर्शक सूचना
+                    गोविंदा पथक विमा अर्ज — मार्गदर्शक सूचना व व्हिडिओ
                   </h3>
                   <p className="text-[10px] text-gray-400">
-                    ऑनलाइन अर्ज अचूक भरण्यासाठी खालील टप्पे काळजीपूर्वक वाचा
+                    ऑनलाइन अर्ज अचूक भरण्यासाठी व्हिडिओ पहा व खालील टप्पे वाचा
                   </p>
                 </div>
               </div>
@@ -52,6 +58,28 @@ export default function InsuranceGuideModal() {
             {/* Modal Content (Scrollable) */}
             <div className="p-4 sm:p-6 space-y-4 overflow-y-auto text-xs text-gray-300 font-sans">
               
+             {/* 🎥 व्हिडिओ गाइड सेक्शन */}
+            <div className="space-y-2 bg-slate-900/80 p-3 rounded-2xl border border-amber-500/30">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                <PlaySquare className="w-4 h-4" />
+                <span>फॉर्म कसा भरावा याचा व्हिडिओ मार्गदर्शक:</span>
+              </div>
+              <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-white/10 bg-black">
+                <iframe 
+                  className="absolute top-0 left-0 w-full h-full"
+                  src="https://www.youtube.com/embed/vMcVe49rVwQ?si=sre3RxJmNFh67ccr" 
+                  title="YouTube video player" 
+                  frameBorder="0" 
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                  referrerPolicy="strict-origin-when-cross-origin" 
+                  allowFullScreen
+                ></iframe>
+              </div>
+              <p className="text-[10px] text-gray-400 text-center">
+                व्हिडिओ पाहिल्यानंतर खालील टप्प्यांची पूर्तता करून आपला अर्ज भरावा.
+              </p>
+            </div>
+
               {/* प्राथमिक सूचना बॅनर */}
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-2.5 text-amber-300 font-medium">
                 <Info className="w-4 h-4 shrink-0 text-amber-400" />
@@ -154,7 +182,7 @@ export default function InsuranceGuideModal() {
                 onClick={() => setIsOpen(false)}
                 className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black rounded-xl text-xs shadow-lg transition cursor-pointer"
               >
-                समजले, बंद करा ✓
+                बंद करा ✓
               </button>
             </div>
 
