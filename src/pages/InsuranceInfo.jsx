@@ -127,6 +127,7 @@ export default function InsuranceInfo() {
   const sampleFormatImgUrl = "https://i.ibb.co/N2FXL0R6/Whats-App-Image-2026-07-20-at-11-48-52-2.jpg"; 
 
   // 🎯 ऑटो-इन्क्रिमेंट ॲटॉमिक आयडी जनरेटर (एकच नंबर कोणालाही डुप्लिकेट जाणार नाही)
+// 🎯 अचूक सिरीयल नंबर जनरेटर (List परमिशनवर आधारित)
   const generateUniqueAppId = async () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -134,39 +135,23 @@ export default function InsuranceInfo() {
     const day = String(now.getDate()).padStart(2, '0');
     const dateFormatted = `${year}${month}${day}`;
 
-    // काऊंटर ट्रॅक करण्यासाठी Firestore डॉक्युमेंट
-    const counterDocRef = doc(db, "app_counters", `insurance_2026_${dateFormatted}`);
+    let serialNumber = 1;
 
     try {
-      const nextSerial = await runTransaction(db, async (transaction) => {
-        const counterDoc = await transaction.get(counterDocRef);
-        let currentCount = 0;
-
-        if (counterDoc.exists()) {
-          currentCount = counterDoc.data().count || 0;
-        }
-
-        const newCount = currentCount + 1;
-        // काऊंटर अपडेट करा (डेटाबेस लॉकमुळे एका वेळी एकच वाढेल)
-        transaction.set(counterDocRef, { count: newCount, updatedAt: serverTimestamp() }, { merge: true });
-
-        return newCount;
-      });
-
-      const serialNo = String(nextSerial).padStart(4, '0');
-      return `MRDGA-${dateFormatted}-${serialNo}`;
-
-    } catch (e) {
-      console.warn("Transaction counter fallback triggered:", e);
-      try {
-        const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
-        const count = (querySnapshot && !querySnapshot.empty) ? querySnapshot.size + 1 : 1;
-        return `MRDGA-${dateFormatted}-${String(count).padStart(4, '0')}`;
-      } catch (fallbackErr) {
-        const fallbackSerial = String(Date.now()).slice(-4);
-        return `MRDGA-${dateFormatted}-${fallbackSerial}`;
+      // सेक्युरिटी रूल्समधील allow list: if true मुळे हे कोणत्याही एररशिवाय चालेल
+      const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
+      if (querySnapshot && !querySnapshot.empty) {
+        serialNumber = querySnapshot.size + 1;
       }
+    } catch (err) {
+      console.warn("Could not fetch total count, defaulting to 1:", err);
+      serialNumber = 1;
     }
+
+    // 4 अंकी सिरीयल फॉरमॅट (उदा. 1 -> 0001, 15 -> 0015)
+    const serialFormatted = String(serialNumber).padStart(4, '0');
+
+    return `MRDGA-${dateFormatted}-${serialFormatted}`;
   };
 
   const handleInputChange = (e) => {
