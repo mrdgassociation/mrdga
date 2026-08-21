@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { db } from '../firebase/config';
-import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, serverTimestamp, doc, runTransaction } from 'firebase/firestore';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget';
 import InsuranceInfoContent from '../components/InsuranceInfoContent';
 import { dataService } from '../services/dataService';
+import InsuranceGuideModal from '../components/InsuranceGuideModal';
 import { 
   ShieldCheck, FileText, Download, Eye, X,
   PlusCircle, UploadCloud, Loader2, CheckCircle, ArrowRight, ArrowLeft,
@@ -125,7 +126,7 @@ export default function InsuranceInfo() {
 
   const sampleFormatImgUrl = "https://i.ibb.co/N2FXL0R6/Whats-App-Image-2026-07-20-at-11-48-52-2.jpg"; 
 
-  // 🎯 सीक्वेन्शियल आयडी जनरेटर (फॉरमॅट: MRDGA-INS-YYYYMMDD-0001)
+  // 🎯 ऑटो-इन्क्रिमेंट ॲटॉमिक आयडी जनरेटर (एकच नंबर कोणालाही डुप्लिकेट जाणार नाही)
   const generateUniqueAppId = async () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -133,17 +134,39 @@ export default function InsuranceInfo() {
     const day = String(now.getDate()).padStart(2, '0');
     const dateFormatted = `${year}${month}${day}`;
 
-    let serialNo = '0001';
-    try {
-      const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
-      const count = querySnapshot.size + 1;
-      serialNo = String(count).padStart(4, '0');
-    } catch (e) {
-      console.warn("Serial counter fallback triggered:", e);
-      serialNo = String(Math.floor(1000 + Math.random() * 9000));
-    }
+    // काऊंटर ट्रॅक करण्यासाठी Firestore डॉक्युमेंट
+    const counterDocRef = doc(db, "app_counters", `insurance_2026_${dateFormatted}`);
 
-    return `MRDGA-${dateFormatted}-${serialNo}`;
+    try {
+      const nextSerial = await runTransaction(db, async (transaction) => {
+        const counterDoc = await transaction.get(counterDocRef);
+        let currentCount = 0;
+
+        if (counterDoc.exists()) {
+          currentCount = counterDoc.data().count || 0;
+        }
+
+        const newCount = currentCount + 1;
+        // काऊंटर अपडेट करा (डेटाबेस लॉकमुळे एका वेळी एकच वाढेल)
+        transaction.set(counterDocRef, { count: newCount, updatedAt: serverTimestamp() }, { merge: true });
+
+        return newCount;
+      });
+
+      const serialNo = String(nextSerial).padStart(4, '0');
+      return `MRDGA-${dateFormatted}-${serialNo}`;
+
+    } catch (e) {
+      console.warn("Transaction counter fallback triggered:", e);
+      try {
+        const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
+        const count = (querySnapshot && !querySnapshot.empty) ? querySnapshot.size + 1 : 1;
+        return `MRDGA-${dateFormatted}-${String(count).padStart(4, '0')}`;
+      } catch (fallbackErr) {
+        const fallbackSerial = String(Date.now()).slice(-4);
+        return `MRDGA-${dateFormatted}-${fallbackSerial}`;
+      }
+    }
   };
 
   const handleInputChange = (e) => {
@@ -414,14 +437,15 @@ export default function InsuranceInfo() {
         allowOutsideClick: false
       }).then((result) => {
         if (result.isConfirmed) {
-          // 👉 थेट लॉगिन स्क्रीनवर रिडायरेक्ट
+          // 👉 React Router नेव्हिगेशन
           navigate('/login');
-          // फॉलबॅक:
+
+          // 🎯 HashRouter सुसंगत अचूक फॉलबॅक
           setTimeout(() => {
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login';
+            if (!window.location.hash.includes('/login')) {
+              window.location.hash = '#/login';
             }
-          }, 200);
+          }, 150);
         }
       });
 
@@ -557,7 +581,6 @@ export default function InsuranceInfo() {
         {/* ---------------- TAB 1: INFO & BASIC WIDGET ---------------- */}
         {activeTab === 'info' && (
           <div className="space-y-6">
-           {/* <InsuranceAnalysisWidget mode="basic" />*/}
             <InsuranceInfoContent onOpenSampleModal={() => setShowSampleModal(true)} />
           </div>
         )}
@@ -568,6 +591,10 @@ export default function InsuranceInfo() {
             <InsuranceAnalysisWidget mode="detailed" />
           </div>
         )}
+
+        <div className="flex gap-2 items-center">
+          <InsuranceGuideModal />
+        </div>
 
       </main>
 
@@ -665,7 +692,7 @@ export default function InsuranceInfo() {
                         <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">मंडळाचे नाव *</label>
                         <input 
                           type="text" 
-                          name="teamName"
+                          name="teamName" 
                           required
                           value={formData.teamName}
                           onChange={handleInputChange}
@@ -730,7 +757,7 @@ export default function InsuranceInfo() {
                           <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">संपर्क व्यक्तीचे नाव *</label>
                           <input 
                             type="text" 
-                            name="contactPerson"
+                            name="contactPerson" 
                             required
                             value={formData.contactPerson}
                             onChange={handleInputChange}
@@ -743,7 +770,7 @@ export default function InsuranceInfo() {
                           <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">व्हॉट्सॲप नंबर (मुख्य) *</label>
                           <input 
                             type="tel" 
-                            name="whatsappNumber"
+                            name="whatsappNumber" 
                             required
                             maxLength={10}
                             value={formData.whatsappNumber}
@@ -760,7 +787,7 @@ export default function InsuranceInfo() {
                           <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पर्यायी फोन नंबर (Alternate No.)</label>
                           <input 
                             type="tel" 
-                            name="alternateNumber"
+                            name="alternateNumber" 
                             maxLength={10}
                             value={formData.alternateNumber}
                             onChange={(e) => {
@@ -776,7 +803,7 @@ export default function InsuranceInfo() {
                           <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">ई-मेल आयडी (लॉगिन ई-मेल) *</label>
                           <input 
                             type="email" 
-                            name="email"
+                            name="email" 
                             required
                             value={formData.email}
                             onChange={handleInputChange}
@@ -812,7 +839,7 @@ export default function InsuranceInfo() {
                           <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">पिनकोड (Pincode) *</label>
                           <input 
                             type="text" 
-                            name="pincode"
+                            name="pincode" 
                             required
                             maxLength={6}
                             value={formData.pincode}
@@ -890,7 +917,7 @@ export default function InsuranceInfo() {
                           <label className="text-xs sm:text-sm font-bold text-slate-200 block mb-1.5">विमा करावयाच्या गोविंदांची संख्या *</label>
                           <input 
                             type="number" 
-                            name="govindaCount"
+                            name="govindaCount" 
                             required
                             min={1}
                             value={formData.govindaCount}

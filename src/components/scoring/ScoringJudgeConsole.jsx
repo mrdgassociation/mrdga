@@ -1,5 +1,5 @@
 // ==========================================
-// #SECTION: DAHI HANDI LIVE SCORING JUDGE CONSOLE (DYNAMIC RANK-BASED POINTS SYSTEM)
+// #SECTION: DAHI HANDI LIVE SCORING JUDGE CONSOLE (COMPLETE PRODUCTION COMPONENT)
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
@@ -10,7 +10,7 @@ import {
 import Swal from 'sweetalert2';
 import { 
   CheckCircle2, Trash2, Clock, Award, AlertTriangle, 
-  Layers, Users, Swords, Trophy, Sparkles, Network
+  Layers, Users, Swords, Trophy, Sparkles, Network, ArrowRight, XCircle
 } from 'lucide-react';
 
 export default function ScoringJudgeConsole({ tournamentId }) {
@@ -25,6 +25,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
   const [activeGroup, setActiveGroup] = useState('Group A');
   const [selectedDuelMatchNo, setSelectedDuelMatchNo] = useState(1);
+  const [selectedSlotNumber, setSelectedSlotNumber] = useState(1);
   const [fopStates, setFopStates] = useState({});
   const [savingAll, setSavingAll] = useState(false);
 
@@ -44,8 +45,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         }
 
         const tSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'teams'));
-        const tList = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setTeams(tList);
+        setTeams(tSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
         const r1Id = rList.find(r => parseFloat(r.roundNumber) === 1)?.id || rList[0]?.id;
         if (r1Id) {
@@ -95,22 +95,36 @@ export default function ScoringJudgeConsole({ tournamentId }) {
       }
     };
     loadFixturesAndSync();
-  }, [tournamentId, selectedRoundId, activeGroup, selectedDuelMatchNo]);
+  }, [tournamentId, selectedRoundId, activeGroup, selectedDuelMatchNo, selectedSlotNumber]);
 
-  // फॉरमॅट फ्लॅग्ज
+  // 🎯 फॉरमॅट व प्रकार निश्चिती (Auto-Detect Wildcard)
   const currentRound = rounds.find(r => r.id === selectedRoundId);
-  const isPureDuelFormat = currentRound?.matchFormat === 'DUEL';
-  const isGroupDuel = currentRound?.matchFormat === 'GROUP_DUEL' || (currentRound?.matchFormat === 'GROUP' && currentRound?.groupExecutionType === 'DUEL');
-  const isDuelFormat = isPureDuelFormat || isGroupDuel;
+  const matchFormat = currentRound?.matchFormat || 'GROUP';
+  const rawRoundType = currentRound?.type || 'LEAGUE';
 
-  const isFormationRound = currentRound?.matchFormat === 'FORMATION_DIFFICULTY';
-  const isSingleFormat = currentRound?.matchFormat === 'SINGLE' || isFormationRound;
-  const isGroupFormat = currentRound?.matchFormat === 'GROUP' || currentRound?.matchFormat === 'GROUP_DUEL';
-  const isGroupSyncFormat = currentRound?.matchFormat === 'GROUP' && !isGroupDuel;
-  const isKnockout = currentRound?.type === 'KNOCKOUT';
+  const isWildcard = rawRoundType === 'WILDCARD' || (currentRound?.roundName || '').toLowerCase().includes('wildcard') || (currentRound?.roundName || '').toLowerCase().includes('repechage');
+  const isKnockout = rawRoundType === 'KNOCKOUT' && !isWildcard;
 
-  const roundQualifiedTeamsCount = Number(currentRound?.qualifiedTeamsCount) || teams.length;
-  const totalDuelMatchesCount = Math.max(1, Math.floor(roundQualifiedTeamsCount / 2));
+  const isPureGroupSync = matchFormat === 'GROUP' && currentRound?.groupExecutionType !== 'DUEL';
+  const isGroupDuel = matchFormat === 'GROUP_DUEL' || (matchFormat === 'GROUP' && currentRound?.groupExecutionType === 'DUEL');
+  const isDirectDuel = matchFormat === 'DUEL';
+  const isFormationConcur = matchFormat === 'FORMATION_DIFFICULTY' || matchFormat === 'CONCUR';
+  const isSingleSlot = matchFormat === 'SINGLE' || isWildcard;
+  const isSingleOrConcur = isSingleSlot || isFormationConcur;
+
+  const roundQualifiedTeamsCount = Number(currentRound?.qualifiedTeamsCount) || Object.keys(fixtures).length || teams.length;
+  const totalDirectDuelMatches = Math.max(1, Math.floor(roundQualifiedTeamsCount / 2));
+  const activeGroups = currentRound?.groupList?.length ? currentRound.groupList : (currentRound?.groupsConfig?.map(g => g.name) || ['Group A', 'Group B', 'Group C', 'Group D']);
+
+  // 🎯 Fixtures च्या रँकनुसार क्रमबद्ध संघांची यादी
+  const getOrderedTeamsList = () => {
+    if (Object.keys(fixtures).length === 0) return teams;
+    return [...teams].sort((a, b) => {
+      const slotA = fixtures[a.id]?.slotNumber || 999;
+      const slotB = fixtures[b.id]?.slotNumber || 999;
+      return slotA - slotB;
+    });
+  };
 
   // 🎯 FOP सेटअप
   const initDynamicFops = (currentR, tList = teams, fMap = fixtures) => {
@@ -143,9 +157,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
       }
 
     } else {
-      const assignedIds = Object.keys(fMap);
-      const defaultTeamId = assignedIds.length > 0 ? assignedIds[0] : (tList[0]?.id || '');
-      newStates['FOP 1'] = createEmptyFopState(defaultTeamId, currentR);
+      const targetTeam = tList.find(t => fMap[t.id]?.slotNumber === selectedSlotNumber);
+      newStates['FOP 1'] = createEmptyFopState(targetTeam ? targetTeam.id : (tList[0]?.id || ''), currentR);
     }
 
     setFopStates(newStates);
@@ -264,7 +277,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     return { totalPenaltySec, totalDeductedPts };
   };
 
-  // 💾 निकाल सेव्ह करणे (रँकनुसार अचूक गुण वाटप)
+  // 💾 स्कोअर सेव्ह व रँकिंग/नॉकआउट/वाईल्डकार्ड फेरगणती
   const handleSaveScores = async () => {
     const activeFopKeys = Object.keys(fopStates).filter(f => fopStates[f].teamId);
 
@@ -280,8 +293,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
       return;
     }
 
-    // ⏱️ अनिवार्य वेळ तपासणी (केवळ गैर-इन्टेंट व गैर-फॉर्मेशनसाठी)
-    if (!isFormationRound) {
+    if (!isFormationConcur) {
       for (const fopKey of activeFopKeys) {
         const data = fopStates[fopKey];
         if (data.situation !== 'INTENT') {
@@ -308,8 +320,9 @@ export default function ScoringJudgeConsole({ tournamentId }) {
 
     setSavingAll(true);
     try {
-      // १. सर्व सक्रिय FOPs चा डेटा तयार करणे
-      const calculatedFops = activeFopKeys.map(fopKey => {
+      const newlyEnteredMap = {};
+
+      for (const fopKey of activeFopKeys) {
         const data = fopStates[fopKey];
         const teamObj = teams.find(t => t.id === data.teamId);
 
@@ -322,109 +335,22 @@ export default function ScoringJudgeConsole({ tournamentId }) {
         const finalTimingMs = rawTimeMs + (totalPenaltySec * 1000);
         const teamOriginalGroup = fixtures[data.teamId]?.group || r1Fixtures[data.teamId]?.group || activeGroup;
 
-        return {
-          fopKey,
-          data,
-          teamObj,
-          m, s, milli,
-          rawTimeMs,
-          totalPenaltySec,
-          totalDeductedPts,
-          finalTimingMs,
-          teamOriginalGroup
-        };
-      });
-
-      // 🎯 २. रँकिंग व गुण वाटप लॉजिक (Rank Evaluation)
-      const pointsList = currentRound?.pointsList || [
-        { label: 'Rank 1', points: 1000 },
-        { label: 'Rank 2', points: 700 },
-        { label: 'Rank 3', points: 500 },
-        { label: 'Rank 4', points: 300 }
-      ];
-      const configuredIntentPts = Number(currentRound?.intentPoints !== undefined ? currentRound.intentPoints : 200);
-
-      // ज्या संघांनी यशस्वी थर लावले (DESCARREGAT / CARREGAT) त्यांना वेळेनुसार सॉर्ट करणे
-      const sitOrder = { DESCARREGAT: 1, CARREGAT: 2, INTENT: 3 };
-      
-      const sortedSuccessful = calculatedFops
-        .filter(item => item.data.situation !== 'INTENT')
-        .sort((a, b) => {
-          if (sitOrder[a.data.situation] !== sitOrder[b.data.situation]) {
-            return sitOrder[a.data.situation] - sitOrder[b.data.situation];
-          }
-          return a.finalTimingMs - b.finalTimingMs;
-        });
-
-      const batch = writeBatch(db);
-
-      for (const item of calculatedFops) {
-        const { fopKey, data, teamObj, m, s, milli, rawTimeMs, totalPenaltySec, totalDeductedPts, finalTimingMs, teamOriginalGroup } = item;
-
-        let basePts = 0;
-        let assignedRank = 1;
-        let isWinner = false;
         let selectedFormationName = '';
         let selectedFormationStructure = '';
-
-        if (isFormationRound) {
+        if (isFormationConcur) {
           const fmtList = currentRound?.formationList || [];
           const activeFmtName = data.selectedFormation || fmtList[0]?.name;
           const chosenFmt = fmtList.find(f => f.name === activeFmtName) || fmtList[0];
-
           selectedFormationName = chosenFmt?.name || '';
           selectedFormationStructure = chosenFmt?.structure || '';
-
-          if (data.situation === 'DESCARREGAT') basePts = Number(chosenFmt?.descarregat) || 0;
-          else if (data.situation === 'CARREGAT') basePts = Number(chosenFmt?.carregat) || 0;
-          else basePts = Number(chosenFmt?.intent) || 0;
-
-        } else if (isKnockout) {
-          basePts = 0;
-        } else if (data.situation === 'INTENT') {
-          // ❌ इन्टेंट गुण
-          basePts = configuredIntentPts;
-          assignedRank = pointsList.length; // शेवटचा रँक
-        } else {
-          // 🏆 यशस्वी थरांसाठी वेळेनुसार अचूक रँक गुण (Rank 1 = 1000, Rank 2 = 700, Rank 3 = 500, Rank 4 = 300)
-          const rankIndex = sortedSuccessful.findIndex(sItem => sItem.data.teamId === data.teamId);
-          assignedRank = rankIndex !== -1 ? rankIndex + 1 : 1;
-          
-          const rankPointConfig = pointsList[rankIndex] || pointsList[pointsList.length - 1];
-          basePts = Number(rankPointConfig?.points) || 1000;
         }
 
-        // DUEL फॉरमॅट असल्यास विजेता ठरवणे
-        if (isDuelFormat && activeFopKeys.length === 2) {
-          const d1 = calculatedFops.find(f => f.fopKey === 'FOP 1');
-          const d2 = calculatedFops.find(f => f.fopKey === 'FOP 2');
-
-          if (d1 && d2) {
-            if (sitOrder[d1.data.situation] !== sitOrder[d2.data.situation]) {
-              isWinner = fopKey === 'FOP 1' 
-                ? sitOrder[d1.data.situation] < sitOrder[d2.data.situation] 
-                : sitOrder[d2.data.situation] < sitOrder[d1.data.situation];
-            } else {
-              isWinner = fopKey === 'FOP 1' 
-                ? d1.finalTimingMs <= d2.finalTimingMs 
-                : d2.finalTimingMs < d1.finalTimingMs;
-            }
-
-            assignedRank = isWinner ? 1 : 2;
-            if (!isKnockout && !isFormationRound && data.situation !== 'INTENT') {
-              basePts = isWinner ? (Number(pointsList[0]?.points) || 1000) : (Number(pointsList[1]?.points) || 700);
-            }
-          }
-        }
-
-        const finalAwardedPts = isKnockout ? 0 : Math.max(0, basePts - totalDeductedPts);
-
-        const currentScorePayload = {
+        newlyEnteredMap[data.teamId] = {
           roundId: selectedRoundId,
           roundNumber: currentRound?.roundNumber || '1',
           roundName: currentRound?.roundName || '',
           matchFormat: currentRound?.matchFormat || 'GROUP',
-          roundType: currentRound?.type || 'LEAGUE',
+          roundType: isWildcard ? 'WILDCARD' : rawRoundType,
           teamId: data.teamId,
           teamName: teamObj?.teamName || '',
           city: teamObj?.city || 'महाराष्ट्र',
@@ -432,39 +358,183 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           fopNo: fopKey,
           duelMatchNo: selectedDuelMatchNo,
           duelSide: fopKey === 'FOP 1' ? 'FOP1' : 'FOP2',
-          roundRank: assignedRank,
-          isWinner,
+          slotNumber: fixtures[data.teamId]?.slotNumber || selectedSlotNumber,
           formationName: selectedFormationName,
           formationStructure: selectedFormationStructure,
           situation: data.situation,
           rawTimeMs,
-          rawFormattedTime: isFormationRound ? '-' : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(milli).padStart(2, '0')}`,
+          rawFormattedTime: isFormationConcur ? '-' : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(milli).padStart(2, '0')}`,
           penaltySec: totalPenaltySec,
           deductedPts: totalDeductedPts,
           appliedPenalties: data.penalties || {},
-          finalTimingMs: isFormationRound ? 0 : finalTimingMs,
-          finalFormattedTime: isFormationRound ? '-' : `${String(Math.floor(finalTimingMs / 60000)).padStart(2, '0')}:${String(Math.floor((finalTimingMs % 60000) / 1000)).padStart(2, '0')}.${String(Math.floor((finalTimingMs % 1000) / 10)).padStart(2, '0')}`,
-          basePoints: basePts,
-          pointsAwarded: finalAwardedPts,
+          finalTimingMs: isFormationConcur ? 0 : finalTimingMs,
+          finalFormattedTime: isFormationConcur ? '-' : `${String(Math.floor(finalTimingMs / 60000)).padStart(2, '0')}:${String(Math.floor((finalTimingMs % 60000) / 1000)).padStart(2, '0')}.${String(Math.floor((finalTimingMs % 1000) / 10)).padStart(2, '0')}`,
           remarks: data.remarks || '',
           timestamp: serverTimestamp()
         };
+      }
 
-        const scoreDocId = `SCORE_${selectedRoundId}_${data.teamId}`;
-        batch.set(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', scoreDocId), currentScorePayload, { merge: true });
+      const allRoundScoresMap = {};
+      scores.forEach(s => { allRoundScoresMap[s.teamId] = { ...s }; });
+      Object.entries(newlyEnteredMap).forEach(([tId, sObj]) => {
+        allRoundScoresMap[tId] = { ...allRoundScoresMap[tId], ...sObj };
+      });
+
+      const pointsList = currentRound?.pointsList || [
+        { label: 'Rank 1', points: 1600 },
+        { label: 'Rank 2', points: 1500 },
+        { label: 'Rank 3', points: 1400 },
+        { label: 'Rank 4', points: 1300 }
+      ];
+      const configuredIntentPts = Number(currentRound?.intentPoints !== undefined ? currentRound.intentPoints : 200);
+
+      const batch = writeBatch(db);
+
+      // 🎯 अचूक टाय-ब्रेकर: DESCARREGAT (1) > CARREGAT (2) > INTENT (3)
+      const getSitWeight = (sit) => {
+        if (sit === 'DESCARREGAT') return 1;
+        if (sit === 'CARREGAT') return 2;
+        return 3;
+      };
+
+      // 🎯 १. WILDCARD फेरी (Descarregat & Time Hierarchy -> Top 1 Winner)
+      if (isWildcard) {
+        const sortedList = Object.values(allRoundScoresMap).sort((a, b) => {
+          const wA = getSitWeight(a.situation);
+          const wB = getSitWeight(b.situation);
+          if (wA !== wB) return wA - wB; // Descarregat प्रथम!
+          return (a.finalTimingMs || 0) - (b.finalTimingMs || 0); // मग कमी वेळ
+        });
+
+        sortedList.forEach((s, idx) => {
+          const isTopWinner = idx === 0;
+          s.roundRank = idx + 1;
+          s.isWinner = isTopWinner;
+          s.basePoints = 0;
+          s.pointsAwarded = 0;
+
+          const scoreDocId = `SCORE_${selectedRoundId}_${s.teamId}`;
+          batch.set(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', scoreDocId), s, { merge: true });
+        });
+
+      // 🎯 २. Formation / Concur
+      } else if (isFormationConcur) {
+        const fmtList = currentRound?.formationList || [];
+        Object.values(allRoundScoresMap).forEach(s => {
+          const chosenFmt = fmtList.find(f => f.name === s.formationName) || fmtList[0];
+          let basePts = 0;
+          if (s.situation === 'DESCARREGAT') basePts = Number(chosenFmt?.descarregat) || 0;
+          else if (s.situation === 'CARREGAT') basePts = Number(chosenFmt?.carregat) || 0;
+          else basePts = Number(chosenFmt?.intent) || 0;
+
+          s.basePoints = basePts;
+          s.pointsAwarded = Math.max(0, basePts - (s.deductedPts || 0));
+
+          const scoreDocId = `SCORE_${selectedRoundId}_${s.teamId}`;
+          batch.set(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', scoreDocId), s, { merge: true });
+        });
+
+      // 🎯 ३. Duel / Group Duel
+      } else if (isDirectDuel || isGroupDuel) {
+        Object.values(allRoundScoresMap).forEach(s => {
+          const scoreDocId = `SCORE_${selectedRoundId}_${s.teamId}`;
+          batch.set(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', scoreDocId), s, { merge: true });
+        });
+
+        if (activeFopKeys.length === 2) {
+          const d1 = newlyEnteredMap[fopStates['FOP 1']?.teamId];
+          const d2 = newlyEnteredMap[fopStates['FOP 2']?.teamId];
+
+          if (d1 && d2) {
+            let isFop1Winner = true;
+            const w1 = getSitWeight(d1.situation);
+            const w2 = getSitWeight(d2.situation);
+
+            if (w1 !== w2) {
+              isFop1Winner = w1 < w2;
+            } else {
+              isFop1Winner = d1.finalTimingMs <= d2.finalTimingMs;
+            }
+
+            const winPts = isKnockout ? 0 : (Number(pointsList[0]?.points) || 1000);
+            const losePts = isKnockout ? 0 : (Number(pointsList[1]?.points) || 700);
+
+            batch.update(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', `SCORE_${selectedRoundId}_${d1.teamId}`), {
+              roundRank: isFop1Winner ? 1 : 2,
+              isWinner: isFop1Winner,
+              basePoints: isKnockout ? 0 : (d1.situation === 'INTENT' ? configuredIntentPts : (isFop1Winner ? winPts : losePts)),
+              pointsAwarded: isKnockout ? 0 : (d1.situation === 'INTENT' ? configuredIntentPts : Math.max(0, (isFop1Winner ? winPts : losePts) - (d1.deductedPts || 0)))
+            });
+
+            batch.update(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', `SCORE_${selectedRoundId}_${d2.teamId}`), {
+              roundRank: isFop1Winner ? 2 : 1,
+              isWinner: !isFop1Winner,
+              basePoints: isKnockout ? 0 : (d2.situation === 'INTENT' ? configuredIntentPts : (!isFop1Winner ? winPts : losePts)),
+              pointsAwarded: isKnockout ? 0 : (d2.situation === 'INTENT' ? configuredIntentPts : Math.max(0, (!isFop1Winner ? winPts : losePts) - (d2.deductedPts || 0)))
+            });
+          }
+        }
+
+      // 🎯 ४. Group Sync किंवा Single Slot (Descarregat > Carregat Dynamic Points)
+      } else {
+        const groupWiseBuckets = {};
+
+        if (isPureGroupSync) {
+          Object.values(allRoundScoresMap).forEach(s => {
+            const grp = s.group || 'Group A';
+            if (!groupWiseBuckets[grp]) groupWiseBuckets[grp] = [];
+            groupWiseBuckets[grp].push(s);
+          });
+        } else {
+          groupWiseBuckets['ALL'] = Object.values(allRoundScoresMap);
+        }
+
+        Object.values(groupWiseBuckets).forEach(teamList => {
+          const sortedList = [...teamList].sort((a, b) => {
+            const wA = getSitWeight(a.situation);
+            const wB = getSitWeight(b.situation);
+            if (wA !== wB) return wA - wB; // Descarregat प्रथम!
+            return (a.finalTimingMs || 0) - (b.finalTimingMs || 0); // मग कमी वेळ
+          });
+
+          sortedList.forEach((s, idx) => {
+            const assignedRank = idx + 1;
+            let basePts = 0;
+
+            if (isKnockout) {
+              basePts = 0;
+            } else if (s.situation === 'INTENT') {
+              basePts = configuredIntentPts;
+            } else {
+              const rankPointConfig = pointsList[idx] || pointsList[pointsList.length - 1];
+              basePts = Number(rankPointConfig?.points) || 1000;
+            }
+
+            s.roundRank = assignedRank;
+            s.basePoints = basePts;
+            s.pointsAwarded = isKnockout ? 0 : Math.max(0, basePts - (s.deductedPts || 0));
+
+            const scoreDocId = `SCORE_${selectedRoundId}_${s.teamId}`;
+            batch.set(doc(db, 'dahi_handi_tournaments', tournamentId, 'scores', scoreDocId), s, { merge: true });
+          });
+        });
       }
 
       await batch.commit();
 
       Swal.fire({
         icon: 'success',
-        title: 'निकाल रँकनुसार सेव्ह झाला!',
-        text: 'प्रत्येक संघाला त्याच्या वेळेनुसार आणि रँकनुसार अचूक गुण वाटप झाले आहेत.',
+        title: isWildcard ? 'वाईल्डकार्ड निकाल सेव्ह झाला!' : isKnockout ? 'नॉकआउट निकाल सेव्ह झाला!' : 'निकाल यशस्वीरीत्या सेव्ह झाला!',
+        text: isWildcard ? 'Descarregat व वेळेनुसार रँक #1 विजेता संघ निवडला गेला आहे.' : 'संघाचे गुण व रँक अचूक अपडेट झाले आहेत.',
         timer: 1500,
         showConfirmButton: false,
         background: '#0c0d14',
         color: '#fff'
       });
+
+      if (isSingleOrConcur && selectedSlotNumber < roundQualifiedTeamsCount) {
+        setSelectedSlotNumber(prev => prev + 1);
+      }
 
     } catch (err) {
       console.error("Save error:", err);
@@ -477,7 +547,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
   const handleDeleteScore = async (id, name) => {
     const res = await Swal.fire({
       title: 'निकाल हटवायचा आहे का?',
-      text: `"${name}" या संघाची नोंद हटवली जाईल.`,
+      text: `"${name}" या संघाची नोंद हटवली जाईल व रँकिंग पुन्हा कॅल्क्युलेट होईल.`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'होय, हटवा',
@@ -494,12 +564,12 @@ export default function ScoringJudgeConsole({ tournamentId }) {
     }
   };
 
-  const activeGroups = currentRound?.groupList?.length ? currentRound.groupList : ['Group A', 'Group B', 'Group C', 'Group D'];
+  const orderedTeams = getOrderedTeamsList();
 
   return (
-    <div className="space-y-5 text-white font-sans w-full">
+    <div className="space-y-4 text-white font-sans w-full">
       
-      {/* 🔝 हेडर व कंट्रोल्स */}
+      {/* 🔝 मुख्य हेडर व कंट्रोल्स */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-[#0c0d14] border border-amber-500/20 p-3.5 sm:p-4 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3">
           <Layers className="w-5 h-5 text-amber-400 shrink-0" />
@@ -508,7 +578,9 @@ export default function ScoringJudgeConsole({ tournamentId }) {
               📋 जज स्कोअरशीट कन्सोल — {currentRound?.roundName || 'फेरी'}
             </h3>
             <p className="text-[10px] text-gray-400">
-              फॉरमॅट: <b className="text-amber-400">{currentRound?.matchFormat}</b> • {isGroupDuel ? '⚔️ ग्रुप अंतर्गत डुएल सामने' : isGroupSyncFormat ? '👥 ग्रुप सिंक (रँकनुसार गुण वाटप)' : isFormationRound ? 'काठिण्य पातळी' : isKnockout ? 'नॉकआउट बाद फेरी' : `थर: ${currentRound?.tierHeight || 5}`}
+              प्रकार: <b className={isWildcard ? 'text-purple-400' : isKnockout ? 'text-rose-400' : 'text-emerald-400'}>
+                {isWildcard ? '🛡️ वाईल्डकार्ड फेरी (Wildcard - 1 Winner)' : isKnockout ? '🔥 बाद फेरी (Knockout)' : '🏆 लीग फेरी (League Points)'}
+              </b> • फॉरमॅट: <b className="text-amber-400">{isFormationConcur ? 'Formation / Concur' : currentRound?.matchFormat}</b>
             </p>
           </div>
         </div>
@@ -522,6 +594,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
               onChange={(e) => {
                 setSelectedRoundId(e.target.value);
                 setSelectedDuelMatchNo(1);
+                setSelectedSlotNumber(1);
               }}
               className="bg-transparent text-amber-400 font-bold text-xs focus:outline-none cursor-pointer"
             >
@@ -534,7 +607,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           </div>
 
           {/* Group Selector */}
-          {isGroupFormat && (
+          {(isPureGroupSync || isGroupDuel) && (
             <div className="flex items-center gap-1 bg-black/60 p-1 rounded-xl border border-blue-500/30">
               {activeGroups.map(grp => (
                 <button
@@ -554,7 +627,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           )}
 
           {/* Match Selector */}
-          {isDuelFormat && (
+          {(isDirectDuel || isGroupDuel) && (
             <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1.5 rounded-xl border border-orange-500/30">
               <Swords className="w-3.5 h-3.5 text-orange-400" />
               <span className="text-[11px] font-bold text-gray-300">सामना:</span>
@@ -563,7 +636,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                 onChange={(e) => setSelectedDuelMatchNo(Number(e.target.value))}
                 className="bg-transparent text-orange-400 font-bold text-xs focus:outline-none cursor-pointer"
               >
-                {Array.from({ length: isGroupDuel ? 2 : totalDuelMatchesCount }).map((_, idx) => (
+                {Array.from({ length: isGroupDuel ? 2 : totalDirectDuelMatches }).map((_, idx) => (
                   <option key={idx + 1} value={idx + 1} className="bg-slate-900 text-white">
                     सामना #{idx + 1} {isGroupDuel ? `(${activeGroup})` : ''}
                   </option>
@@ -580,16 +653,52 @@ export default function ScoringJudgeConsole({ tournamentId }) {
             className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition cursor-pointer disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{savingAll ? 'नोंद होत आहे...' : '✅ निकाल सेव्ह करा'}</span>
+            <span>{savingAll ? 'नोंद होत आहे...' : isWildcard ? '✅ निकाल ठरवा' : isKnockout ? '✅ निकाल ठरवा' : '✅ निकाल सेव्ह करा'}</span>
           </button>
         </div>
       </div>
 
+      {/* 🎯 SINGLE SLOT / CONCUR: स्लॉट क्रमवारी नेव्हिगेशन बार */}
+      {isSingleOrConcur && (
+        <div className="bg-[#0c0d14] border border-amber-500/20 p-3 rounded-2xl flex items-center gap-2 overflow-x-auto shadow">
+          <span className="text-[11px] font-bold text-amber-400 shrink-0 flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> स्लॉट निवडा:
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: roundQualifiedTeamsCount }).map((_, sIdx) => {
+              const slotNum = sIdx + 1;
+              const teamAtSlot = teams.find(t => fixtures[t.id]?.slotNumber === slotNum);
+              const isScored = teamAtSlot && scores.some(s => s.teamId === teamAtSlot.id);
+              const isSelected = selectedSlotNumber === slotNum;
+
+              return (
+                <button
+                  key={slotNum}
+                  type="button"
+                  onClick={() => setSelectedSlotNumber(slotNum)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1 cursor-pointer shrink-0 ${
+                    isSelected
+                      ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20 font-black'
+                      : isScored
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-black/50 text-gray-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  <span>#{slotNum}</span>
+                  {isScored && <span className="text-[10px]">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 🎯 FOP स्कोरिंग कार्ड्स */}
       <div className={`grid gap-3.5 ${
-        isDuelFormat 
+        isDirectDuel || isGroupDuel 
           ? 'grid-cols-1 md:grid-cols-2' 
-          : isSingleFormat 
+          : isSingleOrConcur 
           ? 'grid-cols-1 max-w-2xl mx-auto' 
           : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
       }`}>
@@ -607,14 +716,14 @@ export default function ScoringJudgeConsole({ tournamentId }) {
           const currentChosenFmt = fmtList.find(f => f.name === (fData.selectedFormation || fmtList[0]?.name));
           let currentPreviewPts = 0;
 
-          if (isFormationRound && currentChosenFmt) {
+          if (isFormationConcur && currentChosenFmt) {
             if (fData.situation === 'DESCARREGAT') currentPreviewPts = Number(currentChosenFmt.descarregat) || 0;
             else if (fData.situation === 'CARREGAT') currentPreviewPts = Number(currentChosenFmt.carregat) || 0;
             else currentPreviewPts = Number(currentChosenFmt.intent) || 0;
           } else if (fData.situation === 'INTENT') {
             currentPreviewPts = Number(currentRound?.intentPoints !== undefined ? currentRound.intentPoints : 200);
           } else {
-            currentPreviewPts = currentRound?.pointsList?.[0]?.points || 1000;
+            currentPreviewPts = currentRound?.pointsList?.[0]?.points || 1600;
           }
 
           return (
@@ -627,34 +736,39 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                 {/* Header */}
                 <div className="flex justify-between items-center bg-black/60 p-2 rounded-2xl border border-white/5">
                   <span className="text-xs font-black text-amber-400 font-mono flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> {fopKey} {isDuelFormat ? (fopKey === 'FOP 1' ? '(Team A)' : '(Team B)') : ''}
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> {fopKey} {(isDirectDuel || isGroupDuel) ? (fopKey === 'FOP 1' ? '(Team A)' : '(Team B)') : isSingleOrConcur ? `(स्लॉट #${selectedSlotNumber})` : ''}
                   </span>
                   <span className="text-[10px] text-gray-400 font-bold">
-                    {isDuelFormat ? `सामना #${selectedDuelMatchNo}` : isFormationRound ? 'काठिण्य पातळी' : 'जज कन्सोल'}
+                    {isWildcard ? 'Wildcard Challenge' : (isDirectDuel || isGroupDuel) ? `सामना #${selectedDuelMatchNo}` : isFormationConcur ? 'Formation Challenge' : 'जज कन्सोल'}
                   </span>
                 </div>
 
                 {/* संघ निवड */}
                 <div>
-                  <label className="text-[10px] text-gray-400 block mb-1">गोविंदा पथक (Team):</label>
+                  <label className="text-[10px] text-gray-400 block mb-1">गोविंदा पथक:</label>
                   <select
                     value={fData.teamId}
                     onChange={(e) => updateFopState(fopKey, 'teamId', e.target.value)}
-                    className="w-full bg-slate-900 border border-white/10 text-white font-bold text-xs p-2 rounded-xl focus:outline-none"
+                    className="w-full bg-slate-900 border border-white/10 text-white font-bold text-xs p-2.5 rounded-xl focus:border-amber-400 focus:outline-none cursor-pointer"
                   >
                     <option value="">-- संघ निवडा --</option>
-                    {teams.map(t => (
-                      <option key={t.id} value={t.id}>#{t.chestNumber || '-'} {t.teamName} ({t.city})</option>
-                    ))}
+                    {orderedTeams.map((t) => {
+                      const fixSlot = fixtures[t.id]?.slotNumber;
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {fixSlot ? `[स्लॉट #${fixSlot}] ` : ''}#{t.chestNumber || '-'} {t.teamName} ({t.city || 'महाराष्ट्र'})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
-                {/* काठिण्य पातळी रचना निवड */}
-                {isFormationRound && (
+                {/* Formation निवड */}
+                {isFormationConcur && (
                   <div className="bg-black/50 p-3 rounded-2xl border border-amber-500/30 space-y-2">
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-amber-400 font-bold flex items-center gap-1">
-                        <Trophy className="w-3.5 h-3.5" /> रचना निवडा:
+                        <Trophy className="w-3.5 h-3.5" /> रचना निवडा (Formations Matrix):
                       </span>
                       <span className="text-gray-400 font-mono">{currentChosenFmt?.structure || ''}</span>
                     </div>
@@ -694,7 +808,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                       type="button"
                       onClick={() => handleSituationChange(fopKey, 'DESCARREGAT')}
                       className={`p-1.5 rounded-xl border transition cursor-pointer ${
-                        fData.situation === 'DESCARREGAT' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500' : 'bg-black/40 text-gray-400 border-white/5'
+                        fData.situation === 'DESCARREGAT' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 font-black shadow' : 'bg-black/40 text-gray-400 border-white/5'
                       }`}
                     >
                       🏆 DESCAR
@@ -703,7 +817,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                       type="button"
                       onClick={() => handleSituationChange(fopKey, 'CARREGAT')}
                       className={`p-1.5 rounded-xl border transition cursor-pointer ${
-                        fData.situation === 'CARREGAT' ? 'bg-amber-500/20 text-amber-400 border-amber-500 shadow-md shadow-amber-500/20' : 'bg-black/40 text-gray-400 border-white/5'
+                        fData.situation === 'CARREGAT' ? 'bg-amber-500/20 text-amber-400 border-amber-500 font-black shadow' : 'bg-black/40 text-gray-400 border-white/5'
                       }`}
                     >
                       ⚠️ CARRE
@@ -720,8 +834,8 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                   </div>
                 </div>
 
-                {/* ⏱️ स्टॉपवॉच वेळ */}
-                {!isFormationRound && (
+                {/* स्टॉपवॉच वेळ */}
+                {!isFormationConcur && (
                   <div className="bg-black/60 p-2.5 rounded-2xl border border-white/5 space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-amber-400 text-[10px] flex items-center gap-1">
@@ -773,7 +887,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                   </div>
                 )}
 
-                {/* ⚠️ पेनल्टी रकाने */}
+                {/* पेनल्टी रकाने */}
                 {currentRound?.penaltyList?.length > 0 && (
                   <div className="space-y-1.5 bg-black/40 p-2.5 rounded-2xl border border-rose-500/20">
                     <div className="flex justify-between items-center text-[10px]">
@@ -781,7 +895,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                         <AlertTriangle className="w-3 h-3" /> पेनल्टी रकाने:
                       </span>
                       <div className="flex gap-2 font-mono text-[9px] font-bold">
-                        {!isFormationRound && totalPenaltySec > 0 && <span className="text-amber-400">+{totalPenaltySec}s</span>}
+                        {!isFormationConcur && totalPenaltySec > 0 && <span className="text-amber-400">+{totalPenaltySec}s</span>}
                         {totalDeductedPts > 0 && <span className="text-rose-400">-{totalDeductedPts} pts</span>}
                       </div>
                     </div>
@@ -820,7 +934,7 @@ export default function ScoringJudgeConsole({ tournamentId }) {
                               {isPointsType ? `-${pen.value || 50} pts` : `+${pen.value || pen.seconds || 5}s`}
                             </span>
 
-                            {isApplied && pen.perPlayer !== false && !isPointsType && !isFormationRound && (
+                            {isApplied && pen.perPlayer !== false && !isPointsType && !isFormationConcur && (
                               <div className="flex items-center gap-1 bg-black/60 px-1 py-0.5 rounded-lg border border-slate-700 shrink-0">
                                 <span className="text-[8px] text-gray-400">खेळाडू:</span>
                                 <input
@@ -845,18 +959,18 @@ export default function ScoringJudgeConsole({ tournamentId }) {
               <div className="pt-2 border-t border-white/10 flex justify-between items-center bg-black/60 p-2.5 rounded-2xl mt-2">
                 <div>
                   <span className="text-[8px] text-gray-400 block">
-                    {isFormationRound ? 'रचना गुण:' : 'अंतिम वेळ:'}
+                    {isFormationConcur ? 'रचना गुण:' : 'अंतिम वेळ:'}
                   </span>
                   <span className="font-mono text-xs font-black text-emerald-400">
-                    {isFormationRound ? `${currentPreviewPts} pts` : `${String(Math.floor(finalTimingMs / 60000)).padStart(2, '0')}:${String(Math.floor((finalTimingMs % 60000) / 1000)).padStart(2, '0')}.${String(Math.floor((finalTimingMs % 1000) / 10)).padStart(2, '0')}`}
+                    {isFormationConcur ? `${currentPreviewPts} pts` : `${String(Math.floor(finalTimingMs / 60000)).padStart(2, '0')}:${String(Math.floor((finalTimingMs % 60000) / 1000)).padStart(2, '0')}.${String(Math.floor((finalTimingMs % 1000) / 10)).padStart(2, '0')}`}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-[8px] text-gray-400 block">
-                    {isKnockout ? 'निकाल प्रकार:' : 'अंतिम गुण:'}
+                    {isWildcard ? 'निकाल प्रकार:' : isKnockout ? 'फेरी प्रकार:' : 'पूर्वावलोकन गुण:'}
                   </span>
-                  <span className="text-xs font-mono font-black text-amber-400">
-                    {isKnockout ? 'नॉकआउट सामना' : `${Math.max(0, currentPreviewPts - totalDeductedPts)} pts`}
+                  <span className={`text-xs font-mono font-black ${isWildcard ? 'text-purple-400' : isKnockout ? 'text-rose-400' : 'text-amber-400'}`}>
+                    {isWildcard ? '🛡️ Wildcard (Top 1 Qualifies)' : isKnockout ? 'नॉकआउट (Win/Loss)' : `${Math.max(0, currentPreviewPts - totalDeductedPts)} pts`}
                   </span>
                 </div>
               </div>
@@ -867,124 +981,426 @@ export default function ScoringJudgeConsole({ tournamentId }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* 🏆 निकाल विभाग: गटनिहाय थेट रँकिंग (Group-Wise Live Standings)              */}
+      {/* 🏆 अचूक फॉरमॅटनिहाय निकाल विभाग (नॉकआउट व लीग निकाल स्वतंत्रपणे)               */}
       {/* ========================================================================= */}
       <div className="bg-[#0c0d14] border border-amber-500/20 rounded-3xl p-4 sm:p-5 space-y-4 shadow-xl">
-        
         <div className="flex justify-between items-center border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-400" />
             <h4 className="text-xs sm:text-sm font-black text-white">
-              {currentRound?.roundName} — {isGroupFormat ? 'गटनिहाय चालू निकाल व रँकिंग (Group-Wise Live Standings)' : 'या फेरीचा थेट निकाल'}
+              {currentRound?.roundName} — {
+                isWildcard ? '🛡️ वाईल्डकार्ड थेट निकाल (Top 1 Team Qualifies)' :
+                isGroupDuel ? '⚔️ गट अंतर्गत १ vs १ द्वंद्व निकाल (Group Duel)' :
+                isPureGroupSync ? '👥 गटनिहाय निकाल (Group Standings)' :
+                isDirectDuel ? (isKnockout ? '🔥 १ विरुद्ध १ नॉकआउट निकाल (Knockout Duel Results)' : '⚔️ १ विरुद्ध १ द्वंद्व निकाल (Direct Duel Standings)') :
+                '⏱️ फेरीचा थेट निकाल (Live Standings)'
+              }
             </h4>
           </div>
-          <span className="text-[10px] font-mono text-gray-400">{scores.length} नोंद पूर्ण</span>
+          <span className="text-[10px] font-mono text-gray-400 font-bold">{scores.length} संघ नोंद पूर्ण</span>
         </div>
 
-        {/* 👥 १. जर GROUP / GROUP_DUEL फेरी असेल तर गटनिहाय रँकिंग बोर्ड्स */}
-        {isGroupFormat ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* ------------------------------------------------------------- */}
+        {/* 🎯 प्रकार १: GROUP_DUEL निकाल (Group A, B, C, D मधील 1 vs 1) */}
+        {/* ------------------------------------------------------------- */}
+        {isGroupDuel && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {activeGroups.map(grpName => {
-              const grpScores = scores
-                .filter(s => (fixtures[s.teamId]?.group || r1Fixtures[s.teamId]?.group || s.group) === grpName)
-                .sort((a, b) => {
-                  if ((b.pointsAwarded || 0) !== (a.pointsAwarded || 0)) {
-                    return (b.pointsAwarded || 0) - (a.pointsAwarded || 0);
-                  }
-                  return (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999);
-                });
+              const grpScores = scores.filter(s => s.group === grpName);
 
               return (
-                <div key={grpName} className="bg-black/50 border border-blue-500/30 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
-                  
-                  <div className="flex justify-between items-center text-xs font-black text-blue-300 border-b border-white/5 pb-2">
-                    <span className="flex items-center gap-1.5">
-                      <Network className="w-3.5 h-3.5" /> {grpName}
+                <div key={grpName} className="bg-slate-900/90 border border-orange-500/30 rounded-2xl p-3.5 space-y-3 shadow-lg">
+                  <div className="flex justify-between items-center bg-black/60 p-2 rounded-xl border border-white/5">
+                    <span className="font-black text-orange-400 text-xs flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" /> {grpName}
                     </span>
-                    <span className="text-[10px] text-gray-400 font-mono">{grpScores.length} नोंद</span>
+                    <span className="text-[9px] text-gray-400 font-mono">२ द्वंद्व सामने</span>
                   </div>
 
-                  {grpScores.length === 0 ? (
-                    <div className="text-center py-5 text-gray-600 text-xs">या गटात स्कोअर नोंदवलेला नाही</div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {grpScores.map((s, idx) => (
-                        <div key={s.id} className="bg-slate-900/90 border border-white/5 p-2 rounded-xl flex items-center justify-between gap-1 text-xs">
-                          <div className="flex items-center gap-2 truncate">
-                            <span className={`w-5 h-5 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
-                              idx === 0 ? 'bg-amber-400 text-black shadow' : 
-                              idx === 1 ? 'bg-slate-300 text-black' : 
-                              idx === 2 ? 'bg-amber-700 text-white' : 'bg-white/10 text-gray-400'
-                            }`}>
-                              #{idx + 1}
-                            </span>
-                            <div className="truncate">
-                              <span className="font-bold text-white truncate block">{s.teamName}</span>
-                              <span className="text-[9px] text-gray-400 font-mono">
-                                {s.situation === 'INTENT' ? 'INTENT' : s.finalFormattedTime}
-                              </span>
-                            </div>
+                  <div className="space-y-2.5">
+                    {[1, 2].map(matchNo => {
+                      const mScores = grpScores.filter(s => Number(s.duelMatchNo) === matchNo);
+                      const t1Score = mScores.find(s => s.duelSide === 'FOP1') || mScores[0];
+                      const t2Score = mScores.find(s => s.duelSide === 'FOP2' && s.teamId !== t1Score?.teamId) || mScores[1];
+
+                      const t1Fix = teams.find(t => fixtures[t.id]?.group === grpName && fixtures[t.id]?.duelMatchNo === matchNo && fixtures[t.id]?.duelSide === 'FOP1');
+                      const t2Fix = teams.find(t => fixtures[t.id]?.group === grpName && fixtures[t.id]?.duelMatchNo === matchNo && fixtures[t.id]?.duelSide === 'FOP2');
+
+                      return (
+                        <div key={matchNo} className="bg-black/60 border border-white/5 rounded-2xl p-2.5 space-y-2">
+                          <div className="flex justify-between items-center text-[9px] font-bold text-amber-400 border-b border-white/5 pb-1 font-mono">
+                            <span>सामना #{matchNo}</span>
+                            <span className="text-gray-400">{t1Score && t2Score ? '✅ पूर्ण' : '⏳ बाकी'}</span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <div className="text-right">
-                              <span className="text-[11px] text-amber-400 font-black font-mono block">{s.pointsAwarded} pts</span>
-                              <span className="text-[8px] text-gray-500 uppercase">{s.situation}</span>
+                          {/* FOP 1 Team */}
+                          <div className={`p-2 rounded-xl border space-y-1 ${
+                            t1Score?.isWinner ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-slate-900/60 border-white/5'
+                          }`}>
+                            <div className="flex justify-between items-center text-xs">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="text-[10px]">{t1Score?.isWinner ? '🏆' : '●'}</span>
+                                <span className={`font-extrabold truncate max-w-[110px] ${t1Score?.isWinner ? 'text-emerald-400' : 'text-white'}`}>
+                                  {t1Score?.teamName || t1Fix?.teamName || '-'}
+                                </span>
+                              </div>
+                              
+                              {/* 🎯 निकाल बॅज किंवा गुण */}
+                              {isKnockout ? (
+                                t1Score ? (
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-black font-mono ${
+                                    t1Score.isWinner ? 'bg-emerald-500 text-black' : 'bg-rose-500/20 text-rose-400'
+                                  }`}>
+                                    {t1Score.isWinner ? 'WINNER' : 'LOST'}
+                                  </span>
+                                ) : <span className="text-gray-500 text-[10px]">-</span>
+                              ) : (
+                                <span className="font-mono text-xs font-black text-amber-400">
+                                  {t1Score ? `${t1Score.pointsAwarded} pts` : '-'}
+                                </span>
+                              )}
                             </div>
-                            <button
-                              onClick={() => handleDeleteScore(s.id, s.teamName)}
-                              className="p-1 text-gray-500 hover:text-rose-400 transition"
-                              title="हटवा"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+
+                            {t1Score && (
+                              <div className="flex items-center justify-between text-[9px] font-mono text-gray-400 pt-1 border-t border-white/5">
+                                <span className={`px-1 rounded font-bold ${
+                                  t1Score.situation === 'DESCARREGAT' ? 'text-emerald-400 bg-emerald-500/10' :
+                                  t1Score.situation === 'CARREGAT' ? 'text-amber-400 bg-amber-500/10' : 'text-rose-400 bg-rose-500/10'
+                                }`}>
+                                  {t1Score.situation}
+                                </span>
+                                <span>मूळ: {t1Score.rawFormattedTime}</span>
+                                {t1Score.penaltySec > 0 && <span className="text-rose-400">+{t1Score.penaltySec}s</span>}
+                                <span className="text-white font-bold">वेळ: {t1Score.finalFormattedTime}</span>
+                              </div>
+                            )}
                           </div>
+
+                          <div className="text-center font-mono text-[8px] text-rose-400 font-bold -my-1">VS</div>
+
+                          {/* FOP 2 Team */}
+                          <div className={`p-2 rounded-xl border space-y-1 ${
+                            t2Score?.isWinner ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-slate-900/60 border-white/5'
+                          }`}>
+                            <div className="flex justify-between items-center text-xs">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="text-[10px]">{t2Score?.isWinner ? '🏆' : '●'}</span>
+                                <span className={`font-extrabold truncate max-w-[110px] ${t2Score?.isWinner ? 'text-emerald-400' : 'text-white'}`}>
+                                  {t2Score?.teamName || t2Fix?.teamName || '-'}
+                                </span>
+                              </div>
+
+                              {/* 🎯 निकाल बॅज किंवा गुण */}
+                              {isKnockout ? (
+                                t2Score ? (
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-black font-mono ${
+                                    t2Score.isWinner ? 'bg-emerald-500 text-black' : 'bg-rose-500/20 text-rose-400'
+                                  }`}>
+                                    {t2Score.isWinner ? 'WINNER' : 'LOST'}
+                                  </span>
+                                ) : <span className="text-gray-500 text-[10px]">-</span>
+                              ) : (
+                                <span className="font-mono text-xs font-black text-amber-400">
+                                  {t2Score ? `${t2Score.pointsAwarded} pts` : '-'}
+                                </span>
+                              )}
+                            </div>
+
+                            {t2Score && (
+                              <div className="flex items-center justify-between text-[9px] font-mono text-gray-400 pt-1 border-t border-white/5">
+                                <span className={`px-1 rounded font-bold ${
+                                  t2Score.situation === 'DESCARREGAT' ? 'text-emerald-400 bg-emerald-500/10' :
+                                  t2Score.situation === 'CARREGAT' ? 'text-amber-400 bg-amber-500/10' : 'text-rose-400 bg-rose-500/10'
+                                }`}>
+                                  {t2Score.situation}
+                                </span>
+                                <span>मूळ: {t2Score.rawFormattedTime}</span>
+                                {t2Score.penaltySec > 0 && <span className="text-rose-400">+{t2Score.penaltySec}s</span>}
+                                <span className="text-white font-bold">वेळ: {t2Score.finalFormattedTime}</span>
+                              </div>
+                            )}
+                          </div>
+
                         </div>
-                      ))}
-                    </div>
-                  )}
-
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
           </div>
-        ) : (
+        )}
 
-          /* ⚔️ २. OVERALL DUEL / SINGLE / FORMATION निकाल यादी */
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-            {scores.length === 0 ? (
-              <div className="col-span-full py-6 text-center text-gray-500 text-xs">या फेरीत अद्याप कोणताही स्कोअर नोंदवलेला नाही.</div>
-            ) : (
-              scores
-                .sort((a, b) => (b.pointsAwarded || 0) - (a.pointsAwarded || 0) || (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999))
-                .map((s, idx) => (
-                  <div key={s.id} className="bg-slate-900/90 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-2 text-xs shadow">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className={`w-6 h-6 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
-                        idx === 0 ? 'bg-amber-400 text-black' : 'bg-white/10 text-gray-300'
-                      }`}>
-                        #{idx + 1}
-                      </span>
-                      <div className="truncate">
-                        <h5 className="font-bold text-white truncate">{s.teamName}</h5>
-                        <span className="text-[9px] text-gray-400 font-mono block">
-                          {s.situation} • {s.finalFormattedTime}
+        {/* ------------------------------------------------------------- */}
+        {/* 🎯 प्रकार २: GROUP SYNC निकाल (Group A, B, C, D मधील १ ते ४)   */}
+        {/* ------------------------------------------------------------- */}
+        {isPureGroupSync && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {activeGroups.map(grpName => {
+              const grpScores = scores
+                .filter(s => s.group === grpName)
+                .sort((a, b) => {
+                  const getWeight = (sit) => (sit === 'DESCARREGAT' ? 1 : sit === 'CARREGAT' ? 2 : 3);
+                  const wA = getWeight(a.situation);
+                  const wB = getWeight(b.situation);
+                  if (wA !== wB) return wA - wB; // Descarregat प्रथम!
+                  return (b.pointsAwarded || 0) - (a.pointsAwarded || 0) || (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999);
+                });
+
+              return (
+                <div key={grpName} className="bg-slate-900/90 border border-blue-500/30 rounded-2xl p-3.5 space-y-3 shadow-lg">
+                  <div className="flex justify-between items-center bg-black/60 p-2 rounded-xl border border-white/5">
+                    <span className="font-black text-blue-300 text-xs flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" /> {grpName}
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-mono">{grpScores.length} नोंद</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {grpScores.length === 0 ? (
+                      <div className="p-3 text-center text-[10px] text-gray-500">कोणतीही नोंद नाही</div>
+                    ) : (
+                      grpScores.map((s, idx) => (
+                        <div key={s.id} className="bg-black/50 border border-white/5 p-2.5 rounded-xl space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-black ${
+                                idx === 0 ? 'bg-amber-400 text-black font-black' : 'bg-white/10 text-gray-300'
+                              }`}>
+                                #{idx + 1}
+                              </span>
+                              <span className="font-bold text-white truncate max-w-[120px]">{s.teamName}</span>
+                            </div>
+                            <span className="font-mono text-xs font-black text-emerald-400 shrink-0">{s.pointsAwarded} pts</span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[9px] font-mono text-gray-400 pt-1 border-t border-white/5">
+                            <span className={`px-1 rounded font-bold ${
+                              s.situation === 'DESCARREGAT' ? 'text-emerald-400 bg-emerald-500/10' :
+                              s.situation === 'CARREGAT' ? 'text-amber-400 bg-amber-500/10' : 'text-rose-400 bg-rose-500/10'
+                            }`}>
+                              {s.situation}
+                            </span>
+                            <span>मूळ: {s.rawFormattedTime}</span>
+                            {s.penaltySec > 0 && <span className="text-rose-400">+{s.penaltySec}s</span>}
+                            <span className="text-white font-bold">वेळ: {s.finalFormattedTime}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* 🎯 प्रकार ३: DIRECT 1 vs 1 DUEL (नॉकआउट किंवा थेट द्वंद्व सामने) */}
+        {/* ------------------------------------------------------------- */}
+        {isDirectDuel && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {Array.from({ length: totalDirectDuelMatches }).map((_, mIdx) => {
+              const matchNo = mIdx + 1;
+              const matchScores = scores.filter(s => Number(s.duelMatchNo) === matchNo);
+              const t1Score = matchScores.find(s => s.duelSide === 'FOP1') || matchScores[0];
+              const t2Score = matchScores.find(s => s.duelSide === 'FOP2' && s.teamId !== t1Score?.teamId) || matchScores[1];
+
+              const t1Fix = teams.find(t => fixtures[t.id]?.duelMatchNo === matchNo && fixtures[t.id]?.duelSide === 'FOP1');
+              const t2Fix = teams.find(t => fixtures[t.id]?.duelMatchNo === matchNo && fixtures[t.id]?.duelSide === 'FOP2');
+
+              return (
+                <div key={matchNo} className="bg-slate-900/90 border border-orange-500/30 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-1.5 text-xs font-black text-orange-400 font-mono">
+                    <span className="flex items-center gap-1.5">
+                      <Swords className="w-3.5 h-3.5" /> सामना #{matchNo}
+                    </span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      t1Score && t2Score ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-gray-400'
+                    }`}>
+                      {t1Score && t2Score ? '✅ निकाल पूर्ण' : '⏳ चालू / बाकी'}
+                    </span>
+                  </div>
+
+                  {/* FOP 1 */}
+                  <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                    t1Score?.isWinner ? 'bg-emerald-500/10 border-emerald-500/40 shadow' : 'bg-black/40 border-white/5'
+                  }`}>
+                    <div className="flex justify-between items-center text-xs">
+                      <div className="truncate flex items-center gap-1.5">
+                        <span>{t1Score?.isWinner ? '🏆' : '●'}</span>
+                        <span className={`font-extrabold truncate ${t1Score?.isWinner ? 'text-emerald-400' : 'text-white'}`}>
+                          {t1Score?.teamName || t1Fix?.teamName || 'Team A'}
                         </span>
                       </div>
+
+                      {/* 🎯 नॉकआउट बॅज (WINNER/LOST) किंवा लीग गुण */}
+                      {isKnockout ? (
+                        t1Score ? (
+                          <span className={`px-2.5 py-0.5 rounded-md text-[9px] font-black font-mono tracking-wider ${
+                            t1Score.isWinner ? 'bg-emerald-500 text-black shadow-sm' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            {t1Score.isWinner ? '🏆 WINNER' : '❌ LOST'}
+                          </span>
+                        ) : <span className="text-gray-500 text-[10px]">-</span>
+                      ) : (
+                        <span className="font-mono text-xs font-black text-amber-400">
+                          {t1Score ? `${t1Score.pointsAwarded} pts` : '-'}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono text-xs font-black text-amber-400">{s.pointsAwarded} pts</span>
-                      <button
-                        onClick={() => handleDeleteScore(s.id, s.teamName)}
-                        className="p-1 text-gray-500 hover:text-rose-400 transition"
-                        title="हटवा"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {t1Score && (
+                      <div className="flex items-center justify-between text-[9px] font-mono text-gray-400 pt-1 border-t border-white/5">
+                        <span className={`px-1 rounded font-bold ${
+                          t1Score.situation === 'DESCARREGAT' ? 'text-emerald-400 bg-emerald-500/10' :
+                          t1Score.situation === 'CARREGAT' ? 'text-amber-400 bg-amber-500/10' : 'text-rose-400 bg-rose-500/10'
+                        }`}>
+                          {t1Score.situation}
+                        </span>
+                        <span>मूळ: {t1Score.rawFormattedTime}</span>
+                        {t1Score.penaltySec > 0 && <span className="text-rose-400">+{t1Score.penaltySec}s</span>}
+                        <span className="text-white font-bold">वेळ: {t1Score.finalFormattedTime}</span>
+                      </div>
+                    )}
                   </div>
-                ))
+
+                  <div className="text-center font-mono text-[9px] text-rose-400 font-bold -my-1">VS</div>
+
+                  {/* FOP 2 */}
+                  <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                    t2Score?.isWinner ? 'bg-emerald-500/10 border-emerald-500/40 shadow' : 'bg-black/40 border-white/5'
+                  }`}>
+                    <div className="flex justify-between items-center text-xs">
+                      <div className="truncate flex items-center gap-1.5">
+                        <span>{t2Score?.isWinner ? '🏆' : '●'}</span>
+                        <span className={`font-extrabold truncate ${t2Score?.isWinner ? 'text-emerald-400' : 'text-white'}`}>
+                          {t2Score?.teamName || t2Fix?.teamName || 'Team B'}
+                        </span>
+                      </div>
+
+                      {/* 🎯 नॉकआउट बॅज (WINNER/LOST) किंवा लीग गुण */}
+                      {isKnockout ? (
+                        t2Score ? (
+                          <span className={`px-2.5 py-0.5 rounded-md text-[9px] font-black font-mono tracking-wider ${
+                            t2Score.isWinner ? 'bg-emerald-500 text-black shadow-sm' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            {t2Score.isWinner ? '🏆 WINNER' : '❌ LOST'}
+                          </span>
+                        ) : <span className="text-gray-500 text-[10px]">-</span>
+                      ) : (
+                        <span className="font-mono text-xs font-black text-amber-400">
+                          {t2Score ? `${t2Score.pointsAwarded} pts` : '-'}
+                        </span>
+                      )}
+                    </div>
+
+                    {t2Score && (
+                      <div className="flex items-center justify-between text-[9px] font-mono text-gray-400 pt-1 border-t border-white/5">
+                        <span className={`px-1 rounded font-bold ${
+                          t2Score.situation === 'DESCARREGAT' ? 'text-emerald-400 bg-emerald-500/10' :
+                          t2Score.situation === 'CARREGAT' ? 'text-amber-400 bg-amber-500/10' : 'text-rose-400 bg-rose-500/10'
+                        }`}>
+                          {t2Score.situation}
+                        </span>
+                        <span>मूळ: {t2Score.rawFormattedTime}</span>
+                        {t2Score.penaltySec > 0 && <span className="text-rose-400">+{t2Score.penaltySec}s</span>}
+                        <span className="text-white font-bold">वेळ: {t2Score.finalFormattedTime}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* 🎯 प्रकार ४: SINGLE SLOT किंवा WILDCARD किंवा FORMATION निकाल */}
+        {/* ------------------------------------------------------------- */}
+        {isSingleOrConcur && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            {scores.length === 0 ? (
+              <div className="col-span-full py-6 text-center text-gray-500 text-xs">या फेरीत अद्याप कोणतीही नोंद नाही.</div>
+            ) : (
+              [...scores]
+                .sort((a, b) => {
+                  const getWeight = (sit) => (sit === 'DESCARREGAT' ? 1 : sit === 'CARREGAT' ? 2 : 3);
+                  const wA = getWeight(a.situation);
+                  const wB = getWeight(b.situation);
+                  if (wA !== wB) return wA - wB; // Descarregat नेहमी Carregat च्या आधी!
+                  if (isWildcard) {
+                    return (a.finalTimingMs || 0) - (b.finalTimingMs || 0); // कमी वेळ
+                  }
+                  return (b.pointsAwarded || 0) - (a.pointsAwarded || 0) || (a.finalTimingMs || 999999) - (b.finalTimingMs || 999999);
+                })
+                .map((s, idx) => {
+                  const isTopWildcardWinner = isWildcard && idx === 0;
+
+                  return (
+                    <div 
+                      key={s.id} 
+                      className={`p-3 rounded-2xl space-y-2 text-xs border shadow transition ${
+                        isTopWildcardWinner 
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-lg shadow-emerald-500/20' 
+                          : 'bg-slate-900/90 border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-black ${
+                            (isTopWildcardWinner || idx === 0) ? 'bg-amber-400 text-black font-black' : 'bg-white/10 text-gray-300'
+                          }`}>
+                            #{idx + 1}
+                          </span>
+                          <h5 className="font-bold text-white truncate max-w-[120px]">{s.teamName}</h5>
+                        </div>
+
+                        {/* गुण किंवा Wildcard Qualified बॅज */}
+                        {isWildcard ? (
+                          <span className={`px-2.5 py-0.5 rounded text-[9px] font-black font-mono tracking-wider ${
+                            isTopWildcardWinner ? 'bg-emerald-500 text-black shadow-md' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            {isTopWildcardWinner ? '🏆 QUALIFIED' : '❌ ELIMINATED'}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-xs font-black text-amber-400 shrink-0">{s.pointsAwarded} pts</span>
+                        )}
+                      </div>
+
+                      {/* बारीक अक्षरातील स्थिती, वेळ व पेनल्टी */}
+                      <div className="bg-black/50 p-1.5 rounded-xl border border-white/5 space-y-0.5 text-[9px] font-mono text-gray-400">
+                        <div className="flex justify-between items-center">
+                          <span className={`px-1 rounded font-bold ${
+                            s.situation === 'DESCARREGAT' ? 'text-emerald-400 bg-emerald-500/10' :
+                            s.situation === 'CARREGAT' ? 'text-amber-400 bg-amber-500/10' : 'text-rose-400 bg-rose-500/10'
+                          }`}>
+                            {s.situation} {s.formationName ? `(${s.formationName})` : ''}
+                          </span>
+                          {s.penaltySec > 0 && <span className="text-rose-400 font-bold">+{s.penaltySec}s पेनल्टी</span>}
+                          {s.deductedPts > 0 && <span className="text-rose-400 font-bold">-{s.deductedPts} pts</span>}
+                        </div>
+
+                        {s.finalFormattedTime !== '-' && (
+                          <div className="flex justify-between items-center text-gray-500 pt-0.5 border-t border-white/5">
+                            <span>मूळ: {s.rawFormattedTime}</span>
+                            <span className="text-white font-bold">अंतिम: {s.finalFormattedTime}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleDeleteScore(s.id, s.teamName)}
+                          className="text-[9px] text-gray-500 hover:text-rose-400 flex items-center gap-1 transition cursor-pointer"
+                          title="हटवा"
+                        >
+                          <Trash2 className="w-3 h-3" /> नोंद हटवा
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
             )}
           </div>
         )}

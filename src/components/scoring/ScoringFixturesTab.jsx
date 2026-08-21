@@ -1,12 +1,12 @@
 // ==========================================
-// #SECTION: SCORING FIXTURES TAB (READ-ONLY MATCH SCHEDULE & VISUAL BRACKETS)
+// #SECTION: SCORING FIXTURES TAB (HORIZONTAL LIST-CARD VIEW FOR SINGLE & CONCUR)
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { 
   Calendar, Layers, Users, Swords, Play, 
-  MapPin, CheckCircle2, Trophy, Clock
+  MapPin, CheckCircle2, Trophy, Clock, ShieldAlert, Sparkles
 } from 'lucide-react';
 
 export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
@@ -70,8 +70,10 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
   const isGroupBased = currentRound?.matchFormat === 'GROUP' || currentRound?.matchFormat === 'GROUP_DUEL';
   const isGroupDuel = currentRound?.matchFormat === 'GROUP_DUEL' || (currentRound?.matchFormat === 'GROUP' && currentRound?.groupExecutionType === 'DUEL');
   const isPureDuel = currentRound?.matchFormat === 'DUEL';
+  const isSingleSlot = currentRound?.matchFormat === 'SINGLE';
+  const isFormationConcur = currentRound?.matchFormat === 'FORMATION_DIFFICULTY' || currentRound?.matchFormat === 'CONCUR';
+  
   const roundScores = scores.filter(s => s.roundId === selectedRoundId);
-
   const activeGroups = currentRound?.groupList?.length ? currentRound.groupList : ['Group A', 'Group B', 'Group C', 'Group D'];
 
   return (
@@ -86,7 +88,7 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
               📅 अधिकृत सामने व वेळापत्रक (Official Match Schedule)
             </h2>
             <p className="text-[10px] text-gray-400">
-              फेरी: <b className="text-amber-300">{currentRound?.roundName || 'फेरी निवडा'}</b> • फॉरमॅट: <b className="text-emerald-400">{currentRound?.matchFormat}</b>
+              फेरी: <b className="text-amber-300">{currentRound?.roundName || 'फेरी निवडा'}</b> • फॉरमॅट: <b className="text-emerald-400">{isFormationConcur ? 'Formation / Concur' : currentRound?.matchFormat}</b>
             </p>
           </div>
         </div>
@@ -134,13 +136,11 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
               {activeGroups.map(grpName => {
                 const grpTeams = teams.filter(t => fixtures[t.id]?.group === grpName);
                 
-                // Match 1 आणि Match 2 चे संघ शोधणे
                 const m1_t1 = grpTeams.find(t => fixtures[t.id]?.duelMatchNo === 1 && fixtures[t.id]?.duelSide === 'FOP1');
                 const m1_t2 = grpTeams.find(t => fixtures[t.id]?.duelMatchNo === 1 && fixtures[t.id]?.duelSide === 'FOP2');
                 const m2_t1 = grpTeams.find(t => fixtures[t.id]?.duelMatchNo === 2 && fixtures[t.id]?.duelSide === 'FOP1');
                 const m2_t2 = grpTeams.find(t => fixtures[t.id]?.duelMatchNo === 2 && fixtures[t.id]?.duelSide === 'FOP2');
 
-                // स्कोअर झालेले संघ
                 const m1_s1 = roundScores.find(s => s.teamId === m1_t1?.id);
                 const m1_s2 = roundScores.find(s => s.teamId === m1_t2?.id);
                 const m2_s1 = roundScores.find(s => s.teamId === m2_t1?.id);
@@ -164,7 +164,6 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
                         <span className="text-[9px]">{m1_s1 && m1_s2 ? '✅ पूर्ण' : '⏳ बाकी'}</span>
                       </div>
 
-                      {/* Team 1 */}
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-white truncate max-w-[140px]">{m1_t1?.teamName || '-'}</span>
                         {m1_s1 && <span className="font-mono text-emerald-400 font-bold text-[11px]">{m1_s1.pointsAwarded} pts</span>}
@@ -172,7 +171,6 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
 
                       <div className="text-center font-black text-[9px] text-rose-400 font-mono">VS</div>
 
-                      {/* Team 2 */}
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-white truncate max-w-[140px]">{m1_t2?.teamName || '-'}</span>
                         {m1_s2 && <span className="font-mono text-emerald-400 font-bold text-[11px]">{m1_s2.pointsAwarded} pts</span>}
@@ -186,7 +184,6 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
                         <span className="text-[9px]">{m2_s1 && m2_s2 ? '✅ पूर्ण' : '⏳ बाकी'}</span>
                       </div>
 
-                      {/* Team 1 */}
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-white truncate max-w-[140px]">{m2_t1?.teamName || '-'}</span>
                         {m2_s1 && <span className="font-mono text-emerald-400 font-bold text-[11px]">{m2_s1.pointsAwarded} pts</span>}
@@ -194,7 +191,6 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
 
                       <div className="text-center font-black text-[9px] text-rose-400 font-mono">VS</div>
 
-                      {/* Team 2 */}
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-white truncate max-w-[140px]">{m2_t2?.teamName || '-'}</span>
                         {m2_s2 && <span className="font-mono text-emerald-400 font-bold text-[11px]">{m2_s2.pointsAwarded} pts</span>}
@@ -291,6 +287,160 @@ export default function ScoringFixturesTab({ tournamentId, onGoToScoring }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* 🎯 प्रकार ४: SINGLE SLOT (एकाखाली एक सुटसुटीत लिस्ट कार्ड्स) */}
+          {isSingleSlot && (
+            <div className="bg-[#0c0d14] border border-amber-500/20 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-xl">
+              <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-xs sm:text-sm font-black text-white">
+                    ⏱️ एकल स्लॉट सामने क्रमवारी (Single Slot Execution Schedule)
+                  </h3>
+                </div>
+                <span className="text-[10px] font-mono text-gray-400 font-bold">
+                  {roundScores.length} / {Object.keys(fixtures).length} सामने पूर्ण
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {Object.entries(fixtures)
+                  .sort((a, b) => (a[1].slotNumber || 0) - (b[1].slotNumber || 0))
+                  .map(([tId, fix]) => {
+                    const tObj = teams.find(t => t.id === tId);
+                    const tScore = roundScores.find(s => s.teamId === tId);
+
+                    return (
+                      <div 
+                        key={tId} 
+                        className="bg-slate-900/80 hover:bg-slate-900 border border-white/5 hover:border-amber-500/30 p-3 sm:p-3.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 transition shadow"
+                      >
+                        <div className="flex items-center gap-3 w-full sm:w-auto truncate">
+                          <span className="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono font-black text-xs flex items-center justify-center shrink-0">
+                            #{fix.slotNumber || 1}
+                          </span>
+                          <div className="truncate">
+                            <h4 className="font-extrabold text-white text-xs sm:text-sm truncate">{tObj?.teamName || fix.teamName}</h4>
+                            <p className="text-[10px] text-gray-400">#{tObj?.chestNumber || '-'} • {tObj?.city || 'महाराष्ट्र'}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                          <div className="text-left sm:text-right">
+                            <span className="text-[9px] text-gray-500 block font-mono">वेळ व गुण:</span>
+                            <span className="font-mono text-xs font-black text-amber-400">
+                              {tScore ? `${tScore.pointsAwarded} pts (${tScore.finalFormattedTime})` : '—'}
+                            </span>
+                          </div>
+
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-xl shrink-0 ${
+                            tScore ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-white/5 text-gray-400 border border-white/5'
+                          }`}>
+                            {tScore ? '✅ पूर्ण' : '⏳ स्टेजवर बाकी'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* 🎯 प्रकार ५: FORMATION / CONCUR (एकाखाली एक सुटसुटीत लिस्ट कार्ड्स) */}
+          {isFormationConcur && (
+            <div className="bg-[#0c0d14] border border-amber-500/30 rounded-3xl p-4 sm:p-5 space-y-4 shadow-xl">
+              
+              {/* Header & Rules Info */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                      🏆 Formation / Concur — अधिकृत संघ व आव्हान वेळापत्रक
+                    </h3>
+                    <p className="text-[10px] text-gray-400">
+                      थर: <b className="text-amber-300">{currentRound?.tierHeight || 7}</b> • तयारी वेळ: <b className="text-orange-400">{currentRound?.preparationTime || 60}s</b> • रचना गुणतक्त्यानुसार स्कोअरिंग
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-bold">
+                  {roundScores.length} / {Object.keys(fixtures).length} संघ पूर्ण
+                </span>
+              </div>
+
+              {/* Concur Formations Points Reference Pills */}
+              {currentRound?.formationList?.length > 0 && (
+                <div className="p-3 bg-black/50 border border-white/5 rounded-2xl space-y-1.5">
+                  <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> या फेरीतील उपलब्ध रचना (Formations Matrix):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentRound.formationList.map((fmt, fIdx) => (
+                      <span key={fIdx} className="text-[9px] font-mono bg-slate-900 border border-slate-700 text-gray-300 px-2 py-0.5 rounded-lg">
+                        <b>{fmt.name}</b> ({fmt.structure}) : <span className="text-emerald-400 font-bold">{fmt.descarregat}</span> / <span className="text-amber-400">{fmt.carregat}</span> pts
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Concur Horizontal List Cards */}
+              <div className="space-y-2">
+                {Object.entries(fixtures)
+                  .sort((a, b) => (a[1].slotNumber || 0) - (b[1].slotNumber || 0))
+                  .map(([tId, fix]) => {
+                    const tObj = teams.find(t => t.id === tId);
+                    const tScore = roundScores.find(s => s.teamId === tId);
+
+                    return (
+                      <div 
+                        key={tId} 
+                        className="bg-slate-900/80 hover:bg-slate-900 border border-amber-500/20 hover:border-amber-500/40 p-3 sm:p-3.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 transition shadow-lg"
+                      >
+                        <div className="flex items-center gap-3 w-full sm:w-auto truncate">
+                          <span className="w-7 h-7 rounded-xl bg-amber-500 text-black font-mono font-black text-xs flex items-center justify-center shrink-0 shadow">
+                            #{fix.slotNumber || 1}
+                          </span>
+                          <div className="truncate">
+                            <h4 className="font-extrabold text-white text-xs sm:text-sm truncate">{tObj?.teamName || fix.teamName}</h4>
+                            <p className="text-[10px] text-gray-400">#{tObj?.chestNumber || '-'} • {tObj?.city || 'महाराष्ट्र'}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                          {tScore ? (
+                            <div className="flex items-center gap-3 text-left sm:text-right font-mono">
+                              <div>
+                                <span className="text-[9px] text-gray-500 block">रचना:</span>
+                                <span className="text-blue-300 font-bold text-[11px]">{tScore.formationName || 'Standard'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-gray-500 block">स्थिती:</span>
+                                <span className={`text-[11px] font-black ${tScore.situation === 'DESCARREGAT' ? 'text-emerald-400' : tScore.situation === 'CARREGAT' ? 'text-amber-400' : 'text-rose-400'}`}>
+                                  {tScore.situation}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-gray-500 block">गुण:</span>
+                                <span className="text-amber-400 font-black text-xs sm:text-sm">{tScore.pointsAwarded} pts</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-gray-500 font-mono">Pending Challenge</span>
+                          )}
+
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-xl shrink-0 ${
+                            tScore ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-white/5 text-gray-400 border border-white/5'
+                          }`}>
+                            {tScore ? '✅ पूर्ण' : '⏳ बाकी'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
 

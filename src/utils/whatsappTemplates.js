@@ -1,5 +1,24 @@
 // 📩 सर्व व्हॉट्सॲप मेसेज टेम्पलेट्स (Central Configuration)
 export const WHATSAPP_TEMPLATES = {
+
+
+    // 🛡️ २. गोविंदा विमा अर्ज पाठपुरावा
+  INSURANCE: {
+    id: 'INSURANCE',
+    title: '🛡️ गोविंदा विमा अर्ज पाठपुरावा',
+    getMessage: (name, teamName) => {
+      return encodeURIComponent(
+`नमस्कार *${name || teamName}*,
+
+*महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* कडून संपर्क साधत आहोत. 
+
+कृपया **${teamName}** चा गोविंदा विमा अर्ज लवकरात लवकर पूर्ण करावा.
+👉 विमा अर्ज लिंक: https://mrdga.com/#/insurance-info`
+      );
+    }
+  },
+
+  
   // 🚩 १. १६ ऑगस्ट कृष्णानंद सोहळा (RSVP)
   MEETING_16AUG: {
     id: 'MEETING_16AUG',
@@ -29,21 +48,7 @@ export const WHATSAPP_TEMPLATES = {
     }
   },
 
-//   // 🛡️ २. गोविंदा विमा अर्ज पाठपुरावा
-//   INSURANCE: {
-//     id: 'INSURANCE',
-//     title: '🛡️ गोविंदा विमा अर्ज पाठपुरावा',
-//     getMessage: (name, teamName) => {
-//       return encodeURIComponent(
-// `नमस्कार *${name || teamName}*,
 
-// *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* कडून संपर्क साधत आहोत. 
-
-// कृपया **${teamName}** चा गोविंदा विमा अर्ज लवकरात लवकर पूर्ण करावा.
-// 👉 विमा अर्ज लिंक: https://mrdga.com/#/insurance-info`
-//       );
-//     }
-//   },
 
   // 🌐 ३. सर्वसाधारण माहिती / अधिकृत पोर्टल लिंक
   GENERAL: {
