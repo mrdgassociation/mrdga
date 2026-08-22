@@ -101,8 +101,19 @@ export default function InsuranceDashboard() {
   const loadInsuranceRequests = async () => {
     setLoading(true);
     try {
+      // 'createdAt' ऐवजी आपण डेटा आल्यावर तो 'appId' नुसार सॉर्ट करू 
       const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
-      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      let list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // 🎯 इथे आपण appId नुसार सॉर्टिंग करत आहोत
+      // appId फॉरमॅट: MRDGA-YYYYMMDD-0001
+      list.sort((a, b) => {
+        const idA = a.appId || "";
+        const idB = b.appId || "";
+        return idA.localeCompare(idB); // 0001, 0002 अशा क्रमाने येईल
+      });
+
       setInsurances(list || []);
     } catch (err) {
       console.error("❌ [ERROR]: Error fetching insurance data:", err);
