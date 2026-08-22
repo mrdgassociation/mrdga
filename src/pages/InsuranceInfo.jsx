@@ -577,12 +577,12 @@ export default function InsuranceInfo() {
           </div>
         )}
 
-        {/* ---------------- TAB 2: DETAILED DISTRICT ANALYSIS ---------------- */}
-        {activeTab === 'analysis' && (
-          <div className="space-y-6">
-            <InsuranceAnalysisWidget mode="detailed" />
-          </div>
-        )}
+       {/* ---------------- TAB 2: DETAILED DISTRICT ANALYSIS ---------------- */}
+{activeTab === 'analysis' && (
+  <div className="p-8 text-center bg-[#0c0d14] rounded-2xl border border-slate-800 text-slate-400 text-xs">
+    📊 विश्लेषण आकडेवारी लवकरच अद्ययावत केली जाईल.
+  </div>
+)}
 
         
 

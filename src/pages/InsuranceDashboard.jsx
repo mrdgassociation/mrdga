@@ -951,9 +951,12 @@ export default function InsuranceDashboard() {
       {/* ========================================== */}
       {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
       {/* ========================================== */}
-      {activeTab === 'ANALYSIS' && (
-        <InsuranceAnalysisWidget requests={requests} />
-      )}
+     {/* ---------------- TAB 2: DETAILED DISTRICT ANALYSIS ---------------- */}
+{activeTab === 'analysis' && (
+  <div className="p-8 text-center bg-[#0c0d14] rounded-2xl border border-slate-800 text-slate-400 text-xs">
+    📊 विश्लेषण आकडेवारी लवकरच अद्ययावत केली जाईल.
+  </div>
+)}
 
       {/* ========================================== */}
       {/* #SECTION 13: MODALS (PDF, REJECT & APPROVE) */}
