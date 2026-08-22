@@ -9,7 +9,7 @@ import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
@@ -101,17 +101,14 @@ export default function InsuranceDashboard() {
   const loadInsuranceRequests = async () => {
     setLoading(true);
     try {
-      // 'createdAt' ऐवजी आपण डेटा आल्यावर तो 'appId' नुसार सॉर्ट करू 
       const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
-      
       let list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // 🎯 इथे आपण appId नुसार सॉर्टिंग करत आहोत
-      // appId फॉरमॅट: MRDGA-YYYYMMDD-0001
+      // 🎯 सिरीयल प्रमाणे सॉर्टिंग (0001, 0002...)
       list.sort((a, b) => {
         const idA = a.appId || "";
         const idB = b.appId || "";
-        return idA.localeCompare(idB); // 0001, 0002 अशा क्रमाने येईल
+        return idA.localeCompare(idB);
       });
 
       setInsurances(list || []);
@@ -150,6 +147,67 @@ export default function InsuranceDashboard() {
     userDepartment === 'INSURANCE' || 
     (userDepartment === 'SUPER' && userRole === 'Super Admin') || 
     (userDepartment === 'MRDGA' && userRole === 'Super Admin');
+
+  const isSuperAdminOnly = (userDepartment === 'SUPER' && userRole === 'Super Admin') || (userDepartment === 'MRDGA' && userRole === 'Super Admin') || userRole === 'Super Admin';
+
+  // 🛡️ फक्त सुपर ॲडमिनसाठी App ID एडिट फंक्शन
+  const handleEditAppId = async (item) => {
+    if (!isSuperAdminOnly) {
+      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त Super Admin लाच App ID बदलण्याचा अधिकार आहे.', background: '#0f172a', color: '#fff' });
+      return;
+    }
+
+    const { value: newAppId } = await Swal.fire({
+      title: 'App ID बदला / सुधारा',
+      html: `<div style="font-size:12px; color:#cbd5e1; text-align:left; margin-bottom:8px;">मंडळ: <b>${item.teamName}</b><br/>सध्याचा ID: <b style="color:#f59e0b">${item.appId}</b></div>`,
+      input: 'text',
+      inputValue: item.appId,
+      inputPlaceholder: 'उदा. MRDGA-20260821-0005',
+      showCancelButton: true,
+      confirmButtonText: 'अपडेट करा',
+      cancelButtonText: 'रद्द करा',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#64748b',
+      background: '#0f172a',
+      color: '#fff',
+      inputValidator: (value) => {
+        if (!value || !value.trim()) {
+          return 'App ID रिक्त असू शकत नाही!';
+        }
+      }
+    });
+
+    if (newAppId && newAppId.trim() !== item.appId) {
+      try {
+        const docRef = doc(db, "insurance_requests_2026", item.id);
+        await updateDoc(docRef, {
+          appId: newAppId.trim(),
+          comments: arrayUnion({
+            id: Date.now().toString(),
+            byEmail: userEmail,
+            byName: userName,
+            role: userRole,
+            text: `[Super Admin Update]: App ID बदलला (${item.appId} -> ${newAppId.trim()})`,
+            createdAt: new Date().toISOString()
+          })
+        });
+
+        Swal.fire({
+          icon: 'success',
+          title: 'App ID यशस्वीरीत्या बदलला!',
+          timer: 1500,
+          showConfirmButton: false,
+          background: '#0f172a',
+          color: '#fff'
+        });
+
+        loadInsuranceRequests();
+      } catch (err) {
+        console.error("App ID change error:", err);
+        Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'App ID अपडेट करता आला नाही.', background: '#0f172a', color: '#fff' });
+      }
+    }
+  };
 
   // ==========================================
   // #SECTION 4: SUMMARY STATS CALCULATIONS
@@ -302,7 +360,6 @@ export default function InsuranceDashboard() {
     }
   };
 
-// 🌿 सोबर आणि इंग्लिश स्टेटस बॅजेस (Approved, Rejected, Pending)
   const getStatusBadge = (status) => {
     const s = status || '';
     if (s === 'Approved' || s === 'मंजूर' || s.includes('Approved') || s.includes('मंजूर')) {
@@ -705,9 +762,23 @@ export default function InsuranceDashboard() {
                   >
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-mono font-semibold text-slate-300 bg-slate-800 px-1.5 py-0.2 rounded border border-slate-700">
-                          #{item.appId}
-                        </span>
+                        
+                        {/* 🎯 APP ID + Super Admin Edit Button */}
+                        <div className="inline-flex items-center gap-1 bg-slate-800 px-1.5 py-0.2 rounded border border-slate-700">
+                          <span className="text-[10px] font-mono font-semibold text-slate-300">
+                            #{item.appId}
+                          </span>
+                          {isSuperAdminOnly && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditAppId(item)}
+                              className="text-amber-400 hover:text-amber-300 p-0.5 transition cursor-pointer"
+                              title="Super Admin: App ID सुधारा / एडिट करा"
+                            >
+                              <Edit className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </div>
                         
                         {getStatusBadge(item.status)}
 
@@ -729,7 +800,15 @@ export default function InsuranceDashboard() {
                             📍 {mandalAddressText}
                           </span>
                         )}
+                        {/* ⚠️ रिजेक्ट केलेले कारण कार्डवर थेट दिसण्यासाठी */}
+
                         <span className="text-slate-300 font-semibold font-mono"><ShieldCheck className="w-3 h-3 inline text-slate-400"/> {item.govindaCount} गोविंदा</span>
+                        {item.rejectReason && (
+  <div className="text-[11px] text-rose-300 font-sans mt-0.5 bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-800/60 flex items-start gap-1">
+    <span className="font-bold text-rose-400 shrink-0">कारण:</span>
+    <span className="truncate">{item.rejectReason}</span>
+  </div>
+)}
                       </div>
                     </div>
 
@@ -780,7 +859,7 @@ export default function InsuranceDashboard() {
 
                       {isApproved && (
                         <button 
-                          onClick={() => setPrintReqData(item)}
+                          onClick={() => setPrintReqData(item)} 
                           className="px-2.5 py-1 bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 hover:text-white rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                         >
                           <Printer className="w-3.5 h-3.5 text-slate-400" />
@@ -1161,18 +1240,18 @@ export default function InsuranceDashboard() {
               {/* Submit Approval */}
               <div className="flex gap-2 pt-2 border-t border-slate-800">
                 {canApproveOrReject ? (
-                  <button
-                    onClick={() => handleUpdateInsurance('Approved')}
-                    disabled={submitting}
+                  <button 
+                    onClick={() => handleUpdateInsurance('Approved')} 
+                    disabled={submitting} 
                     className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 
                     {selectedReq.status === 'Approved' || selectedReq.status === 'मंजूर' ? 'अपडेट करा' : 'मंजूर करा'}
                   </button>
                 ) : (
-                  <button
-                    onClick={() => handleUpdateInsurance('Pending')}
-                    disabled={submitting}
+                  <button 
+                    onClick={() => handleUpdateInsurance('Pending')} 
+                    disabled={submitting} 
                     className="flex-1 py-2.5 bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-700"
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} 

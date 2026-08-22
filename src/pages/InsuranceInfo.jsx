@@ -124,7 +124,7 @@ export default function InsuranceInfo() {
   const [loading, setLoading] = useState(false);
   const [submittedId, setSubmittedId] = useState(null);
 
-  const sampleFormatImgUrl = "https://i.ibb.co/N2FXL0R6/Whats-App-Image-2026-07-20-at-11-48-52-2.jpg"; 
+  const sampleFormatImgUrl = "https://i.ibb.co/S4YQDwqh/Govinda-Insurance.png"; 
 
   // 🎯 ऑटो-इन्क्रिमेंट ॲटॉमिक आयडी जनरेटर (एकच नंबर कोणालाही डुप्लिकेट जाणार नाही)
 // 🎯 अचूक सिरीयल नंबर जनरेटर (List परमिशनवर आधारित)
@@ -471,6 +471,8 @@ export default function InsuranceInfo() {
     setShowFormModal(true);
   };
 
+  
+
   return (
     <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
       <Navbar />
@@ -534,10 +536,12 @@ export default function InsuranceInfo() {
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            दि ओरिएंटल इन्शुरन्स कंपनी लि. (भारत सरकारचा उपक्रम) यांच्या सहकार्याने सर्व नोंदणीकृत गोविंदांना सामाजिक सुरक्षा व विमा संरक्षण देण्याचा उपक्रम.
+          महाराष्ट्र राज्य शासनाच्या वतीने महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशनच्या
+माध्यमातून ओरीयंटल इंशुरन्स कंपनीच्या सहकार्याने उपलब्ध करून दिलेली मोफत "गोविंदा अपघात विमा संरक्षण योजना" सर्व गोविंदा पथकांसाठी सुरू करण्यात आली आहे.
+तरी सर्व गोविंदा पथकांनी त्वरित आपल्या खेळाडूंचा विमा करून घ्यावा आणि गोविंदा खेळाच्या सुरक्षिततेसह दर्जा उंचवावा.
           </p>
 
-          {/* 🎯 ३. १,६०,००० उद्दिष्ट आणि मंजूर संख्येचा कॉम्पॅक्ट बॉक्स */}
+          {/* 🎯 ३. १,६०,००० उद्दिष्ट आणि मंजूर संख्येचा कॉम्पॅक्ट बॉक्स 
           <div className="pt-2">
             <div className="grid grid-cols-2 gap-2.5 sm:gap-4 bg-black/50 p-2.5 sm:p-3 rounded-2xl border border-white/5">
               
@@ -562,7 +566,7 @@ export default function InsuranceInfo() {
               </div>
 
             </div>
-          </div>
+          </div>*/}
 
         </div>
 
