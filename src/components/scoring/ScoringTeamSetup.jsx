@@ -5,18 +5,19 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
 import { 
   collection, doc, setDoc, deleteDoc, 
-  serverTimestamp, onSnapshot 
+  serverTimestamp, getDocs 
 } from 'firebase/firestore';
 import Swal from 'sweetalert2';
 import { 
   Users, Plus, Trash2, Edit3, MapPin, 
-  Search, Award, Phone, UserCheck
+  Search, Award, Phone, UserCheck, RefreshCw 
 } from 'lucide-react';
 
 export default function ScoringTeamSetup({ tournamentId }) {
   const [teams, setTeams] = useState([]);
   const [allTournamentScores, setAllTournamentScores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,30 +31,37 @@ export default function ScoringTeamSetup({ tournamentId }) {
     chestNumber: ''
   });
 
-  // 1️⃣ संघ आणि स्कोअर फेच करणे
-  useEffect(() => {
+  // 1️⃣ संघ आणि स्कोअर फेच करणे (onSnapshot ऐवजी getDocs - Zero Background Reads)
+  const fetchTeamsAndScores = async (isManual = false) => {
     if (!tournamentId) return;
-    setLoading(true);
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
 
-    const unsubTeams = onSnapshot(collection(db, 'dahi_handi_tournaments', tournamentId, 'teams'), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (Number(a.chestNumber) || 0) - (Number(b.chestNumber) || 0));
-      setTeams(list);
-      setLoading(false);
-    });
+    try {
+      // संघ (Teams)
+      const tSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'teams'));
+      const tList = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      tList.sort((a, b) => (Number(a.chestNumber) || 0) - (Number(b.chestNumber) || 0));
+      setTeams(tList);
 
-    const unsubScores = onSnapshot(collection(db, 'dahi_handi_tournaments', tournamentId, 'scores'), (snap) => {
-      const sList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // स्कोअर (Scores)
+      const sSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'scores'));
+      const sList = sSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAllTournamentScores(sList);
-    });
 
-    return () => {
-      unsubTeams();
-      unsubScores();
-    };
+    } catch (err) {
+      console.error("Error fetching teams data:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeamsAndScores();
   }, [tournamentId]);
 
-  // 💾 संघ सेव्ह करणे
+  // 💾 संघ सेव्ह करणे (स्थानिक स्टेट थेट अपडेट - Zero Re-fetch Reads)
   const handleSaveTeam = async (e) => {
     e.preventDefault();
     if (!formData.teamName.trim()) {
@@ -64,12 +72,26 @@ export default function ScoringTeamSetup({ tournamentId }) {
     try {
       const teamId = editingTeam ? editingTeam.id : `TEAM_${Date.now()}`;
       const teamRef = doc(db, 'dahi_handi_tournaments', tournamentId, 'teams', teamId);
+      const calculatedChestNo = formData.chestNumber ? Number(formData.chestNumber) : teams.length + 1;
 
-      await setDoc(teamRef, {
+      const teamPayload = {
         ...formData,
-        chestNumber: formData.chestNumber ? Number(formData.chestNumber) : teams.length + 1,
+        chestNumber: calculatedChestNo,
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      };
+
+      await setDoc(teamRef, teamPayload, { merge: true });
+
+      // 🎯 पुन्हा getDocs न मागवता स्थानिक स्टेट अपडेट करणे
+      setTeams(prev => {
+        let updated;
+        if (editingTeam) {
+          updated = prev.map(t => t.id === teamId ? { ...t, ...teamPayload, id: teamId } : t);
+        } else {
+          updated = [...prev, { ...teamPayload, id: teamId }];
+        }
+        return updated.sort((a, b) => (Number(a.chestNumber) || 0) - (Number(b.chestNumber) || 0));
+      });
 
       Swal.fire({
         icon: 'success',
@@ -89,7 +111,7 @@ export default function ScoringTeamSetup({ tournamentId }) {
     }
   };
 
-  // 🗑️ संघ डिलीट करणे
+  // 🗑️ संघ डिलीट करणे (स्थानिक स्टेट थेट अपडेट - Zero Re-fetch Reads)
   const handleDeleteTeam = async (id, name) => {
     const res = await Swal.fire({
       title: 'संघ हटवायचा आहे का?',
@@ -106,12 +128,18 @@ export default function ScoringTeamSetup({ tournamentId }) {
     if (res.isConfirmed) {
       try {
         await deleteDoc(doc(db, 'dahi_handi_tournaments', tournamentId, 'teams', id));
+        
+        // 🎯 स्थानिक स्टेटमधून थेट काढून टाकणे
+        setTeams(prev => prev.filter(t => t.id !== id));
+
         Swal.fire({ icon: 'success', title: 'संघ हटवला!', timer: 1200, showConfirmButton: false, background: '#0c0d14', color: '#fff' });
-      } catch (e) {}
+      } catch (e) {
+        console.error("Delete error:", e);
+      }
     }
   };
 
-  // 🎯 संघांची एकूण रँकिंग व आकडेवारी
+  // 🎯 संघांची एकूण रँकिंग व आकडेवारी (In-Memory Processing)
   const teamsWithStats = teams.map(t => {
     const teamScores = allTournamentScores.filter(s => s.teamId === t.id);
     const totalPts = teamScores.reduce((sum, s) => sum + (Number(s.pointsAwarded) || 0), 0);
@@ -162,6 +190,17 @@ export default function ScoringTeamSetup({ tournamentId }) {
             />
           </div>
 
+          {/* 🔄 मॅन्युअल रिफ्रेश बटण */}
+          <button
+            type="button"
+            onClick={() => fetchTeamsAndScores(true)}
+            disabled={refreshing}
+            className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded-xl transition cursor-pointer shrink-0"
+            title="रिफ्रेश करा"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-400' : ''}`} />
+          </button>
+
           <button
             onClick={() => {
               setEditingTeam(null);
@@ -181,7 +220,7 @@ export default function ScoringTeamSetup({ tournamentId }) {
         </div>
       </div>
 
-      {/* 📋 एकाखाली एक टेबल/रो लेआउट */}
+      {/* 📋 टेबल / रो लेआउट */}
       {loading ? (
         <div className="p-8 text-center text-gray-400 text-xs animate-pulse font-bold">संघ लोड होत आहेत...</div>
       ) : teams.length === 0 ? (
@@ -210,7 +249,6 @@ export default function ScoringTeamSetup({ tournamentId }) {
               <tbody className="divide-y divide-white/5 font-sans">
                 {filteredTeams.map((team, idx) => (
                   <tr key={team.id} className="hover:bg-white/5 transition">
-                    {/* 🎯 फक्त एकच स्वच्छ अनुक्रमांक */}
                     <td className="p-3 text-center">
                       <span className="w-7 h-7 inline-flex items-center justify-center bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-xs rounded-lg">
                         #{idx + 1}
@@ -274,75 +312,10 @@ export default function ScoringTeamSetup({ tournamentId }) {
             </table>
           </div>
 
-          {/* 📱 Mobile List / Compact Row View */}
+          {/* 📱 Mobile List View */}
           <div className="md:hidden divide-y divide-white/5">
             {filteredTeams.map((team, idx) => (
               <div key={team.id} className="p-3 flex items-center justify-between gap-2.5 hover:bg-white/5 transition">
-                
-                {/* अ.क्र. */}
-                <div className="flex items-center shrink-0">
-                  <span className="w-7 h-7 flex items-center justify-center bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono font-bold text-xs rounded-lg">
-                    #{idx + 1}
-                  </span>
-                </div>
-
-                {/* संघाचे नाव व शहर */}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-extrabold text-xs text-white truncate leading-tight">
-                    {team.teamName}
-                  </h4>
-                  <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-2.5 h-2.5 text-amber-400" /> {team.city || 'महाराष्ट्र'}
-                  </p>
-                </div>
-
-                {/* एकूण गुण & कृती बटन्स */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-right">
-                    <span className="font-mono font-black text-xs text-emerald-400 block">
-                      {team.totalPts} pts
-                    </span>
-                    <span className="text-[9px] text-gray-500 font-mono">
-                      {team.completedRounds} फेऱ्या
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1 border-l border-white/10 pl-1.5">
-                    <button
-                      onClick={() => {
-                        setEditingTeam(team);
-                        setFormData({
-                          teamName: team.teamName || '',
-                          city: team.city || '',
-                          coachName: team.coachName || '',
-                          contactNumber: team.contactNumber || '',
-                          chestNumber: team.chestNumber || idx + 1
-                        });
-                        setIsModalOpen(true);
-                      }}
-                      className="p-1 text-gray-400 hover:text-amber-400"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteTeam(team.id, team.teamName)}
-                      className="p-1 text-gray-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
-
-          {/* 📱 Mobile List / Compact Row View */}
-          <div className="md:hidden divide-y divide-white/5">
-            {filteredTeams.map((team, idx) => (
-              <div key={team.id} className="p-3 flex items-center justify-between gap-2.5 hover:bg-white/5 transition">
-                
-                {/* अ.क्र. व चेस्ट नंबर */}
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="w-6 text-center font-mono font-black text-xs text-gray-400">
                     {idx + 1}.
@@ -352,7 +325,6 @@ export default function ScoringTeamSetup({ tournamentId }) {
                   </span>
                 </div>
 
-                {/* संघाचे नाव व शहर */}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-extrabold text-xs text-white truncate leading-tight">
                     {team.teamName}
@@ -362,7 +334,6 @@ export default function ScoringTeamSetup({ tournamentId }) {
                   </p>
                 </div>
 
-                {/* एकूण गुण & कृती बटन्स */}
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
                     <span className="font-mono font-black text-xs text-emerald-400 block">
@@ -398,7 +369,6 @@ export default function ScoringTeamSetup({ tournamentId }) {
                     </button>
                   </div>
                 </div>
-
               </div>
             ))}
           </div>
@@ -410,7 +380,6 @@ export default function ScoringTeamSetup({ tournamentId }) {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
           <div className="bg-[#0c0d14] border border-amber-500/30 rounded-3xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4">
-            
             <div className="flex justify-between items-center border-b border-white/10 pb-2.5">
               <h3 className="text-sm font-bold text-amber-400 flex items-center gap-1.5">
                 <Users className="w-4 h-4" />

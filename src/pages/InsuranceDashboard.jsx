@@ -15,7 +15,7 @@ import { PDFDocument } from 'pdf-lib';
 
 import CertificatePrintModal from '../components/CertificatePrintModal';
 import InsuranceDuplicatesTab from '../components/InsuranceDuplicatesTab';
-import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget';
+// ⚠️ InsuranceAnalysisWidget चे न वापरलेले इम्पोर्ट काढून टाकले आहे
 
 const PREDEFINED_REJECT_REASONS = [
   "१. मंडळाच्या लेटरहेडवर नावाची नोंद नाही (No Mandal Name on List)",
@@ -150,7 +150,7 @@ export default function InsuranceDashboard() {
 
   const isSuperAdminOnly = (userDepartment === 'SUPER' && userRole === 'Super Admin') || (userDepartment === 'MRDGA' && userRole === 'Super Admin') || userRole === 'Super Admin';
 
-  // 🛡️ फक्त सुपर ॲडमिनसाठी App ID एडिट फंक्शन
+  // 🛡️ फक्त सुपर ॲडमिनसाठी App ID एडिट फंक्शन (Zero-Waste Local Update)
   const handleEditAppId = async (item) => {
     if (!isSuperAdminOnly) {
       Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त Super Admin लाच App ID बदलण्याचा अधिकार आहे.', background: '#0f172a', color: '#fff' });
@@ -180,17 +180,30 @@ export default function InsuranceDashboard() {
     if (newAppId && newAppId.trim() !== item.appId) {
       try {
         const docRef = doc(db, "insurance_requests_2026", item.id);
+        const newCommentObj = {
+          id: Date.now().toString(),
+          byEmail: userEmail,
+          byName: userName,
+          role: userRole,
+          text: `[Super Admin Update]: App ID बदलला (${item.appId} -> ${newAppId.trim()})`,
+          createdAt: new Date().toISOString()
+        };
+
         await updateDoc(docRef, {
           appId: newAppId.trim(),
-          comments: arrayUnion({
-            id: Date.now().toString(),
-            byEmail: userEmail,
-            byName: userName,
-            role: userRole,
-            text: `[Super Admin Update]: App ID बदलला (${item.appId} -> ${newAppId.trim()})`,
-            createdAt: new Date().toISOString()
-          })
+          comments: arrayUnion(newCommentObj)
         });
+
+        // 🎯 ० Reads: स्थानिक स्टेट थेट अपडेट करणे
+        setInsurances(prev => prev.map(reqItem => 
+          reqItem.id === item.id 
+            ? { 
+                ...reqItem, 
+                appId: newAppId.trim(), 
+                comments: [...(reqItem.comments || []), newCommentObj] 
+              } 
+            : reqItem
+        ));
 
         Swal.fire({
           icon: 'success',
@@ -201,7 +214,6 @@ export default function InsuranceDashboard() {
           color: '#fff'
         });
 
-        loadInsuranceRequests();
       } catch (err) {
         console.error("App ID change error:", err);
         Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'App ID अपडेट करता आला नाही.', background: '#0f172a', color: '#fff' });
@@ -210,7 +222,7 @@ export default function InsuranceDashboard() {
   };
 
   // ==========================================
-  // #SECTION 4: SUMMARY STATS CALCULATIONS
+  // #SECTION 4: SUMMARY STATS CALCULATIONS (Zero Extra Reads)
   // ==========================================
   const stats = useMemo(() => {
     let pending = 0;
@@ -219,13 +231,13 @@ export default function InsuranceDashboard() {
     let totalApprovedGovindas = 0;
 
     requests.forEach(item => {
-      const st = item.status || 'Pending';
+      const st = String(item.status || '').toLowerCase();
       const count = Number(item.govindaCount) || 0;
 
-      if (st === 'Approved' || st.includes('Approved')) {
+      if (st.includes('approved') || st.includes('मंजूर')) {
         approved++;
         totalApprovedGovindas += count;
-      } else if (st === 'Rejected' || st.includes('Rejected')) {
+      } else if (st.includes('rejected') || st.includes('नामंजूर') || st.includes('नाकार')) {
         rejected++;
       } else {
         pending++;
@@ -237,7 +249,7 @@ export default function InsuranceDashboard() {
       pending, 
       approved, 
       rejected, 
-      totalApprovedGovindas,
+      totalApprovedGovindas, 
       target: 160000 
     };
   }, [requests]);
@@ -384,7 +396,7 @@ export default function InsuranceDashboard() {
   };
 
   // ==========================================
-  // #SECTION 7: REJECT & APPROVE HANDLERS
+  // #SECTION 7: REJECT & APPROVE HANDLERS (Zero-Waste Local Updates)
   // ==========================================
   const handleConfirmReject = async () => {
     if (!canApproveOrReject) {
@@ -411,19 +423,32 @@ export default function InsuranceDashboard() {
 
     try {
       const docRef = doc(db, "insurance_requests_2026", rejectModalReq.id);
-      
+      const newCommentObj = {
+        id: Date.now().toString(),
+        byEmail: userEmail,
+        byName: userName,
+        role: userRole,
+        text: `[नामंजूर कारण]: ${finalReason}`,
+        createdAt: new Date().toISOString()
+      };
+
       await updateDoc(docRef, {
         status: 'Rejected',
         rejectReason: finalReason,
-        comments: arrayUnion({
-          id: Date.now().toString(),
-          byEmail: userEmail,
-          byName: userName,
-          role: userRole,
-          text: `[नामंजूर कारण]: ${finalReason}`,
-          createdAt: new Date().toISOString()
-        })
+        comments: arrayUnion(newCommentObj)
       });
+
+      // 🎯 ० Reads: स्थानिक स्टेट थेट अपडेट
+      setInsurances(prev => prev.map(item => 
+        item.id === rejectModalReq.id 
+          ? { 
+              ...item, 
+              status: 'Rejected', 
+              rejectReason: finalReason,
+              comments: [...(item.comments || []), newCommentObj]
+            } 
+          : item
+      ));
 
       Swal.fire({
         icon: 'success',
@@ -438,7 +463,6 @@ export default function InsuranceDashboard() {
       setCustomReason('');
       setDuplicateRefId('');
       setSelectedReason(PREDEFINED_REJECT_REASONS[0]);
-      loadInsuranceRequests();
 
     } catch (err) {
       console.error("Reject action failed:", err);
@@ -516,18 +540,31 @@ export default function InsuranceDashboard() {
         certificateUrl: uploadedCertificateUrl
       };
 
+      let newCommentObj = null;
       if (newComment.trim()) {
-        updateData.comments = arrayUnion({
+        newCommentObj = {
           id: Date.now().toString(),
           byEmail: userEmail,
           byName: userName,
           role: userRole,
           text: newComment.trim(),
           createdAt: new Date().toISOString()
-        });
+        };
+        updateData.comments = arrayUnion(newCommentObj);
       }
 
       await updateDoc(docRef, updateData);
+
+      // 🎯 ० Reads: स्थानिक स्टेट थेट अपडेट
+      setInsurances(prev => prev.map(item => 
+        item.id === selectedReq.id 
+          ? { 
+              ...item, 
+              ...updateData,
+              comments: newCommentObj ? [...(item.comments || []), newCommentObj] : item.comments
+            } 
+          : item
+      ));
 
       Swal.fire({
         icon: 'success',
@@ -541,7 +578,6 @@ export default function InsuranceDashboard() {
       setNewComment('');
       setPolicyCopyFile(null);
       setSelectedReq(null);
-      loadInsuranceRequests();
 
     } catch (err) {
       console.error("Update Insurance action failed:", err);
@@ -662,8 +698,6 @@ export default function InsuranceDashboard() {
         <>
           {/* 📊 SOBER STATS SUMMARY CARDS */}
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-            
-            {/* Desktop Only Total Card */}
             <div 
               onClick={() => { setStatusFilter('ALL'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center hidden sm:block ${statusFilter === 'ALL' ? 'bg-slate-800/80 border-slate-600' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -800,15 +834,13 @@ export default function InsuranceDashboard() {
                             📍 {mandalAddressText}
                           </span>
                         )}
-                        {/* ⚠️ रिजेक्ट केलेले कारण कार्डवर थेट दिसण्यासाठी */}
-
                         <span className="text-slate-300 font-semibold font-mono"><ShieldCheck className="w-3 h-3 inline text-slate-400"/> {item.govindaCount} गोविंदा</span>
                         {item.rejectReason && (
-  <div className="text-[11px] text-rose-300 font-sans mt-0.5 bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-800/60 flex items-start gap-1">
-    <span className="font-bold text-rose-400 shrink-0">कारण:</span>
-    <span className="truncate">{item.rejectReason}</span>
-  </div>
-)}
+                          <div className="text-[11px] text-rose-300 font-sans mt-0.5 bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-800/60 flex items-start gap-1">
+                            <span className="font-bold text-rose-400 shrink-0">कारण:</span>
+                            <span className="truncate">{item.rejectReason}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -912,9 +944,9 @@ export default function InsuranceDashboard() {
 
               {displayedRequests.length < filteredRequests.length && (
                 <div className="text-center pt-2 pb-3">
-                  <button
-                    type="button"
-                    onClick={loadMoreData}
+                  <button 
+                    type="button" 
+                    onClick={loadMoreData} 
                     className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium text-xs rounded-lg transition cursor-pointer"
                   >
                     + आणखी १० अर्ज पाहा
@@ -951,12 +983,11 @@ export default function InsuranceDashboard() {
       {/* ========================================== */}
       {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
       {/* ========================================== */}
-     {/* ---------------- TAB 2: DETAILED DISTRICT ANALYSIS ---------------- */}
-{activeTab === 'analysis' && (
-  <div className="p-8 text-center bg-[#0c0d14] rounded-2xl border border-slate-800 text-slate-400 text-xs">
-    📊 विश्लेषण आकडेवारी लवकरच अद्ययावत केली जाईल.
-  </div>
-)}
+      {activeTab === 'ANALYSIS' && (
+        <div className="p-8 text-center bg-[#0c0d14] rounded-2xl border border-slate-800 text-slate-400 text-xs">
+          📊 विश्लेषण आकडेवारी लवकरच अद्ययावत केली जाईल.
+        </div>
+      )}
 
       {/* ========================================== */}
       {/* #SECTION 13: MODALS (PDF, REJECT & APPROVE) */}

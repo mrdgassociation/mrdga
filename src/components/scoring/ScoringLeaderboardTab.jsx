@@ -3,10 +3,10 @@
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
-import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { 
   Trophy, Award, Users, Layers, Clock, 
-  AlertTriangle, Filter, CheckCircle2, Swords, Sparkles
+  AlertTriangle, Filter, CheckCircle2, Swords, Sparkles, RefreshCw
 } from 'lucide-react';
 
 export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels }) {
@@ -16,55 +16,56 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
   const [roundFixturesMap, setRoundFixturesMap] = useState({});
   const [allScores, setAllScores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 'ALL' | 'R1_R2' | 'ROUND_ID'
   const [selectedFilter, setSelectedFilter] = useState('R1_R2'); 
   const [activeViewType, setActiveViewType] = useState('GROUP'); // 'GROUP' | 'OVERALL'
 
-  // 1️⃣ Data Load
-  useEffect(() => {
+  // 1️⃣ Data Load (onSnapshot ऐवजी getDocs सह - Zero Background Reads)
+  const loadInitialData = async (isManual = false) => {
     if (!tournamentId) return;
-    setLoading(true);
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
 
-    const loadInitialData = async () => {
-      try {
-        // फेऱ्या (Rounds)
-        const rSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds'));
-        const rList = rSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        rList.sort((a, b) => (Number(a.roundNumber) || 0) - (Number(b.roundNumber) || 0));
-        setRounds(rList);
+    try {
+      // १. फेऱ्या (Rounds)
+      const rSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds'));
+      const rList = rSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      rList.sort((a, b) => (Number(a.roundNumber) || 0) - (Number(b.roundNumber) || 0));
+      setRounds(rList);
 
-        // संघ (Teams)
-        const tSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'teams'));
-        const tList = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setTeams(tList);
+      // २. संघ (Teams)
+      const tSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'teams'));
+      const tList = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setTeams(tList);
 
-        // Round 1 Fixtures (मूळ गट A, B, C, D साठी)
-        if (rList.length > 0) {
-          const r1Id = rList.find(r => Number(r.roundNumber) === 1)?.id || rList[0].id;
-          const fixSnap = await getDocs(
-            collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds', r1Id, 'fixtures')
-          );
-          const fMap = {};
-          fixSnap.docs.forEach(d => { fMap[d.id] = d.data(); });
-          setFixtures(fMap);
-        }
-      } catch (err) {
-        console.error("Error loading standings data:", err);
-      } finally {
-        setLoading(false);
+      // ३. Round 1 Fixtures (मूळ गट A, B, C, D साठी)
+      if (rList.length > 0) {
+        const r1Id = rList.find(r => Number(r.roundNumber) === 1)?.id || rList[0].id;
+        const fixSnap = await getDocs(
+          collection(db, 'dahi_handi_tournaments', tournamentId, 'rounds', r1Id, 'fixtures')
+        );
+        const fMap = {};
+        fixSnap.docs.forEach(d => { fMap[d.id] = d.data(); });
+        setFixtures(fMap);
       }
-    };
 
-    loadInitialData();
-
-    // रिअल-टाइम स्कोअर
-    const unsub = onSnapshot(collection(db, 'dahi_handi_tournaments', tournamentId, 'scores'), (snap) => {
-      const sList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // ४. स्कोअर (Scores)
+      const scoreSnap = await getDocs(collection(db, 'dahi_handi_tournaments', tournamentId, 'scores'));
+      const sList = scoreSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAllScores(sList);
-    });
 
-    return () => unsub();
+    } catch (err) {
+      console.error("Error loading standings data:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInitialData();
   }, [tournamentId]);
 
   // चालू निवडलेल्या फेरीचे Fixtures लोड करणे
@@ -105,7 +106,7 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
 
   const filteredScores = getFilteredScores();
 
-  // 🎯 रँकिंग आणि गुणतक्ता कॅल्क्युलेशन
+  // 🎯 रँकिंग आणि गुणतक्ता कॅल्क्युलेशन (In-Memory Processing)
   const calculateStandings = () => {
     let targetTeams = [...teams];
     const isSingleSpecificRound = selectedFilter !== 'ALL' && selectedFilter !== 'R1_R2';
@@ -220,7 +221,7 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
             <button
               onClick={() => setActiveViewType('GROUP')}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                activeViewType === 'GROUP' ? 'bg-blue-500 text-black shadow' : 'text-gray-400 hover:text-white'
+                activeViewType === 'GROUP' ? 'bg-blue-500 text-black shadow font-black' : 'text-gray-400 hover:text-white'
               }`}
             >
               👥 गटनिहाय (A, B, C, D)
@@ -228,12 +229,23 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
             <button
               onClick={() => setActiveViewType('OVERALL')}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                activeViewType === 'OVERALL' ? 'bg-blue-500 text-black shadow' : 'text-gray-400 hover:text-white'
+                activeViewType === 'OVERALL' ? 'bg-blue-500 text-black shadow font-black' : 'text-gray-400 hover:text-white'
               }`}
             >
               🏆 सर्व {standingsData.length} संघ (1 to {standingsData.length})
             </button>
           </div>
+
+          {/* 🔄 मॅन्युअल रिफ्रेश बटण */}
+          <button
+            type="button"
+            onClick={() => loadInitialData(true)}
+            disabled={refreshing}
+            className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+            title="रँकिंग रिफ्रेश करा"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-400' : ''}`} />
+          </button>
         </div>
       </div>
 
@@ -313,10 +325,9 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
       ) : (
 
         /* ============================================================= */
-        /* 🏆 ३. OVERALL STANDINGS TABLE (WINNER / RUNNER-UP / FINALIST BADGES) */
+        /* 🏆 ३. OVERALL STANDINGS TABLE */
         /* ============================================================= */
         <div className="bg-[#0c0d14] border border-amber-500/20 rounded-3xl p-4 shadow-xl space-y-3">
-          
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -333,7 +344,6 @@ export default function ScoringLeaderboardTab({ tournamentId, onNavigateToDuels 
                 {sortedStandings.map((t, idx) => {
                   const isQualified = idx < advancingCutoff;
 
-                  // 🎯 स्टेजनुसार अचूक बॅजेस (Grand Final किंवा Semi Final किंवा League)
                   let badgeText = isQualified ? '🏆 QUALIFIED' : '❌ ELIMINATED';
                   let badgeColor = isQualified ? 'bg-emerald-500 text-black shadow' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
 
