@@ -11,9 +11,9 @@ import {
   MapPin, Phone, User, MessageSquare, ExternalLink, RefreshCw 
 } from 'lucide-react';
 
-export default function InsuranceReportTab({ canExportAndPrint }) {
+export default function InsuranceReportTab({ canExportAndPrint, requests = [] }) {
   const [insuranceData, setInsuranceData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,6 +30,17 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
       .join(' ');
   };
 
+  // 🎯 पॅरेंट डॅशबोर्डकडून डेटा आला असल्यास थेट तोच वापरणे (0 Extra Reads)
+  useEffect(() => {
+    if (Array.isArray(requests) && requests.length > 0) {
+      setInsuranceData(requests);
+      setLoading(false);
+    } else {
+      fetchInsuranceRequests();
+    }
+  }, [requests]);
+
+  // मॅन्युअल रिफ्रेश किंवा फॉलबॅक फेच
   const fetchInsuranceRequests = async () => {
     setLoading(true);
     try {
@@ -43,11 +54,7 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
     }
   };
 
-  useEffect(() => {
-    fetchInsuranceRequests();
-  }, []);
-
-  // Filter Logic
+  // Filter Logic (In-Memory Processing - 0 Extra Reads)
   const filteredData = useMemo(() => {
     return insuranceData.filter(item => {
       const teamName = item.teamName || '';
@@ -118,6 +125,7 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
     }, 1000);
   };
 
+  // 🎯 आकडेवारीची मोजणी (In-Memory Processing - 0 Extra Reads)
   const totalCount = filteredData.length;
   const totalGovindaCount = filteredData.reduce((acc, curr) => acc + Number(curr.govindaCount || 0), 0);
   const approvedCount = filteredData.filter(i => (i.status || '').includes('मंजूर') || (i.status || '').includes('Approved')).length;
@@ -188,7 +196,7 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
         </div>
       </div>
 
-      {/* 📈 STATS CARDS (Matching Master Amber Theme) */}
+      {/* 📈 STATS CARDS */}
       <div className="no-print grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
         <div className="bg-black/40 border border-amber-500/20 p-2 sm:p-2.5 rounded-xl flex flex-col items-center justify-center text-center">
           <p className="text-[8px] sm:text-[10px] text-gray-400 font-bold uppercase truncate w-full">एकूण मंडळ अर्ज</p>
@@ -266,7 +274,7 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
         <p className="p-8 text-center text-gray-400 text-xs font-medium">कोणतीही नोंदणी सापडली नाही.</p>
       ) : (
         <>
-          {/* 📱 MOBILE VIEW CARDS (Compact Cards, No Horizontal Scroll, Phone Hidden on Screen) */}
+          {/* 📱 MOBILE VIEW CARDS */}
           <div className="no-print grid grid-cols-1 md:hidden gap-2.5">
             {filteredData.map((item, idx) => {
               const contactName = toTitleCase(item.contactPerson || item.presidentName || 'संपर्क नाव नाही');
@@ -330,10 +338,8 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
             })}
           </div>
 
-          {/* 💻 DESKTOP & PRINTABLE SECTION (High Density Compact Rows) */}
+          {/* 💻 DESKTOP & PRINTABLE SECTION */}
           <div className="hidden md:block print-area rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-3 sm:p-4 bg-[#0c0d14] text-white">
-            
-            {/* Header for Print / Desktop */}
             <div className="mb-3 pb-2 border-b border-gray-600 flex justify-between items-center">
               <div>
                 <h1 className="text-base font-black text-amber-400 uppercase tracking-wide">
@@ -380,8 +386,6 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
                         <td className="p-1.5 border border-white/5 font-mono font-bold text-amber-400 whitespace-nowrap">{item.appId || item.id}</td>
                         <td className="p-1.5 border border-white/5 font-bold text-white">{toTitleCase(item.teamName)}</td>
                         <td className="p-1.5 border border-white/5 text-gray-300">{toTitleCase(item.district)}</td>
-                        
-                        {/* 🎯 संपर्क व्यक्ती: स्क्रीनवर नंबर लपलेला, PDF मध्ये 📞 सह प्रिंट होईल */}
                         <td className="p-1.5 border border-white/5">
                           <div className="flex items-center justify-between gap-1">
                             <div>
@@ -404,7 +408,6 @@ export default function InsuranceReportTab({ canExportAndPrint }) {
                         <td className="p-1.5 border border-white/5 text-center font-mono font-bold text-amber-300">{item.govindaCount || 0}</td>
                         <td className="p-1.5 border border-white/5 text-center text-gray-300 font-mono">{item.pyramidCapacity || '-'}</td>
                         
-                        {/* लेटरहेड लिंक */}
                         <td className="p-1.5 border border-white/5 text-center no-print">
                           {item.fileUrl ? (
                             <a href={item.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-amber-400 hover:underline">

@@ -128,31 +128,45 @@ export default function InsuranceInfo() {
 
   // 🎯 ऑटो-इन्क्रिमेंट ॲटॉमिक आयडी जनरेटर (एकच नंबर कोणालाही डुप्लिकेट जाणार नाही)
 // 🎯 अचूक सिरीयल नंबर जनरेटर (List परमिशनवर आधारित)
-  const generateUniqueAppId = async () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const dateFormatted = `${year}${month}${day}`;
+const generateUniqueAppId = async () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const dateFormatted = `${year}${month}${day}`;
 
-    let serialNumber = 1;
+  // 🎯 तुझ्या अस्तित्वात असलेल्या counters कलेक्शनमधील insurance_2026 डॉक्युमेंट
+  const counterRef = doc(db, "counters", "insurance_2026");
 
-    try {
-      // सेक्युरिटी रूल्समधील allow list: if true मुळे हे कोणत्याही एररशिवाय चालेल
-      const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
-      if (querySnapshot && !querySnapshot.empty) {
-        serialNumber = querySnapshot.size + 1;
+  try {
+    const newSerial = await runTransaction(db, async (transaction) => {
+      const counterDoc = await transaction.get(counterRef);
+      let nextCount = 1;
+
+      if (counterDoc.exists()) {
+        nextCount = (Number(counterDoc.data().currentCount) || 0) + 1;
+      } else {
+        nextCount = 201; // सुरुवातीचा फॉलबॅक
       }
-    } catch (err) {
-      console.warn("Could not fetch total count, defaulting to 1:", err);
-      serialNumber = 1;
-    }
 
-    // 4 अंकी सिरीयल फॉरमॅट (उदा. 1 -> 0001, 15 -> 0015)
-    const serialFormatted = String(serialNumber).padStart(4, '0');
+      transaction.set(counterRef, { 
+        currentCount: nextCount,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
 
+      return nextCount;
+    });
+
+    const serialFormatted = String(newSerial).padStart(4, '0');
     return `MRDGA-${dateFormatted}-${serialFormatted}`;
-  };
+
+  } catch (err) {
+    console.error("Counter transaction error, using fallback:", err);
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    return `MRDGA-${dateFormatted}-${randomSuffix}`;
+  }
+};
+
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
