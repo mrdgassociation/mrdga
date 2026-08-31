@@ -3,18 +3,19 @@
 // ==========================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase/config';
-import { collection, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, arrayUnion,setDoc } from 'firebase/firestore';
 import { authService } from '../services/authService';
 import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit,TrendingUp
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
 import CertificatePrintModal from '../components/CertificatePrintModal';
 import InsuranceDuplicatesTab from '../components/InsuranceDuplicatesTab';
+import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget'; // 👈 हे इंपोर्ट असल्याची खात्री करा
 // ⚠️ InsuranceAnalysisWidget चे न वापरलेले इम्पोर्ट काढून टाकले आहे
 
 const PREDEFINED_REJECT_REASONS = [
@@ -60,6 +61,7 @@ export default function InsuranceDashboard() {
 
   // 🎯 Filter States
   const [searchTerm, setSearchTerm] = useState('');
+  
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('');
 
@@ -257,28 +259,67 @@ export default function InsuranceDashboard() {
   // ==========================================
   // #SECTION 5: SEARCH & FILTERING LOGIC
   // ==========================================
-  const filteredRequests = useMemo(() => {
+const filteredRequests = useMemo(() => {
     return requests.filter(item => {
       const tName = item.teamName || '';
-      const appId = item.appId || '';
+      const appId = item.appId || item.id || '';
       const cPerson = item.contactPerson || '';
       const phone = item.whatsappNumber || '';
 
+      // १. सर्च बार
       const matchesSearch = tName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             appId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             cPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             phone.includes(searchTerm);
 
-      const matchesStatus = statusFilter === 'ALL' || 
-                            item.status === statusFilter || 
-                            (statusFilter === 'Pending' && (!item.status || item.status.includes('Pending') || item.status.includes('प्रलंबित'))) ||
-                            (statusFilter === 'Approved' && (item.status === 'Approved' || item.status.includes('मंजूर'))) ||
-                            (statusFilter === 'Rejected' && (item.status === 'Rejected' || item.status.includes('नामंजूर')));
-
+      // २. तारीख फिल्टर
       let matchesDate = true;
       if (dateFilter) {
         const itemDateStr = parseFormattedDate(item.createdAt);
         matchesDate = itemDateStr === dateFilter;
+      }
+
+      // ३. स्थिती आणि कारणांची अचूक तपासणी
+      const itemStatus = String(item.status || '');
+      const isApproved = itemStatus === 'Approved' || itemStatus.includes('मंजूर');
+      const isRejected = itemStatus === 'Rejected' || itemStatus.includes('नामंजूर') || itemStatus.includes('नाकार');
+      const hasCert = Boolean(item.certificateUrl && item.certificateUrl.trim() !== '');
+
+      // रिजेक्टचे कारण शोधणे (comments, adminComment, rejectReason किंवा history मधून)
+      const allComments = [
+        item.comments || '',
+        item.adminComment || '',
+        item.rejectReason || '',
+        item.rejectionReason || '',
+        ...(Array.isArray(item.history) ? item.history.map(h => h.comment || '') : [])
+      ].join(' ').toLowerCase();
+
+      // १० क्रमांकाचे Duplicate कारण तपासणे
+      const isDuplicateReason = allComments.includes('duplicate') || 
+                                allComments.includes('दुबार') || 
+                                allComments.includes('आधीच नोंदणी');
+
+      // ४. स्टेटस ड्रॉपडाउन फिल्टर लॉजिक
+      let matchesStatus = false;
+
+      if (statusFilter === 'ALL') {
+        matchesStatus = true;
+      } else if (statusFilter === 'Pending') {
+        matchesStatus = !item.status || itemStatus.includes('Pending') || itemStatus.includes('प्रलंबित');
+      } else if (statusFilter === 'Approved') {
+        matchesStatus = isApproved;
+      } else if (statusFilter === 'PendingCert') {
+        // ⚠️ मंजूर पण पॉलिसी अपलोड बाकी
+        matchesStatus = isApproved && !hasCert;
+      } else if (statusFilter === 'Rejected') {
+        // सर्व नाकारलेले अर्ज
+        matchesStatus = isRejected;
+      } else if (statusFilter === 'REJECTED_DUPLICATE') {
+        // 📑 फक्त दुबार नोंदणीमुळे नाकारलेले (१० नंबरचे कारण)
+        matchesStatus = isRejected && isDuplicateReason;
+      } else if (statusFilter === 'REJECTED_WRONG_DATA') {
+        // 📞 माहिती/कागदपत्र चुकीमुळे नाकारलेले (दुबार सोडून बाकी सर्व - संपर्क करण्यासाठी)
+        matchesStatus = isRejected && !isDuplicateReason;
       }
 
       return matchesSearch && matchesStatus && matchesDate;
@@ -398,6 +439,93 @@ export default function InsuranceDashboard() {
   // ==========================================
   // #SECTION 7: REJECT & APPROVE HANDLERS (Zero-Waste Local Updates)
   // ==========================================
+
+  // ⚡ सुपर ॲडमिनसाठी ॲनालिसिस क्लाऊडवर सिंक करण्याचे फंक्शन ($0 Extra Reads)
+  const handleSyncSummaryToCloud = async () => {
+    if (!isSuperAdminOnly) {
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'अधिकार नाही!', 
+        text: 'फक्त Super Admin लाच ॲनालिसिस अपडेट करण्याचा अधिकार आहे.', 
+        background: '#0f172a', 
+        color: '#fff' 
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let approved = 0;
+      let pending = 0;
+      const distMap = {};
+
+      requests.forEach(data => {
+        const count = Number(data.govindaCount || 0);
+        const status = String(data.status || '').toLowerCase();
+        const dist = data.district || 'इतर / इतर जिल्हे';
+
+        if (status.includes('rejected') || status.includes('नामंजूर') || status.includes('नाकार')) {
+          return;
+        }
+
+        if (!distMap[dist]) {
+          distMap[dist] = { approvedGovinda: 0, pendingGovinda: 0, totalApps: 0, totalGovinda: 0 };
+        }
+
+        distMap[dist].totalApps += 1;
+
+        if (status.includes('approved') || status.includes('मंजूर')) {
+          approved += count;
+          distMap[dist].approvedGovinda += count;
+          distMap[dist].totalGovinda += count;
+        } else {
+          pending += count;
+          distMap[dist].pendingGovinda += count;
+          distMap[dist].totalGovinda += count;
+        }
+      });
+
+      const sortedDistricts = Object.keys(distMap).map(key => ({
+        districtName: key,
+        ...distMap[key]
+      })).sort((a, b) => b.approvedGovinda - a.approvedGovinda);
+
+      // 🎯 फक्त १ डॉक्युमेंट Write (analytics/insurance_summary)
+      const summaryDocRef = doc(db, "analytics", "insurance_summary");
+      await setDoc(summaryDocRef, {
+        target: 160000,
+        approvedCount: approved,
+        pendingCount: pending,
+        balanceCount: Math.max(0, 160000 - approved),
+        percentage: Math.min(100, Number(((approved / 160000) * 100).toFixed(1))),
+        districts: sortedDistricts,
+        lastUpdated: new Date().toISOString()
+      });
+
+      Swal.fire({
+        icon: 'success',
+        title: 'ॲनालिसिस डेटा सिंक झाला!',
+        text: 'पब्लिक युझर्सना आता सर्वात नवीन आकडेवारी दिसेल.',
+        timer: 1500,
+        showConfirmButton: false,
+        background: '#0f172a',
+        color: '#fff'
+      });
+    } catch (err) {
+      console.error("Summary sync error:", err);
+      Swal.fire({ 
+        icon: 'error', 
+        title: 'त्रुटी!', 
+        text: 'डेटा सिंक होऊ शकला नाही. तुमचे Super Admin अधिकार तपासा.', 
+        background: '#0f172a', 
+        color: '#fff' 
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
   const handleConfirmReject = async () => {
     if (!canApproveOrReject) {
       Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0f172a', color: '#fff' });
@@ -748,12 +876,17 @@ export default function InsuranceDashboard() {
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setVisibleCount(10); }}
-                className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1 text-[11px] text-slate-200 font-medium focus:outline-none"
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-medium focus:outline-none"
               >
                 <option value="ALL" className="bg-[#0f172a]">सर्व स्टेटस</option>
-                <option value="Pending" className="bg-[#0f172a]">प्रलंबित</option>
-                <option value="Approved" className="bg-[#0f172a]">मंजूर</option>
-                <option value="Rejected" className="bg-[#0f172a]">नाकारलेले</option>
+                <option value="Pending" className="bg-[#0f172a]">प्रलंबित (Pending)</option>
+                <option value="Approved" className="bg-[#0f172a]">मंजूर (Approved)</option>
+                <option value="PendingCert" className="bg-[#0f172a] text-amber-400 font-bold">⚠️ मंजूर (पॉलिसी अपलोड बाकी)</option>
+                
+                {/* 🚫 रिजेक्ट ऑप्शन्स ग्रुप */}
+                <option value="Rejected" className="bg-[#0f172a]">नाकारलेले (सर्व)</option>
+                <option value="REJECTED_WRONG_DATA" className="bg-[#0f172a] text-rose-400 font-semibold">📞 नाकारलेले (दुरुस्ती / संपर्क)</option>
+                <option value="REJECTED_DUPLICATE" className="bg-[#0f172a] text-slate-400 font-semibold">📑 नाकारलेले (दुबार नोंदणी)</option>
               </select>
 
               <div className="relative flex items-center">
@@ -983,9 +1116,30 @@ export default function InsuranceDashboard() {
       {/* ========================================== */}
       {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
       {/* ========================================== */}
+      {/* ========================================== */}
+      {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
+      {/* ========================================== */}
       {activeTab === 'ANALYSIS' && (
-        <div className="p-8 text-center bg-[#0c0d14] rounded-2xl border border-slate-800 text-slate-400 text-xs">
-          📊 विश्लेषण आकडेवारी लवकरच अद्ययावत केली जाईल.
+        <div className="space-y-3">
+          {isSuperAdminOnly && (
+            <div className="flex justify-between items-center bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl shadow-sm">
+              <span className="text-xs text-slate-300 font-medium">
+                👑 Super Admin: पब्लिक युझर्ससाठी नवीन आकडेवारी अपडेट करा
+              </span>
+              <button
+                type="button"
+                onClick={handleSyncSummaryToCloud}
+                disabled={submitting}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-amber-500/10"
+              >
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TrendingUp className="w-3.5 h-3.5" />}
+                <span>⚡ क्लाऊड ॲनालिसिस सिंक करा</span>
+              </button>
+            </div>
+          )}
+
+          {/* ॲडमिनसाठी ० Reads वर थेट स्थानिक मेमरीतून विश्लेषण */}
+          <InsuranceAnalysisWidget mode="detailed" requests={requests} />
         </div>
       )}
 

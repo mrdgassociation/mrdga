@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase/config';
-import { collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { ShieldCheck, Clock, Target, TrendingUp, AlertCircle, MapPin } from 'lucide-react';
 
-export default function InsuranceAnalysisWidget({ mode = 'basic' }) {
+export default function InsuranceAnalysisWidget({ mode = 'basic', requests = null }) {
   const [stats, setStats] = useState({
     target: 160000,
     approvedCount: 0,
@@ -15,76 +15,112 @@ export default function InsuranceAnalysisWidget({ mode = 'basic' }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStatsData = async () => {
+    // 🎯 केस १: जर ॲडमिन डॅशबोर्डने आधीच मेमरीतील डेटा पाठवला असेल (० Reads)
+    if (requests && Array.isArray(requests) && requests.length > 0) {
+      let approved = 0;
+      let pending = 0;
+      const distMap = {};
+
+      requests.forEach(data => {
+        const count = Number(data.govindaCount || 0);
+        const status = String(data.status || '').toLowerCase();
+        const dist = data.district || 'इतर / इतर जिल्हे';
+
+        if (status.includes('rejected') || status.includes('नामंजूर') || status.includes('नाकार')) return;
+
+        if (!distMap[dist]) {
+          distMap[dist] = { approvedGovinda: 0, pendingGovinda: 0, totalApps: 0, totalGovinda: 0 };
+        }
+
+        distMap[dist].totalApps += 1;
+
+        if (status.includes('approved') || status.includes('मंजूर')) {
+          approved += count;
+          distMap[dist].approvedGovinda += count;
+          distMap[dist].totalGovinda += count;
+        } else {
+          pending += count;
+          distMap[dist].pendingGovinda += count;
+          distMap[dist].totalGovinda += count;
+        }
+      });
+
+      const TOTAL_TARGET = 160000;
+      const balance = Math.max(0, TOTAL_TARGET - approved);
+      const pct = Math.min(100, Number(((approved / TOTAL_TARGET) * 100).toFixed(1)));
+
+      const sortedDistricts = Object.keys(distMap).map(key => ({
+        districtName: key,
+        ...distMap[key]
+      })).sort((a, b) => b.approvedGovinda - a.approvedGovinda);
+
+      setStats({
+        target: TOTAL_TARGET,
+        approvedCount: approved,
+        pendingCount: pending,
+        balanceCount: balance,
+        percentage: pct
+      });
+      setDistrictData(sortedDistricts);
+      setLoading(false);
+      return;
+    }
+
+    // 🎯 केस २: पब्लिक युझरसाठी Single Aggregated Doc + LocalStorage (फक्त १ Read)
+    const fetchSingleSummaryDoc = async () => {
+      const LOCAL_KEY = 'mrdga_insurance_summary_cache';
+      const LOCAL_TIME_KEY = 'mrdga_summary_sync_time';
+
+      const cached = localStorage.getItem(LOCAL_KEY);
+      const cachedTime = localStorage.getItem(LOCAL_TIME_KEY);
+      const FOUR_HOURS = 4 * 60 * 60 * 1000; // ४ तास स्थानिक मेमरीतून दिसेल
+
+      if (cached && cachedTime && (Date.now() - Number(cachedTime) < FOUR_HOURS)) {
+        try {
+          const parsed = JSON.parse(cached);
+          setStats({
+            target: parsed.target || 160000,
+            approvedCount: parsed.approvedCount || 0,
+            pendingCount: parsed.pendingCount || 0,
+            balanceCount: parsed.balanceCount || 160000,
+            percentage: parsed.percentage || 0
+          });
+          setDistrictData(parsed.districts || []);
+          setLoading(false);
+          return;
+        } catch (e) {
+          console.warn("Cache parse error:", e);
+        }
+      }
+
       try {
-        const snap = await getDocs(collection(db, 'insurance_requests_2026'));
-        let approved = 0;
-        let pending = 0;
-        const distMap = {};
+        // 🎯 १,३४५ डॉक्युमेंट्स ऐवजी फक्त १ समरी डॉक्युमेंट फेच (खर्च: १ Read)
+        const docRef = doc(db, "analytics", "insurance_summary");
+        const docSnap = await getDoc(docRef);
 
-        snap.docs.forEach(doc => {
-          const data = doc.data();
-          const count = Number(data.govindaCount || 0);
-          const status = data.status || '';
-          const dist = data.district || 'इतर / इतर जिल्हे';
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setStats({
+            target: data.target || 160000,
+            approvedCount: data.approvedCount || 0,
+            pendingCount: data.pendingCount || 0,
+            balanceCount: data.balanceCount || 160000,
+            percentage: data.percentage || 0
+          });
+          setDistrictData(data.districts || []);
 
-          // १. नाकारलेले (Rejected) अर्ज पूर्णपणे सोडून द्या (Ignore)
-          if (status.includes('Rejected') || status.includes('नामंजूर')) {
-            return;
-          }
-
-          // २. जिल्हावार ऑबजेक्ट तयार करणे
-          if (!distMap[dist]) {
-            distMap[dist] = { 
-              approvedGovinda: 0, 
-              pendingGovinda: 0, 
-              totalApps: 0, 
-              totalGovinda: 0 
-            };
-          }
-
-          distMap[dist].totalApps += 1;
-
-          if (status.includes('Approved') || status.includes('मंजूर')) {
-            approved += count;
-            distMap[dist].approvedGovinda += count;
-            distMap[dist].totalGovinda += count;
-          } else {
-            // बाय-डिफॉल्ट किंवा प्रलंबित (Pending) अर्ज
-            pending += count;
-            distMap[dist].pendingGovinda += count;
-            distMap[dist].totalGovinda += count;
-          }
-        });
-
-        const TOTAL_TARGET = 160000;
-        const balance = Math.max(0, TOTAL_TARGET - approved);
-        const pct = Math.min(100, Number(((approved / TOTAL_TARGET) * 100).toFixed(1)));
-
-        // जिल्ह्यांची लिस्ट बनवून ज्या जिल्ह्यात जास्त विमा झालाय त्यांना वर आणणे (Sort)
-        const sortedDistricts = Object.keys(distMap).map(key => ({
-          districtName: key,
-          ...distMap[key]
-        })).sort((a, b) => b.approvedGovinda - a.approvedGovinda);
-
-        setStats({
-          target: TOTAL_TARGET,
-          approvedCount: approved,
-          pendingCount: pending,
-          balanceCount: balance,
-          percentage: pct
-        });
-        setDistrictData(sortedDistricts);
-
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+          localStorage.setItem(LOCAL_TIME_KEY, Date.now().toString());
+        }
       } catch (err) {
-        console.error("Error fetching insurance stats:", err);
+        console.error("Summary read error:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStatsData();
-  }, []);
+    fetchSingleSummaryDoc();
+  }, [requests]);
 
   if (loading) {
     return (
@@ -96,7 +132,7 @@ export default function InsuranceAnalysisWidget({ mode = 'basic' }) {
 
   return (
     <div className="space-y-6">
-      {/* 🎯 बेसिक ओव्हरव्ह्यू विजेट (दोन्ही टॅबवर / BASIC MODE) */}
+      {/* 🎯 बेसिक ओव्हरव्ह्यू विजेट */}
       <div className="p-5 rounded-2xl bg-[#0c0d14] border-2 border-amber-500/30 space-y-4 shadow-xl">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
           <div>
@@ -158,7 +194,7 @@ export default function InsuranceAnalysisWidget({ mode = 'basic' }) {
         </div>
       </div>
 
-      {/* 📊 डीटेल्स मोड (DETAILED ANALYSIS TAB साठी - जिल्हावार ग्रिड) */}
+      {/* 📊 डीटेल्स मोड (जिल्हावार ग्रिड) */}
       {mode === 'detailed' && (
         <div className="p-5 rounded-2xl bg-[#0c0d14] border border-slate-800 space-y-4 shadow-xl">
           <div className="border-b border-slate-800 pb-3 flex justify-between items-center">
@@ -173,7 +209,6 @@ export default function InsuranceAnalysisWidget({ mode = 'basic' }) {
             </span>
           </div>
 
-          {/* Cards Grid for Districts */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {districtData.length === 0 ? (
               <p className="text-xs text-slate-500 italic p-3">कोणताही जिल्हावार डेटा उपलब्ध नाही.</p>
@@ -190,7 +225,6 @@ export default function InsuranceAnalysisWidget({ mode = 'basic' }) {
                     </span>
                   </div>
 
-                  {/* 2 Status Boxes: Approved & Pending */}
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
                     <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-center">
                       <span className="text-[10px] text-emerald-400 block font-bold">मंजूर गोविंदा</span>

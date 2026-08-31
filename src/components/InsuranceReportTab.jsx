@@ -1,5 +1,5 @@
 // ==========================================
-// #SECTION: INSURANCE REPORT TAB (COMPACT & UNIFIED THEME)
+// #SECTION 1: IMPORTS & INITIALIZATION
 // ==========================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase/config';
@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 
 export default function InsuranceReportTab({ canExportAndPrint, requests = [] }) {
+  // ==========================================
+  // #SECTION 2: STATE MANAGEMENT
+  // ==========================================
   const [insuranceData, setInsuranceData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -30,18 +33,12 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
       .join(' ');
   };
 
-  // 🎯 पॅरेंट डॅशबोर्डकडून डेटा आला असल्यास थेट तोच वापरणे (0 Extra Reads)
-  useEffect(() => {
-    if (Array.isArray(requests) && requests.length > 0) {
-      setInsuranceData(requests);
-      setLoading(false);
-    } else {
-      fetchInsuranceRequests();
-    }
-  }, [requests]);
-
-  // मॅन्युअल रिफ्रेश किंवा फॉलबॅक फेच
+  // ==========================================
+  // #SECTION 3: DATA FETCHING & SYNCHRONIZATION
+  // ==========================================
+  // मॅन्युअल किंवा स्वतंत्र फेच फंक्शन
   const fetchInsuranceRequests = async () => {
+    if (loading) return;
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'insurance_requests_2026'));
@@ -54,7 +51,27 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     }
   };
 
-  // Filter Logic (In-Memory Processing - 0 Extra Reads)
+  // सुरक्षित माउंट: लूप टाळण्यासाठी फक्त एकदाच लोड होईल
+  useEffect(() => {
+    if (Array.isArray(requests) && requests.length > 0) {
+      setInsuranceData(requests);
+      setLoading(false);
+    } else {
+      fetchInsuranceRequests();
+    }
+  }, []);
+
+  // पॅरेंटकडून requests डेटा नंतर आला तर अपडेट करणे
+  useEffect(() => {
+    if (Array.isArray(requests) && requests.length > 0) {
+      setInsuranceData(requests);
+      setLoading(false);
+    }
+  }, [requests]);
+
+  // ==========================================
+  // #SECTION 4: FILTER LOGIC (IN-MEMORY)
+  // ==========================================
   const filteredData = useMemo(() => {
     return insuranceData.filter(item => {
       const teamName = item.teamName || '';
@@ -82,7 +99,40 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     });
   }, [insuranceData, searchTerm, statusFilter, districtFilter, categoryFilter]);
 
-  // Excel Export Handler
+  // ==========================================
+  // #SECTION 5: ACCURATE STATS CALCULATION (EXCLUDING REJECTED)
+  // ==========================================
+  // 🎯 गोळाबेरजेतून रिजेक्ट झालेले अर्ज पूर्णपणे वगळणे
+  const validData = useMemo(() => {
+    return filteredData.filter(item => {
+      const status = String(item.status || '').toLowerCase();
+      return !(status.includes('rejected') || status.includes('नामंजूर') || status.includes('नाकार'));
+    });
+  }, [filteredData]);
+
+  // १. वैध अर्ज संख्या (Rejected वगळून)
+  const totalCount = validData.length;
+
+  // २. सुरक्षित गोविंदा संख्या (फक्त Approved + Pending गोविंदांची अचूक बेरीज)
+  const totalGovindaCount = validData.reduce((acc, curr) => acc + Number(curr.govindaCount || 0), 0);
+
+  // ३. मंजूर अर्ज संख्या
+  const approvedCount = filteredData.filter(i => {
+    const s = String(i.status || '').toLowerCase();
+    return s.includes('approved') || s.includes('मंजूर');
+  }).length;
+
+  // ४. प्रलंबित अर्ज संख्या
+  const pendingCount = filteredData.filter(i => {
+    const s = String(i.status || '').toLowerCase();
+    return s.includes('pending') || s.includes('प्रलंबित') || !i.status;
+  }).length;
+
+  const uniqueDistricts = Array.from(new Set(insuranceData.map(i => i.district).filter(Boolean)));
+
+  // ==========================================
+  // #SECTION 6: EXPORT & PRINT HANDLERS
+  // ==========================================
   const handleExportToExcel = () => {
     if (filteredData.length === 0) {
       Swal.fire({ icon: 'warning', title: 'डेटा उपलब्ध नाही!', background: '#0c0d14', color: '#fff' });
@@ -115,7 +165,6 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     XLSX.writeFile(workbook, `MRDGA_Govinda_Insurance_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  // Print Handler
   const handlePrint = () => {
     const originalTitle = document.title;
     document.title = `MRDGA_Insurance_Report_${new Date().toISOString().slice(0, 10)}`;
@@ -125,13 +174,9 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     }, 1000);
   };
 
-  // 🎯 आकडेवारीची मोजणी (In-Memory Processing - 0 Extra Reads)
-  const totalCount = filteredData.length;
-  const totalGovindaCount = filteredData.reduce((acc, curr) => acc + Number(curr.govindaCount || 0), 0);
-  const approvedCount = filteredData.filter(i => (i.status || '').includes('मंजूर') || (i.status || '').includes('Approved')).length;
-  const pendingCount = filteredData.filter(i => (i.status || '').includes('प्रलंबित') || (i.status || '').includes('Pending') || !i.status).length;
-  const uniqueDistricts = Array.from(new Set(insuranceData.map(i => i.district).filter(Boolean)));
-
+  // ==========================================
+  // #SECTION 7: MAIN RENDER (UI & TABLES)
+  // ==========================================
   return (
     <div className="space-y-3.5 font-sans text-white">
       
@@ -196,10 +241,10 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
         </div>
       </div>
 
-      {/* 📈 STATS CARDS */}
+      {/* 📈 STATS CARDS (Accurate Counts) */}
       <div className="no-print grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
         <div className="bg-black/40 border border-amber-500/20 p-2 sm:p-2.5 rounded-xl flex flex-col items-center justify-center text-center">
-          <p className="text-[8px] sm:text-[10px] text-gray-400 font-bold uppercase truncate w-full">एकूण मंडळ अर्ज</p>
+          <p className="text-[8px] sm:text-[10px] text-gray-400 font-bold uppercase truncate w-full">वैध मंडळ अर्ज</p>
           <p className="text-sm sm:text-base font-black text-white mt-0.5">{totalCount}</p>
         </div>
 
