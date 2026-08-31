@@ -725,6 +725,65 @@ const filteredRequests = useMemo(() => {
     );
   }
 
+
+          const getDynamicWhatsAppMessage = (item) => {
+          const contactName = item.contactPerson || item.presidentName || 'पदाधिकारी';
+          const team = item.teamName || 'आपले मंडळ';
+          const appId = item.appId || item.id || '-';
+          const status = String(item.status || 'Pending').toLowerCase();
+          
+          // रिमार्क / नाकारण्याचे कारण
+          const remark = item.rejectReason || item.comments || item.adminComment || '';
+
+          // 🔴 केस १: अर्ज नाकारला असल्यास (Rejected)
+          if (status.includes('reject') || status.includes('नामंजूर') || status.includes('नाकार')) {
+            return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
+
+        नमस्कार *${contactName}*,
+        आपल्या *${team}* या मंडळाच्या गोविंदा विमा अर्जाबाबत (अर्ज क्र: *#${appId}*).
+
+        ⚠️ *आपला विमा अर्ज खालील कारणामुळे नाकारण्यात आला आहे:*
+        👉 *कारण:* ${remark || 'कागदपत्रांमधील त्रुटी / चुकीची माहिती'}
+
+        📝 *पुढील प्रक्रिया:*
+        कृपया अधिकृत वेबसाईटवर लॉग इन करा, *'My Status'* पर्यायावर जा आणि *सुधारित फाईल त्वरित पुन्हा अपलोड करा.*
+
+        काही अडचण असल्यास संपर्क साधा.
+        
+
+        धन्यवाद,
+        *MRDGA विमा विभाग*`;
+          }
+
+          // 🟢 केस २: अर्ज मंजूर असल्यास (Approved)
+          if (status.includes('approved') || status.includes('मंजूर')) {
+            return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
+
+        नमस्कार *${contactName}*,
+        अभिनंदन! आपल्या *${team}* या मंडळाचा गोविंदा विमा अर्ज (अर्ज क्र: *#${appId}*) *मंजूर (Approved)* करण्यात आला आहे.
+
+        विमा संख्या: *${item.govindaCount || 0} गोविंदा*
+
+        आपले विमा प्रमाणपत्र डाऊनलोड करण्यासाठी कृपया अधिकृत वेबसाईटवर लॉग इन करा, *'My Status'* पर्यायावर जा:
+        
+        धन्यवाद,
+        *MRDGA विमा विभाग*`;
+          }
+
+          // 🟡 केस ३: प्रलंबित / बाय-डिफॉल्ट अर्ज (Pending)
+          return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
+
+        नमस्कार *${contactName}*,
+        आपल्या *${team}* या मंडळाच्या गोविंदा विमा अर्जाबाबत (अर्ज क्र: *#${appId}*).
+
+        आपला अर्ज सध्या *पडताळणी प्रक्रियेत (Pending Review)* आहे.
+
+        
+
+        धन्यवाद,
+        *MRDGA विमा विभाग*`;
+        };
+
   return (
     <div className="space-y-2.5 max-w-7xl mx-auto px-1.5 py-1.5 font-sans text-slate-200">
       
@@ -985,14 +1044,14 @@ const filteredRequests = useMemo(() => {
 
                       <div className="flex items-center gap-1 shrink-0">
                         <a 
-                          href={`https://wa.me/91${item.whatsappNumber}?text=नमस्कार ${encodeURIComponent(item.contactPerson)}, ${encodeURIComponent(item.teamName)} संदर्भात...`} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-white transition"
-                          title="WhatsApp"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                        </a>
+                            href={`https://wa.me/91${item.whatsappNumber || item.phone}?text=${encodeURIComponent(getDynamicWhatsAppMessage(item))}`} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
+                            title="अधिकृत व्हॉट्सॲप मेसेज पाठवा"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </a>
 
                         <a 
                           href={`tel:${item.whatsappNumber}`} 

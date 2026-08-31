@@ -8,7 +8,8 @@ import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { 
   FileSpreadsheet, Printer, Search, Shield, 
-  MapPin, Phone, User, MessageSquare, ExternalLink, RefreshCw 
+  MapPin, Phone, User, MessageSquare, ExternalLink, RefreshCw,
+  BarChart3, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 export default function InsuranceReportTab({ canExportAndPrint, requests = [] }) {
@@ -23,6 +24,9 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [districtFilter, setDistrictFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  
+  // 🎯 Collapsible Summary State (फक्त ॲडमिनला पाहण्यासाठी)
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   const toTitleCase = (str) => {
     if (!str) return '';
@@ -33,10 +37,14 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
       .join(' ');
   };
 
+  // सर्व आकडे शुद्ध इंग्रजीत व भारतीय कॉमा (1,09,149) सह दाखवण्यासाठी
+const formatNumber = (num) => {
+  return Number(num || 0).toLocaleString('en-IN');
+};
+
   // ==========================================
   // #SECTION 3: DATA FETCHING & SYNCHRONIZATION
   // ==========================================
-  // मॅन्युअल किंवा स्वतंत्र फेच फंक्शन
   const fetchInsuranceRequests = async () => {
     if (loading) return;
     setLoading(true);
@@ -51,7 +59,6 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     }
   };
 
-  // सुरक्षित माउंट: लूप टाळण्यासाठी फक्त एकदाच लोड होईल
   useEffect(() => {
     if (Array.isArray(requests) && requests.length > 0) {
       setInsuranceData(requests);
@@ -61,7 +68,6 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     }
   }, []);
 
-  // पॅरेंटकडून requests डेटा नंतर आला तर अपडेट करणे
   useEffect(() => {
     if (Array.isArray(requests) && requests.length > 0) {
       setInsuranceData(requests);
@@ -100,9 +106,9 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
   }, [insuranceData, searchTerm, statusFilter, districtFilter, categoryFilter]);
 
   // ==========================================
-  // #SECTION 5: ACCURATE STATS CALCULATION (EXCLUDING REJECTED)
+  // #SECTION 5: STATS & DISTRICT SUMMARY CALCULATION
   // ==========================================
-  // 🎯 गोळाबेरजेतून रिजेक्ट झालेले अर्ज पूर्णपणे वगळणे
+  // 🎯 रिजेक्ट झालेले अर्ज वगळून वैध संख्या
   const validData = useMemo(() => {
     return filteredData.filter(item => {
       const status = String(item.status || '').toLowerCase();
@@ -110,23 +116,55 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
     });
   }, [filteredData]);
 
-  // १. वैध अर्ज संख्या (Rejected वगळून)
   const totalCount = validData.length;
-
-  // २. सुरक्षित गोविंदा संख्या (फक्त Approved + Pending गोविंदांची अचूक बेरीज)
   const totalGovindaCount = validData.reduce((acc, curr) => acc + Number(curr.govindaCount || 0), 0);
 
-  // ३. मंजूर अर्ज संख्या
   const approvedCount = filteredData.filter(i => {
     const s = String(i.status || '').toLowerCase();
     return s.includes('approved') || s.includes('मंजूर');
   }).length;
 
-  // ४. प्रलंबित अर्ज संख्या
   const pendingCount = filteredData.filter(i => {
     const s = String(i.status || '').toLowerCase();
     return s.includes('pending') || s.includes('प्रलंबित') || !i.status;
   }).length;
+
+  // 📊 जिल्हावार संक्षिप्त समरी (In-Memory Processing)
+  const districtSummary = useMemo(() => {
+    const map = {};
+    insuranceData.forEach(item => {
+      const status = String(item.status || '').toLowerCase();
+      if (status.includes('rejected') || status.includes('नामंजूर') || status.includes('नाकार')) return;
+
+      const dist = item.district || 'इतर / इतर जिल्हे';
+      const gCount = Number(item.govindaCount || 0);
+
+      if (!map[dist]) {
+        map[dist] = {
+          district: dist,
+          totalApps: 0,
+          approvedApps: 0,
+          approvedGovinda: 0,
+          pendingApps: 0,
+          pendingGovinda: 0,
+          totalGovinda: 0
+        };
+      }
+
+      map[dist].totalApps += 1;
+      map[dist].totalGovinda += gCount;
+
+      if (status.includes('approved') || status.includes('मंजूर')) {
+        map[dist].approvedApps += 1;
+        map[dist].approvedGovinda += gCount;
+      } else {
+        map[dist].pendingApps += 1;
+        map[dist].pendingGovinda += gCount;
+      }
+    });
+
+    return Object.values(map).sort((a, b) => b.approvedGovinda - a.approvedGovinda);
+  }, [insuranceData]);
 
   const uniqueDistricts = Array.from(new Set(insuranceData.map(i => i.district).filter(Boolean)));
 
@@ -175,25 +213,79 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
   };
 
   // ==========================================
-  // #SECTION 7: MAIN RENDER (UI & TABLES)
+  // #SECTION 7: MAIN RENDER (UI, SUMMARY & TABLES)
   // ==========================================
   return (
     <div className="space-y-3.5 font-sans text-white">
       
-      {/* 🖨️ PRINT & PDF STYLING */}
+      {/* 🖨️ COMPETITION REPORT प्रमाणे CLEAN PRINT & PDF STYLING */}
       <style>{`
         @media print {
-          body { background-color: #fff !important; color: #000 !important; margin: 0 !important; padding: 0 !important; }
-          .no-print { display: none !important; }
-          .print-area { background: white !important; color: black !important; box-shadow: none !important; border: none !important; width: 100% !important; padding: 0 !important; }
-          .print-page-break { page-break-before: always !important; break-before: page !important; padding-top: 10px !important; }
-          table { width: 100% !important; border-collapse: collapse !important; }
-          th, td { color: black !important; border: 1px solid #333 !important; }
-          th { background-color: #f3f4f6 !important; }
+          body { 
+            background-color: #fff !important; 
+            color: #000 !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+          }
+          .no-print { 
+            display: none !important; 
+          }
+          .print-area { 
+            background: white !important; 
+            color: black !important; 
+            box-shadow: none !important; 
+            border: none !important; 
+            width: 100% !important; 
+            padding: 0 !important; 
+            margin: 0 !important;
+          }
+          .print-page-break { 
+            page-break-before: always !important; 
+            break-before: page !important; 
+            padding-top: 10px !important; 
+          }
+          table { 
+            width: 100% !important; 
+            border-collapse: collapse !important; 
+            font-size: 10px !important; 
+          }
+          th, td { 
+            color: black !important; 
+            border: 1px solid #444 !important; 
+            padding: 4px 5px !important; 
+          }
+          th { 
+            background-color: #f3f4f6 !important; 
+            font-weight: bold !important;
+          }
+          .status-approved-print {
+            border: 1px solid #16a34a !important;
+            color: #15803d !important;
+            background-color: #f0fdf4 !important;
+            font-weight: 800 !important;
+            padding: 1px 4px !important;
+            border-radius: 3px !important;
+          }
+          .status-rejected-print {
+            border: 1px solid #dc2626 !important;
+            color: #b91c1c !important;
+            background-color: #fef2f2 !important;
+            font-weight: 800 !important;
+            padding: 1px 4px !important;
+            border-radius: 3px !important;
+          }
+          .status-pending-print {
+            border: 1px solid #d97706 !important;
+            color: #b45309 !important;
+            background-color: #fffbeb !important;
+            font-weight: 800 !important;
+            padding: 1px 4px !important;
+            border-radius: 3px !important;
+          }
         }
       `}</style>
 
-      {/* 📊 Header & Compact Icon Buttons Bar */}
+      {/* 📊 Header & Action Buttons */}
       <div className="no-print flex justify-between items-center bg-black/50 border border-amber-500/20 p-2.5 sm:p-3 rounded-2xl backdrop-blur-md gap-2 shadow-xl">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl shrink-0">
@@ -207,7 +299,6 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
           </div>
         </div>
 
-        {/* 🎯 कॉम्पॅक्ट आयकॉन बटन्स */}
         <div className="flex items-center gap-1.5 shrink-0">
           {canExportAndPrint && (
             <>
@@ -241,27 +332,103 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
         </div>
       </div>
 
-      {/* 📈 STATS CARDS (Accurate Counts) */}
+      {/* 📈 STATS CARDS (Uniform English Digits) */}
       <div className="no-print grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
         <div className="bg-black/40 border border-amber-500/20 p-2 sm:p-2.5 rounded-xl flex flex-col items-center justify-center text-center">
           <p className="text-[8px] sm:text-[10px] text-gray-400 font-bold uppercase truncate w-full">वैध मंडळ अर्ज</p>
-          <p className="text-sm sm:text-base font-black text-white mt-0.5">{totalCount}</p>
+          <p className="text-sm sm:text-base font-black text-white mt-0.5">{formatNumber(totalCount)}</p>
         </div>
 
         <div className="bg-black/40 border border-amber-500/30 p-2 sm:p-2.5 rounded-xl flex flex-col items-center justify-center text-center">
           <p className="text-[8px] sm:text-[10px] text-amber-400 font-bold uppercase truncate w-full">संरक्षित गोविंदा संख्या</p>
-          <p className="text-sm sm:text-base font-black text-amber-300 mt-0.5">{totalGovindaCount.toLocaleString('mr-IN')}</p>
+          <p className="text-sm sm:text-base font-black text-amber-300 mt-0.5">{formatNumber(totalGovindaCount)}</p>
         </div>
 
         <div className="bg-black/40 border border-emerald-500/20 p-2 sm:p-2.5 rounded-xl flex flex-col items-center justify-center text-center">
           <p className="text-[8px] sm:text-[10px] text-emerald-400/80 font-bold uppercase truncate w-full">मंजूर अर्ज</p>
-          <p className="text-sm sm:text-base font-black text-emerald-400 mt-0.5">{approvedCount}</p>
+          <p className="text-sm sm:text-base font-black text-emerald-400 mt-0.5">{formatNumber(approvedCount)}</p>
         </div>
 
         <div className="bg-black/40 border border-rose-500/20 p-2 sm:p-2.5 rounded-xl flex flex-col items-center justify-center text-center">
           <p className="text-[8px] sm:text-[10px] text-rose-400/80 font-bold uppercase truncate w-full">प्रलंबित अर्ज</p>
-          <p className="text-sm sm:text-base font-black text-rose-400 mt-0.5">{pendingCount}</p>
+          <p className="text-sm sm:text-base font-black text-rose-400 mt-0.5">{formatNumber(pendingCount)}</p>
         </div>
+      </div>
+
+      {/* 📊 COLLAPSIBLE DISTRICT-WISE SUMMARY */}
+      <div className="no-print bg-black/40 border border-amber-500/20 rounded-2xl overflow-hidden shadow-md">
+        <button
+          type="button"
+          onClick={() => setIsSummaryOpen(!isSummaryOpen)}
+          className="w-full flex items-center justify-between p-3 bg-black/60 hover:bg-white/5 transition cursor-pointer text-left"
+        >
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-xs sm:text-sm font-extrabold text-amber-400">
+              जिल्हावार संक्षिप्त सारांश (District-wise Summary: Approved vs Pending)
+            </span>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 font-mono">
+              {districtSummary.length} जिल्हे
+            </span>
+          </div>
+          {isSummaryOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+
+        {isSummaryOpen && (
+          <div className="p-3 border-t border-white/10 overflow-x-auto">
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr className="bg-black/80 border-b border-amber-500/30 text-amber-300 font-extrabold text-[10px]">
+                  <th className="p-1.5 border border-white/10">जिल्हा (District)</th>
+                  <th className="p-1.5 border border-white/10 text-center text-emerald-400">मंजूर अर्ज</th>
+                  <th className="p-1.5 border border-white/10 text-center text-emerald-400">मंजूर गोविंदा</th>
+                  <th className="p-1.5 border border-white/10 text-center text-amber-400">प्रलंबित अर्ज</th>
+                  <th className="p-1.5 border border-white/10 text-center text-amber-400">प्रलंबित गोविंदा</th>
+                  <th className="p-1.5 border border-white/10 text-center text-white">एकूण गोविंदा</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 font-mono">
+                {districtSummary.map((dist, idx) => (
+                  <tr key={idx} className="hover:bg-white/5 transition">
+                    <td className="p-1.5 border border-white/5 font-bold text-white flex items-center gap-1 font-sans">
+                      <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+                      {toTitleCase(dist.district)}
+                    </td>
+                    <td className="p-1.5 border border-white/5 text-center font-bold text-emerald-400">{formatNumber(dist.approvedApps)}</td>
+                    <td className="p-1.5 border border-white/5 text-center font-bold text-emerald-300">{formatNumber(dist.approvedGovinda)}</td>
+                    <td className="p-1.5 border border-white/5 text-center text-amber-400">{formatNumber(dist.pendingApps)}</td>
+                    <td className="p-1.5 border border-white/5 text-center text-amber-300">{formatNumber(dist.pendingGovinda)}</td>
+                    <td className="p-1.5 border border-white/5 text-center font-bold text-white">{formatNumber(dist.totalGovinda)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              
+              {/* 🎯 एकसमान इंग्रजी फॉरमॅटसह GRAND TOTAL */}
+              <tfoot>
+                <tr className="bg-amber-500/10 border-t-2 border-amber-500/50 font-black text-[11px] font-mono">
+                  <td className="p-2 border border-white/10 text-amber-300 uppercase tracking-wide font-sans">
+                    🚩 एकूण (GRAND TOTAL)
+                  </td>
+                  <td className="p-2 border border-white/10 text-center text-emerald-400 text-xs font-bold">
+                    {formatNumber(districtSummary.reduce((sum, d) => sum + d.approvedApps, 0))}
+                  </td>
+                  <td className="p-2 border border-white/10 text-center text-emerald-300 text-xs font-bold">
+                    {formatNumber(districtSummary.reduce((sum, d) => sum + d.approvedGovinda, 0))}
+                  </td>
+                  <td className="p-2 border border-white/10 text-center text-amber-400 text-xs font-bold">
+                    {formatNumber(districtSummary.reduce((sum, d) => sum + d.pendingApps, 0))}
+                  </td>
+                  <td className="p-2 border border-white/10 text-center text-amber-300 text-xs font-bold">
+                    {formatNumber(districtSummary.reduce((sum, d) => sum + d.pendingGovinda, 0))}
+                  </td>
+                  <td className="p-2 border border-white/10 text-center text-white text-xs font-bold">
+                    {formatNumber(districtSummary.reduce((sum, d) => sum + d.totalGovinda, 0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* 🔍 SEARCH & FILTERS BAR */}
@@ -384,8 +551,10 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
           </div>
 
           {/* 💻 DESKTOP & PRINTABLE SECTION */}
-          <div className="hidden md:block print-area rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-3 sm:p-4 bg-[#0c0d14] text-white">
-            <div className="mb-3 pb-2 border-b border-gray-600 flex justify-between items-center">
+          <div className="hidden md:block print-area rounded-2xl overflow-hidden border border-amber-500/20 shadow-2xl p-4 bg-[#0c0d14] text-white">
+            
+            {/* Header (Screen & Clean PDF Print) */}
+            <div className="mb-4 pb-3 border-b border-gray-600 flex justify-between items-center">
               <div>
                 <h1 className="text-base font-black text-amber-400 uppercase tracking-wide">
                   MAHARASHTRA RAJYA DAHIHANDI GOVINDA ASSOCIATION
@@ -394,7 +563,7 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
                   🛡️ गोविंदा विमा अहवाल (Insurance Report 2026)
                 </h2>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  अधिकृत विमा अर्ज यादी | दिनांक: {new Date().toLocaleDateString('mr-IN')}
+                  अधिकृत विमा अर्ज यादी | दिनांक: {new Date().toLocaleDateString('mr-IN')} | स्टेटस: <b className="text-amber-400">{statusFilter}</b>
                 </p>
               </div>
               <div className="text-right">
@@ -404,19 +573,20 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
               </div>
             </div>
 
+            {/* Insurance Records Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-black/80 border-b border-amber-500/30 text-amber-400 font-extrabold uppercase text-[10px]">
-                    <th className="p-1.5 border border-white/10 text-center">अ.क्र.</th>
-                    <th className="p-1.5 border border-white/10">App ID</th>
-                    <th className="p-1.5 border border-white/10">मंडळाचे नाव</th>
-                    <th className="p-1.5 border border-white/10">जिल्हा</th>
-                    <th className="p-1.5 border border-white/10">संपर्क व्यक्ती</th>
-                    <th className="p-1.5 border border-white/10 text-center">गोविंदा</th>
-                    <th className="p-1.5 border border-white/10 text-center">थर</th>
-                    <th className="p-1.5 border border-white/10 text-center no-print">लेटरहेड PDF</th>
-                    <th className="p-1.5 border border-white/10 text-center">स्टेटस</th>
+                    <th className="p-2 border border-white/10 text-center w-8">अ.क्र.</th>
+                    <th className="p-2 border border-white/10 w-24">App ID</th>
+                    <th className="p-2 border border-white/10">मंडळाचे नाव</th>
+                    <th className="p-2 border border-white/10">जिल्हा</th>
+                    <th className="p-2 border border-white/10">संपर्क व्यक्ती</th>
+                    <th className="p-2 border border-white/10 text-center w-14">गोविंदा</th>
+                    <th className="p-2 border border-white/10 text-center w-12">थर</th>
+                    <th className="p-2 border border-white/10 text-center no-print w-16">लेटरहेड</th>
+                    <th className="p-2 border border-white/10 text-center w-20">स्टेटस</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -427,11 +597,13 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
 
                     return (
                       <tr key={item.id || idx} className="hover:bg-white/5 transition">
-                        <td className="p-1.5 border border-white/5 text-gray-400 font-mono text-center">{idx + 1}</td>
-                        <td className="p-1.5 border border-white/5 font-mono font-bold text-amber-400 whitespace-nowrap">{item.appId || item.id}</td>
-                        <td className="p-1.5 border border-white/5 font-bold text-white">{toTitleCase(item.teamName)}</td>
-                        <td className="p-1.5 border border-white/5 text-gray-300">{toTitleCase(item.district)}</td>
-                        <td className="p-1.5 border border-white/5">
+                        <td className="p-2 border border-white/5 text-gray-400 font-mono text-center">{idx + 1}</td>
+                        <td className="p-2 border border-white/5 font-mono font-bold text-amber-400 whitespace-nowrap">{item.appId || item.id}</td>
+                        <td className="p-2 border border-white/5 font-bold text-white">{toTitleCase(item.teamName)}</td>
+                        <td className="p-2 border border-white/5 text-gray-300">{toTitleCase(item.district)}</td>
+                        
+                        {/* संपर्क व्यक्ती व फोन */}
+                        <td className="p-2 border border-white/5">
                           <div className="flex items-center justify-between gap-1">
                             <div>
                               <p className="font-semibold text-gray-200">{toTitleCase(item.contactPerson || item.presidentName || '-')}</p>
@@ -450,10 +622,11 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
                           </div>
                         </td>
 
-                        <td className="p-1.5 border border-white/5 text-center font-mono font-bold text-amber-300">{item.govindaCount || 0}</td>
-                        <td className="p-1.5 border border-white/5 text-center text-gray-300 font-mono">{item.pyramidCapacity || '-'}</td>
+                        <td className="p-2 border border-white/5 text-center font-mono font-bold text-amber-300">{item.govindaCount || 0}</td>
+                        <td className="p-2 border border-white/5 text-center text-gray-300 font-mono">{item.pyramidCapacity || '-'}</td>
                         
-                        <td className="p-1.5 border border-white/5 text-center no-print">
+                        {/* लेटरहेड लिंक (फक्त स्क्रीनवर) */}
+                        <td className="p-2 border border-white/5 text-center no-print">
                           {item.fileUrl ? (
                             <a href={item.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-amber-400 hover:underline">
                               <ExternalLink className="w-3 h-3" /> पाहा
@@ -461,11 +634,12 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
                           ) : <span className="text-gray-500 text-[10px]">-</span>}
                         </td>
 
-                        <td className="p-1.5 border border-white/5 text-center">
+                        {/* स्टेटस */}
+                        <td className="p-2 border border-white/5 text-center">
                           <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold border uppercase ${
-                            isApproved ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                            isRejected ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
-                            'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                            isApproved ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 status-approved-print' :
+                            isRejected ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 status-rejected-print' :
+                            'bg-amber-500/10 text-amber-400 border-amber-500/30 status-pending-print'
                           }`}>
                             {item.status || 'Pending'}
                           </span>

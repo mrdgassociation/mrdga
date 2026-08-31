@@ -73,7 +73,7 @@ export default function InsuranceAnalysisWidget({ mode = 'basic', requests = nul
 
       const cached = localStorage.getItem(LOCAL_KEY);
       const cachedTime = localStorage.getItem(LOCAL_TIME_KEY);
-      const FOUR_HOURS = 4 * 60 * 60 * 1000; // ४ तास स्थानिक मेमरीतून दिसेल
+      const FOUR_HOURS = 1 * 60 * 60 * 1000; // ४ तास स्थानिक मेमरीतून दिसेल
 
       if (cached && cachedTime && (Date.now() - Number(cachedTime) < FOUR_HOURS)) {
         try {
