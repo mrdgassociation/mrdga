@@ -62,6 +62,7 @@ export default function InsuranceDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('');
+  const [pincodeFilter, setPincodeFilter] = useState('ALL'); // 👈 नवीन पिनकोड स्टेट
 
   const [visibleCount, setVisibleCount] = useState(10);
 
@@ -340,6 +341,14 @@ export default function InsuranceDashboard() {
     };
   }, [requests]);
 
+  // सर्व उपलब्ध युनिक पिनकोड्स (Ascending order मध्ये)
+  const uniquePincodes = useMemo(() => {
+    const pins = requests
+      .map(r => String(r.pincode || '').trim())
+      .filter(p => p.length >= 6);
+    return Array.from(new Set(pins)).sort();
+  }, [requests]);
+
   // ==========================================
   // #SECTION 5: SEARCH & FILTERING LOGIC
   // ==========================================
@@ -351,8 +360,9 @@ export default function InsuranceDashboard() {
       const appId = (item.appId || item.id || '').toLowerCase();
       const cPerson = (item.contactPerson || '').toLowerCase();
       const phone = (item.whatsappNumber || item.phone || '').replace(/[^0-9]/g, '');
+      const pincode = String(item.pincode || '').replace(/[^0-9]/g, ''); // 👈 पिनकोड जोडला
 
-      // 🎯 अचूक App ID / नंबर शोधणे
+      // 🎯 स्मार्ट सर्च लॉजिक (App ID, फोन, पिनकोड किंवा नाव)
       let matchesSearch = true;
       if (rawSearch) {
         const isNumeric = /^\d+$/.test(rawSearch);
@@ -361,7 +371,9 @@ export default function InsuranceDashboard() {
           const appIdDigits = appId.replace(/[^0-9]/g, '');
           const matchesExactIdEnd = appIdDigits.endsWith(rawSearch); 
           const matchesExactPhone = phone.includes(rawSearch);
-          matchesSearch = matchesExactIdEnd || matchesExactPhone;
+          const matchesPincode = pincode.includes(rawSearch); // 👈 सर्चमध्ये ६ अंकी किंवा आंशिक पिनकोड शोधणे
+          
+          matchesSearch = matchesExactIdEnd || matchesExactPhone || matchesPincode;
         } else {
           matchesSearch = appId.includes(rawSearch) || 
                           tName.includes(rawSearch) || 
@@ -369,12 +381,14 @@ export default function InsuranceDashboard() {
         }
       }
 
+      // तारीख फिल्टर
       let matchesDate = true;
       if (dateFilter) {
         const itemDateStr = parseFormattedDate(item.createdAt);
         matchesDate = itemDateStr === dateFilter;
       }
 
+      // स्टेटस फिल्टर
       const itemStatus = String(item.status || '');
       const isApproved = itemStatus === 'Approved' || itemStatus.includes('मंजूर');
       const isRejected = itemStatus === 'Rejected' || itemStatus.includes('नामंजूर') || itemStatus.includes('नाकार');
@@ -1031,6 +1045,8 @@ export default function InsuranceDashboard() {
                 <option value="REJECTED_WRONG_DATA" className="bg-[#0f172a] text-rose-400 font-semibold">📞 नाकारलेले (दुरुस्ती / संपर्क)</option>
                 <option value="REJECTED_DUPLICATE" className="bg-[#0f172a] text-slate-400 font-semibold">📑 नाकारलेले (दुबार नोंदणी)</option>
               </select>
+
+              
 
               <div className="relative flex items-center">
                 <Calendar className="w-3.5 h-3.5 absolute left-2 text-slate-400 pointer-events-none z-10" />
