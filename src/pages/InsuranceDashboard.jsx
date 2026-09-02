@@ -288,13 +288,16 @@ export default function InsuranceDashboard() {
     return dupMap;
   }, [requests]);
 
+
   // ==========================================
-  // #SECTION 4: SUMMARY STATS CALCULATIONS (Zero Extra Reads)
+  // #SECTION 4: SUMMARY STATS (नाकारलेल्यांचे २ भागांत वर्गीकरण)
   // ==========================================
   const stats = useMemo(() => {
     let pending = 0;
     let approved = 0;
     let rejected = 0;
+    let rejectedDuplicate = 0;
+    let rejectedWrongData = 0;
     let totalApprovedGovindas = 0;
 
     requests.forEach(item => {
@@ -306,6 +309,20 @@ export default function InsuranceDashboard() {
         totalApprovedGovindas += count;
       } else if (st.includes('rejected') || st.includes('नामंजूर') || st.includes('नाकार')) {
         rejected++;
+
+        // १० क्रमांकाचे दुबार कारण तपासणे
+        const rReason = String(item.rejectReason || item.comments || item.adminComment || '').toLowerCase();
+        const isDup = item.subStatus === 'DUPLICATE' || 
+                      rReason.includes('duplicate') || 
+                      rReason.includes('दुबार') || 
+                      rReason.includes('आधीच नोंदणी') ||
+                      rReason.includes('१०.');
+
+        if (isDup) {
+          rejectedDuplicate++;
+        } else {
+          rejectedWrongData++; // कागदपत्र/दुरुस्ती त्रुटी
+        }
       } else {
         pending++;
       }
@@ -316,6 +333,8 @@ export default function InsuranceDashboard() {
       pending, 
       approved, 
       rejected, 
+      rejectedDuplicate,
+      rejectedWrongData,
       totalApprovedGovindas, 
       target: 160000 
     };
@@ -928,15 +947,18 @@ export default function InsuranceDashboard() {
       {activeTab === 'ALL_REQUESTS' && (
         <>
           {/* 📊 SOBER STATS SUMMARY CARDS */}
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+         {/* 📊 STATS SUMMARY CARDS (नाकारलेल्या अर्जांचे स्पष्ट विभाजन) */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            {/* १. एकूण अर्ज */}
             <div 
               onClick={() => { setStatusFilter('ALL'); setVisibleCount(10); }}
-              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center hidden sm:block ${statusFilter === 'ALL' ? 'bg-slate-800/80 border-slate-600' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'ALL' ? 'bg-slate-800 border-slate-600' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
             >
               <p className="text-[9px] text-slate-400 font-medium uppercase truncate">एकूण अर्ज</p>
               <p className="text-xs sm:text-sm font-bold text-white font-mono">{stats.total}</p>
             </div>
 
+            {/* २. प्रलंबित */}
             <div 
               onClick={() => { setStatusFilter('Pending'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Pending' ? 'bg-slate-800 border-amber-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -945,6 +967,7 @@ export default function InsuranceDashboard() {
               <p className="text-xs sm:text-sm font-bold text-amber-200/90 font-mono">{stats.pending}</p>
             </div>
 
+            {/* ३. मंजूर */}
             <div 
               onClick={() => { setStatusFilter('Approved'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Approved' ? 'bg-slate-800 border-emerald-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -953,12 +976,24 @@ export default function InsuranceDashboard() {
               <p className="text-xs sm:text-sm font-bold text-emerald-300 font-mono">{stats.approved}</p>
             </div>
 
+            {/* ४. कागदपत्र त्रुटी (दुरुस्ती / संपर्क) */}
             <div 
-              onClick={() => { setStatusFilter('Rejected'); setVisibleCount(10); }}
-              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Rejected' ? 'bg-slate-800 border-rose-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
+              onClick={() => { setStatusFilter('REJECTED_WRONG_DATA'); setVisibleCount(10); }}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'REJECTED_WRONG_DATA' ? 'bg-slate-800 border-rose-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
             >
-              <p className="text-[9px] text-slate-400 font-medium uppercase truncate">नाकारलेले</p>
-              <p className="text-xs sm:text-sm font-bold text-rose-300 font-mono">{stats.rejected}</p>
+              <p className="text-[9px] text-rose-400 font-medium uppercase truncate">कागदपत्र त्रुटी</p>
+              <p className="text-xs sm:text-sm font-bold text-rose-300 font-mono">{stats.rejectedWrongData}</p>
+              <span className="text-[8px] text-slate-500 block font-sans">दुरुस्ती/कॉल करणे</span>
+            </div>
+
+            {/* ५. दुबार नोंदणी (Reject १० नंबर) */}
+            <div 
+              onClick={() => { setStatusFilter('REJECTED_DUPLICATE'); setVisibleCount(10); }}
+              className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'REJECTED_DUPLICATE' ? 'bg-slate-800 border-slate-500' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
+            >
+              <p className="text-[9px] text-slate-400 font-medium uppercase truncate">दुबार नोंदणी</p>
+              <p className="text-xs sm:text-sm font-bold text-slate-300 font-mono">{stats.rejectedDuplicate}</p>
+              <span className="text-[8px] text-slate-500 block font-sans">१० नंबर कारण</span>
             </div>
           </div>
 
