@@ -3,20 +3,19 @@
 // ==========================================
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase/config';
-import { collection, getDocs, doc, updateDoc, arrayUnion,setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, arrayUnion, setDoc } from 'firebase/firestore';
 import { authService } from '../services/authService';
 import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit,TrendingUp
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit, TrendingUp
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
 import CertificatePrintModal from '../components/CertificatePrintModal';
 import InsuranceDuplicatesTab from '../components/InsuranceDuplicatesTab';
-import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget'; // 👈 हे इंपोर्ट असल्याची खात्री करा
-// ⚠️ InsuranceAnalysisWidget चे न वापरलेले इम्पोर्ट काढून टाकले आहे
+import InsuranceAnalysisWidget from '../components/InsuranceAnalysisWidget';
 
 const PREDEFINED_REJECT_REASONS = [
   "१. मंडळाच्या लेटरहेडवर नावाची नोंद नाही (No Mandal Name on List)",
@@ -61,7 +60,6 @@ export default function InsuranceDashboard() {
 
   // 🎯 Filter States
   const [searchTerm, setSearchTerm] = useState('');
-  
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('');
 
@@ -106,7 +104,6 @@ export default function InsuranceDashboard() {
       const querySnapshot = await getDocs(collection(db, "insurance_requests_2026"));
       let list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // 🎯 सिरीयल प्रमाणे सॉर्टिंग (0001, 0002...)
       list.sort((a, b) => {
         const idA = a.appId || "";
         const idB = b.appId || "";
@@ -196,7 +193,6 @@ export default function InsuranceDashboard() {
           comments: arrayUnion(newCommentObj)
         });
 
-        // 🎯 ० Reads: स्थानिक स्टेट थेट अपडेट करणे
         setInsurances(prev => prev.map(reqItem => 
           reqItem.id === item.id 
             ? { 
@@ -222,6 +218,75 @@ export default function InsuranceDashboard() {
       }
     }
   };
+
+  // 🔍 पिनपॉईंट अचूक दुबार पडताळणी (नाव + फोन किंवा नाव + पिनकोड)
+  const duplicateMap = useMemo(() => {
+    const dupMap = new Map();
+    
+    const cleanStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9\u0900-\u097F]/g, '').trim();
+    const cleanPhone = (ph) => (ph || '').replace(/[^0-9]/g, '').slice(-10);
+    const cleanPin = (pin) => (pin || '').replace(/[^0-9]/g, '').slice(0, 6);
+
+    const approvedByNameAndPhone = new Map(); 
+    const approvedByNameAndPin = new Map();   
+
+    // १. मंजूर अर्जांची नोंद ठेवणे
+    requests.forEach(req => {
+      const isApproved = String(req.status || '').toLowerCase().includes('approved') || String(req.status || '').toLowerCase().includes('मंजूर');
+      
+      if (isApproved) {
+        const cName = cleanStr(req.teamName);
+        const cPhone = cleanPhone(req.whatsappNumber || req.phone);
+        const cPin = cleanPin(req.pincode);
+        const currentAppId = req.appId || req.id;
+
+        if (cName && cPhone && cPhone.length === 10) {
+          approvedByNameAndPhone.set(`${cName}_${cPhone}`, currentAppId);
+        }
+        if (cName && cPin && cPin.length === 6) {
+          approvedByNameAndPin.set(`${cName}_${cPin}`, currentAppId);
+        }
+      }
+    });
+
+    // २. फक्त तेच अर्ज तपासणे ज्यांना अद्याप '१०. दुबार नोंदणी' कारण लावलेले नाही
+    requests.forEach(req => {
+      const isApproved = String(req.status || '').toLowerCase().includes('approved') || String(req.status || '').toLowerCase().includes('मंजूर');
+      if (isApproved) return;
+
+      // 🚫 ज्यांना आधीच '१०. दुबार नोंदणी' म्हणून नाकारले आहे त्यांना वगळा
+      const rejectReasonText = String(req.rejectReason || '');
+      const isAlreadyMarkedDuplicate = req.subStatus === 'DUPLICATE' || 
+                                       rejectReasonText.includes('Duplicate Entry') || 
+                                       rejectReasonText.includes('दुबार नोंदणी') ||
+                                       rejectReasonText.includes('१०.');
+
+      if (isAlreadyMarkedDuplicate) return;
+
+      const cName = cleanStr(req.teamName);
+      const cPhone = cleanPhone(req.whatsappNumber || req.phone);
+      const cPin = cleanPin(req.pincode);
+      const currentAppId = req.appId || req.id;
+
+      let matchedApprovedId = null;
+
+      if (cName && cPhone && approvedByNameAndPhone.has(`${cName}_${cPhone}`)) {
+        matchedApprovedId = approvedByNameAndPhone.get(`${cName}_${cPhone}`);
+      } else if (cName && cPin && approvedByNameAndPin.has(`${cName}_${cPin}`)) {
+        matchedApprovedId = approvedByNameAndPin.get(`${cName}_${cPin}`);
+      }
+
+      if (matchedApprovedId && matchedApprovedId !== currentAppId) {
+        dupMap.set(req.id, {
+          isDuplicate: true,
+          approvedRefId: matchedApprovedId,
+          reason: `आधीच मंजूर अर्ज क्र. #${matchedApprovedId}`
+        });
+      }
+    });
+
+    return dupMap;
+  }, [requests]);
 
   // ==========================================
   // #SECTION 4: SUMMARY STATS CALCULATIONS (Zero Extra Reads)
@@ -259,72 +324,59 @@ export default function InsuranceDashboard() {
   // ==========================================
   // #SECTION 5: SEARCH & FILTERING LOGIC
   // ==========================================
-const filteredRequests = useMemo(() => {
+  const filteredRequests = useMemo(() => {
+    const rawSearch = searchTerm.trim().toLowerCase();
+
     return requests.filter(item => {
-      const tName = item.teamName || '';
-      const appId = item.appId || item.id || '';
-      const cPerson = item.contactPerson || '';
-      const phone = item.whatsappNumber || '';
+      const tName = (item.teamName || '').toLowerCase();
+      const appId = (item.appId || item.id || '').toLowerCase();
+      const cPerson = (item.contactPerson || '').toLowerCase();
+      const phone = (item.whatsappNumber || item.phone || '').replace(/[^0-9]/g, '');
 
-      // १. सर्च बार
-      const matchesSearch = tName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            appId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            cPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            phone.includes(searchTerm);
+      // 🎯 अचूक App ID / नंबर शोधणे
+      let matchesSearch = true;
+      if (rawSearch) {
+        const isNumeric = /^\d+$/.test(rawSearch);
+        
+        if (isNumeric) {
+          const appIdDigits = appId.replace(/[^0-9]/g, '');
+          const matchesExactIdEnd = appIdDigits.endsWith(rawSearch); 
+          const matchesExactPhone = phone.includes(rawSearch);
+          matchesSearch = matchesExactIdEnd || matchesExactPhone;
+        } else {
+          matchesSearch = appId.includes(rawSearch) || 
+                          tName.includes(rawSearch) || 
+                          cPerson.includes(rawSearch);
+        }
+      }
 
-      // २. तारीख फिल्टर
       let matchesDate = true;
       if (dateFilter) {
         const itemDateStr = parseFormattedDate(item.createdAt);
         matchesDate = itemDateStr === dateFilter;
       }
 
-      // ३. स्थिती आणि कारणांची अचूक तपासणी
       const itemStatus = String(item.status || '');
       const isApproved = itemStatus === 'Approved' || itemStatus.includes('मंजूर');
       const isRejected = itemStatus === 'Rejected' || itemStatus.includes('नामंजूर') || itemStatus.includes('नाकार');
       const hasCert = Boolean(item.certificateUrl && item.certificateUrl.trim() !== '');
+      const isDuplicateStatus = item.subStatus === 'DUPLICATE' || 
+                                String(item.rejectReason || '').includes('Duplicate') || 
+                                String(item.rejectReason || '').includes('दुबार');
 
-      // रिजेक्टचे कारण शोधणे (comments, adminComment, rejectReason किंवा history मधून)
-      const allComments = [
-        item.comments || '',
-        item.adminComment || '',
-        item.rejectReason || '',
-        item.rejectionReason || '',
-        ...(Array.isArray(item.history) ? item.history.map(h => h.comment || '') : [])
-      ].join(' ').toLowerCase();
-
-      // १० क्रमांकाचे Duplicate कारण तपासणे
-      const isDuplicateReason = allComments.includes('duplicate') || 
-                                allComments.includes('दुबार') || 
-                                allComments.includes('आधीच नोंदणी');
-
-      // ४. स्टेटस ड्रॉपडाउन फिल्टर लॉजिक
       let matchesStatus = false;
-
-      if (statusFilter === 'ALL') {
-        matchesStatus = true;
-      } else if (statusFilter === 'Pending') {
-        matchesStatus = !item.status || itemStatus.includes('Pending') || itemStatus.includes('प्रलंबित');
-      } else if (statusFilter === 'Approved') {
-        matchesStatus = isApproved;
-      } else if (statusFilter === 'PendingCert') {
-        // ⚠️ मंजूर पण पॉलिसी अपलोड बाकी
-        matchesStatus = isApproved && !hasCert;
-      } else if (statusFilter === 'Rejected') {
-        // सर्व नाकारलेले अर्ज
-        matchesStatus = isRejected;
-      } else if (statusFilter === 'REJECTED_DUPLICATE') {
-        // 📑 फक्त दुबार नोंदणीमुळे नाकारलेले (१० नंबरचे कारण)
-        matchesStatus = isRejected && isDuplicateReason;
-      } else if (statusFilter === 'REJECTED_WRONG_DATA') {
-        // 📞 माहिती/कागदपत्र चुकीमुळे नाकारलेले (दुबार सोडून बाकी सर्व - संपर्क करण्यासाठी)
-        matchesStatus = isRejected && !isDuplicateReason;
-      }
+      if (statusFilter === 'ALL') matchesStatus = true;
+      else if (statusFilter === 'AUTO_DETECTED_DUP') matchesStatus = duplicateMap.has(item.id) && !isApproved;
+      else if (statusFilter === 'Pending') matchesStatus = !item.status || itemStatus.includes('Pending') || itemStatus.includes('प्रलंबित');
+      else if (statusFilter === 'Approved') matchesStatus = isApproved;
+      else if (statusFilter === 'PendingCert') matchesStatus = isApproved && !hasCert;
+      else if (statusFilter === 'Rejected') matchesStatus = isRejected;
+      else if (statusFilter === 'REJECTED_DUPLICATE') matchesStatus = isRejected && isDuplicateStatus;
+      else if (statusFilter === 'REJECTED_WRONG_DATA') matchesStatus = isRejected && !isDuplicateStatus;
 
       return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [requests, searchTerm, statusFilter, dateFilter]);
+  }, [requests, searchTerm, statusFilter, dateFilter, duplicateMap]);
 
   const displayedRequests = useMemo(() => {
     return filteredRequests.slice(0, visibleCount);
@@ -437,10 +489,8 @@ const filteredRequests = useMemo(() => {
   };
 
   // ==========================================
-  // #SECTION 7: REJECT & APPROVE HANDLERS (Zero-Waste Local Updates)
+  // #SECTION 7: REJECT & APPROVE HANDLERS
   // ==========================================
-
-  // ⚡ सुपर ॲडमिनसाठी ॲनालिसिस क्लाऊडवर सिंक करण्याचे फंक्शन ($0 Extra Reads)
   const handleSyncSummaryToCloud = async () => {
     if (!isSuperAdminOnly) {
       Swal.fire({ 
@@ -490,7 +540,6 @@ const filteredRequests = useMemo(() => {
         ...distMap[key]
       })).sort((a, b) => b.approvedGovinda - a.approvedGovinda);
 
-      // 🎯 फक्त १ डॉक्युमेंट Write (analytics/insurance_summary)
       const summaryDocRef = doc(db, "analytics", "insurance_summary");
       await setDoc(summaryDocRef, {
         target: 160000,
@@ -525,7 +574,6 @@ const filteredRequests = useMemo(() => {
     }
   };
 
-
   const handleConfirmReject = async () => {
     if (!canApproveOrReject) {
       Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त विमा विभाग मधील अधिकारीच अर्ज Reject करू शकतात.', confirmButtonColor: '#ef4444', background: '#0f172a', color: '#fff' });
@@ -538,7 +586,8 @@ const filteredRequests = useMemo(() => {
       ? customReason.trim() 
       : selectedReason;
 
-    if (selectedReason.includes("Duplicate Entry") && duplicateRefId.trim()) {
+    const isDuplicateReason = selectedReason.includes("Duplicate Entry") || selectedReason.includes("दुबार");
+    if (isDuplicateReason && duplicateRefId.trim()) {
       finalReason += ` [मूळ अर्ज ID: ${duplicateRefId.trim()}]`;
     }
 
@@ -560,19 +609,24 @@ const filteredRequests = useMemo(() => {
         createdAt: new Date().toISOString()
       };
 
-      await updateDoc(docRef, {
+      const updatePayload = {
         status: 'Rejected',
         rejectReason: finalReason,
+        subStatus: isDuplicateReason ? 'DUPLICATE' : 'WRONG_DATA',
         comments: arrayUnion(newCommentObj)
-      });
+      };
 
-      // 🎯 ० Reads: स्थानिक स्टेट थेट अपडेट
+      if (isDuplicateReason && duplicateRefId.trim()) {
+        updatePayload.duplicateOfAppId = duplicateRefId.trim();
+      }
+
+      await updateDoc(docRef, updatePayload);
+
       setInsurances(prev => prev.map(item => 
         item.id === rejectModalReq.id 
           ? { 
               ...item, 
-              status: 'Rejected', 
-              rejectReason: finalReason,
+              ...updatePayload,
               comments: [...(item.comments || []), newCommentObj]
             } 
           : item
@@ -594,7 +648,7 @@ const filteredRequests = useMemo(() => {
 
     } catch (err) {
       console.error("Reject action failed:", err);
-      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्टेटस बदलता आला नाही.' });
+      Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'स्टेटस बदलता आला नाही.', background: '#0f172a', color: '#fff' });
     } finally {
       setSubmitting(false);
     }
@@ -683,7 +737,6 @@ const filteredRequests = useMemo(() => {
 
       await updateDoc(docRef, updateData);
 
-      // 🎯 ० Reads: स्थानिक स्टेट थेट अपडेट
       setInsurances(prev => prev.map(item => 
         item.id === selectedReq.id 
           ? { 
@@ -725,64 +778,56 @@ const filteredRequests = useMemo(() => {
     );
   }
 
+  const getDynamicWhatsAppMessage = (item) => {
+    const contactName = item.contactPerson || item.presidentName || 'पदाधिकारी';
+    const team = item.teamName || 'आपले मंडळ';
+    const appId = item.appId || item.id || '-';
+    const status = String(item.status || 'Pending').toLowerCase();
+    
+    const remark = item.rejectReason || item.comments || item.adminComment || '';
 
-          const getDynamicWhatsAppMessage = (item) => {
-          const contactName = item.contactPerson || item.presidentName || 'पदाधिकारी';
-          const team = item.teamName || 'आपले मंडळ';
-          const appId = item.appId || item.id || '-';
-          const status = String(item.status || 'Pending').toLowerCase();
-          
-          // रिमार्क / नाकारण्याचे कारण
-          const remark = item.rejectReason || item.comments || item.adminComment || '';
+    if (status.includes('reject') || status.includes('नामंजूर') || status.includes('नाकार')) {
+      return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
 
-          // 🔴 केस १: अर्ज नाकारला असल्यास (Rejected)
-          if (status.includes('reject') || status.includes('नामंजूर') || status.includes('नाकार')) {
-            return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
+नमस्कार *${contactName}*,
+आपल्या *${team}* या मंडळाच्या गोविंदा विमा अर्जाबाबत (अर्ज क्र: *#${appId}*).
 
-        नमस्कार *${contactName}*,
-        आपल्या *${team}* या मंडळाच्या गोविंदा विमा अर्जाबाबत (अर्ज क्र: *#${appId}*).
+⚠️ *आपला विमा अर्ज खालील कारणामुळे नाकारण्यात आला आहे:*
+👉 *कारण:* ${remark || 'कागदपत्रांमधील त्रुटी / चुकीची माहिती'}
 
-        ⚠️ *आपला विमा अर्ज खालील कारणामुळे नाकारण्यात आला आहे:*
-        👉 *कारण:* ${remark || 'कागदपत्रांमधील त्रुटी / चुकीची माहिती'}
+📝 *पुढील प्रक्रिया:*
+कृपया अधिकृत वेबसाईटवर लॉग इन करा, *'My Status'* पर्यायावर जा आणि *सुधारित फाईल त्वरित पुन्हा अपलोड करा.*
 
-        📝 *पुढील प्रक्रिया:*
-        कृपया अधिकृत वेबसाईटवर लॉग इन करा, *'My Status'* पर्यायावर जा आणि *सुधारित फाईल त्वरित पुन्हा अपलोड करा.*
+काही अडचण असल्यास संपर्क साधा.
 
-        काही अडचण असल्यास संपर्क साधा.
-        
+धन्यवाद,
+*MRDGA विमा विभाग*`;
+    }
 
-        धन्यवाद,
-        *MRDGA विमा विभाग*`;
-          }
+    if (status.includes('approved') || status.includes('मंजूर')) {
+      return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
 
-          // 🟢 केस २: अर्ज मंजूर असल्यास (Approved)
-          if (status.includes('approved') || status.includes('मंजूर')) {
-            return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
+नमस्कार *${contactName}*,
+अभिनंदन! आपल्या *${team}* या मंडळाचा गोविंदा विमा अर्ज (अर्ज क्र: *#${appId}*) *मंजूर (Approved)* करण्यात आला आहे.
 
-        नमस्कार *${contactName}*,
-        अभिनंदन! आपल्या *${team}* या मंडळाचा गोविंदा विमा अर्ज (अर्ज क्र: *#${appId}*) *मंजूर (Approved)* करण्यात आला आहे.
+विमा संख्या: *${item.govindaCount || 0} गोविंदा*
 
-        विमा संख्या: *${item.govindaCount || 0} गोविंदा*
+आपले विमा प्रमाणपत्र डाऊनलोड करण्यासाठी कृपया अधिकृत वेबसाईटवर लॉग इन करा, *'My Status'* पर्यायावर जा:
 
-        आपले विमा प्रमाणपत्र डाऊनलोड करण्यासाठी कृपया अधिकृत वेबसाईटवर लॉग इन करा, *'My Status'* पर्यायावर जा:
-        
-        धन्यवाद,
-        *MRDGA विमा विभाग*`;
-          }
+धन्यवाद,
+*MRDGA विमा विभाग*`;
+    }
 
-          // 🟡 केस ३: प्रलंबित / बाय-डिफॉल्ट अर्ज (Pending)
-          return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
+    return `🚩 *महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन (MRDGA)* 🚩
 
-        नमस्कार *${contactName}*,
-        आपल्या *${team}* या मंडळाच्या गोविंदा विमा अर्जाबाबत (अर्ज क्र: *#${appId}*).
+नमस्कार *${contactName}*,
+आपल्या *${team}* या मंडळाच्या गोविंदा विमा अर्जाबाबत (अर्ज क्र: *#${appId}*).
 
-        आपला अर्ज सध्या *पडताळणी प्रक्रियेत (Pending Review)* आहे.
+आपला अर्ज सध्या *पडताळणी प्रक्रियेत (Pending Review)* आहे.
 
-        
-
-        धन्यवाद,
-        *MRDGA विमा विभाग*`;
-        };
+धन्यवाद,
+*MRDGA विमा विभाग*`;
+  };
 
   return (
     <div className="space-y-2.5 max-w-7xl mx-auto px-1.5 py-1.5 font-sans text-slate-200">
@@ -805,7 +850,6 @@ const filteredRequests = useMemo(() => {
           </div>
         </div>
 
-        {/* 📊 सोबर आकडेवारी (1.6 Lakh Target) */}
         <div className="hidden lg:flex items-center gap-3 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800/80 font-mono text-xs text-slate-300">
           <div className="flex items-center gap-1">
             <Target className="w-3.5 h-3.5 text-slate-400" />
@@ -938,11 +982,16 @@ const filteredRequests = useMemo(() => {
                 className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-medium focus:outline-none"
               >
                 <option value="ALL" className="bg-[#0f172a]">सर्व स्टेटस</option>
+                
+                {/* 🎯 १-क्लिक संभाव्य दुबार अर्ज पर्याय */}
+                <option value="AUTO_DETECTED_DUP" className="bg-[#0f172a] text-amber-300 font-bold">
+                  ⚠️ संभाव्य दुबार अर्ज (Auto Detected)
+                </option>
+
                 <option value="Pending" className="bg-[#0f172a]">प्रलंबित (Pending)</option>
                 <option value="Approved" className="bg-[#0f172a]">मंजूर (Approved)</option>
                 <option value="PendingCert" className="bg-[#0f172a] text-amber-400 font-bold">⚠️ मंजूर (पॉलिसी अपलोड बाकी)</option>
                 
-                {/* 🚫 रिजेक्ट ऑप्शन्स ग्रुप */}
                 <option value="Rejected" className="bg-[#0f172a]">नाकारलेले (सर्व)</option>
                 <option value="REJECTED_WRONG_DATA" className="bg-[#0f172a] text-rose-400 font-semibold">📞 नाकारलेले (दुरुस्ती / संपर्क)</option>
                 <option value="REJECTED_DUPLICATE" className="bg-[#0f172a] text-slate-400 font-semibold">📑 नाकारलेले (दुबार नोंदणी)</option>
@@ -980,11 +1029,16 @@ const filteredRequests = useMemo(() => {
                 const isApproved = item.status === 'Approved' || item.status === 'मंजूर' || item.status?.includes('मंजूर');
                 const hasCertificate = !!item.certificateUrl;
                 const mandalAddressText = item.address || item.mandalAddress || '';
+                const dupInfo = duplicateMap?.get(item.id);
 
                 return (
                   <div 
                     key={item.id}
-                    className="p-3 rounded-xl border border-slate-800/90 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 transition shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2.5"
+                    className={`p-3 rounded-xl border transition shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2.5 ${
+                      dupInfo && !isApproved 
+                        ? 'border-amber-500/40 bg-amber-950/10 hover:border-amber-500/60' 
+                        : 'border-slate-800/90 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700'
+                    }`}
                   >
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -1008,6 +1062,37 @@ const filteredRequests = useMemo(() => {
                         
                         {getStatusBadge(item.status)}
 
+                        {/* ⚠️ दुबार नोंदणी शक्यता इशारा व थेट PDF Compare बटण */}
+                        {dupInfo && !isApproved && (
+                          <div className="inline-flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              ⚠️ {dupInfo.reason}
+                            </span>
+                            
+                            {(() => {
+                              const originalApprovedReq = requests.find(r => (r.appId === dupInfo.approvedRefId || r.id === dupInfo.approvedRefId));
+                              if (originalApprovedReq?.fileUrl && item.fileUrl) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => setComparePdfs({
+                                      title1: `सध्याचा अर्ज (#${item.appId})`,
+                                      pdf1: item.fileUrl,
+                                      title2: `मंजूर मूळ अर्ज (#${originalApprovedReq.appId})`,
+                                      pdf2: originalApprovedReq.fileUrl
+                                    })}
+                                    className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition shadow"
+                                    title="दोन्ही PDF समोरासमोर तपासा"
+                                  >
+                                    🔍 दोन्ही PDF तपासा
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        )}
+
                         {item.policyNumber && (
                           <span className="text-[10px] font-mono font-medium text-slate-300 bg-slate-950 px-1.5 py-0.2 rounded border border-slate-700/80">
                             पॉलिसी: {item.policyNumber}
@@ -1027,6 +1112,7 @@ const filteredRequests = useMemo(() => {
                           </span>
                         )}
                         <span className="text-slate-300 font-semibold font-mono"><ShieldCheck className="w-3 h-3 inline text-slate-400"/> {item.govindaCount} गोविंदा</span>
+                        
                         {item.rejectReason && (
                           <div className="text-[11px] text-rose-300 font-sans mt-0.5 bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-800/60 flex items-start gap-1">
                             <span className="font-bold text-rose-400 shrink-0">कारण:</span>
@@ -1044,14 +1130,14 @@ const filteredRequests = useMemo(() => {
 
                       <div className="flex items-center gap-1 shrink-0">
                         <a 
-                            href={`https://wa.me/91${item.whatsappNumber || item.phone}?text=${encodeURIComponent(getDynamicWhatsAppMessage(item))}`} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
-                            title="अधिकृत व्हॉट्सॲप मेसेज पाठवा"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                          </a>
+                          href={`https://wa.me/91${item.whatsappNumber || item.phone}?text=${encodeURIComponent(getDynamicWhatsAppMessage(item))}`} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="p-1.5 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-emerald-600 hover:text-white transition"
+                          title="अधिकृत व्हॉट्सॲप मेसेज पाठवा"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </a>
 
                         <a 
                           href={`tel:${item.whatsappNumber}`} 
@@ -1120,7 +1206,13 @@ const filteredRequests = useMemo(() => {
                             </button>
 
                             <button 
-                              onClick={() => setRejectModalReq(item)} 
+                              onClick={() => {
+                                setRejectModalReq(item);
+                                if (dupInfo) {
+                                  setSelectedReason("१०. या मंडळाची आधीच नोंदणी झाली आहे [Duplicate Entry] (दुबार नोंदणी)");
+                                  setDuplicateRefId(dupInfo.approvedRefId || '');
+                                }
+                              }} 
                               className="px-2.5 py-1 bg-rose-950/40 text-rose-300 border border-rose-800/80 hover:bg-rose-900/60 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition shrink-0"
                             >
                               <XCircle className="w-3.5 h-3.5 text-rose-400" /> Reject
@@ -1173,10 +1265,7 @@ const filteredRequests = useMemo(() => {
       )}
 
       {/* ========================================== */}
-      {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
-      {/* ========================================== */}
-      {/* ========================================== */}
-      {/* #SECTION 12: TAB 3 - ANALYSIS VIEW        */}
+      {/* #SECTION 12: TAB 3 - ANALYSIS VIEW         */}
       {/* ========================================== */}
       {activeTab === 'ANALYSIS' && (
         <div className="space-y-3">
@@ -1197,7 +1286,6 @@ const filteredRequests = useMemo(() => {
             </div>
           )}
 
-          {/* ॲडमिनसाठी ० Reads वर थेट स्थानिक मेमरीतून विश्लेषण */}
           <InsuranceAnalysisWidget mode="detailed" requests={requests} />
         </div>
       )}
