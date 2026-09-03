@@ -169,24 +169,69 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
   // ==========================================
   // #SECTION 6: EXPORT & PRINT HANDLERS
   // ==========================================
- const handleExportToExcel = () => {
+const handleExportToExcel = () => {
     if (filteredData.length === 0) {
       Swal.fire({ icon: 'warning', title: 'डेटा उपलब्ध नाही!', background: '#0c0d14', color: '#fff' });
       return;
     }
 
-    const excelRows = filteredData.map((item, idx) => {
-      // 🎯 रिमार्क / नाकारण्याचे कारण अचूक मिळवणे (rejectReason, comments किंवा adminComment मधून)
-      let remarksText = item.rejectReason || item.adminComment || '';
+    // १. मजकूर स्वच्छ करण्याचे हेल्पर फंक्शन (तारीख, प्रिफिक्स व टॅग्ज काढून टाकणे)
+    const cleanRemarkText = (rawText) => {
+      if (!rawText) return '';
+      let text = String(rawText).trim();
       
-      if (!remarksText && Array.isArray(item.comments) && item.comments.length > 0) {
-        const lastComment = item.comments[item.comments.length - 1];
-        remarksText = typeof lastComment === 'string' ? lastComment : (lastComment?.text || '');
-      } else if (!remarksText && typeof item.comments === 'string') {
-        remarksText = item.comments;
+      // अनावश्यक प्रिफिक्स काढून टाकणे
+      text = text.replace(/^\[(नामंजूर कारण|नाकारले|Super Admin Update|Admin Note|Remark)\]:\s*/i, '');
+      text = text.replace(/^\[.*?\]\s*/g, ''); // जर सुरुवातीला ब्रॅकेट्स असतील तर
+      return text.trim();
+    };
+
+    // २. प्रत्येक अर्जातील सर्व रिमार्क्स फक्त शुद्ध मजकूर स्वरूपात गोळा करणे
+    const rowsWithRemarks = filteredData.map(item => {
+      const remarkList = [];
+
+      // A. नाकारण्याचे मुख्य कारण (Reject Reason) असल्यास
+      if (item.rejectReason && String(item.rejectReason).trim()) {
+        const cleaned = cleanRemarkText(item.rejectReason);
+        if (cleaned) remarkList.push(cleaned);
       }
 
-      return {
+      // B. ॲडमिन कमेंट (adminComment) असल्यास
+      if (item.adminComment && String(item.adminComment).trim()) {
+        const cleaned = cleanRemarkText(item.adminComment);
+        if (cleaned && !remarkList.includes(cleaned)) {
+          remarkList.push(cleaned);
+        }
+      }
+
+      // C. 🎯 comments ॲरेमधील ऑब्जेक्ट्समधून फक्त 'text' घेणे (नाव व तारीख वगळली आहे)
+      if (Array.isArray(item.comments) && item.comments.length > 0) {
+        item.comments.forEach(c => {
+          if (!c) return;
+          const raw = typeof c === 'object' ? (c.text || '') : String(c);
+          const cleaned = cleanRemarkText(raw);
+
+          // डुप्लिकेट नसलेला स्वच्छ मजकूरच लिस्टमध्ये घेणे
+          if (cleaned && !remarkList.includes(cleaned)) {
+            remarkList.push(cleaned);
+          }
+        });
+      } else if (typeof item.comments === 'string' && item.comments.trim()) {
+        const cleaned = cleanRemarkText(item.comments);
+        if (cleaned && !remarkList.includes(cleaned)) {
+          remarkList.push(cleaned);
+        }
+      }
+
+      return { item, remarkList };
+    });
+
+    // ३. जास्तीत जास्त किती रिमार्क्स कॉलम्स लागतील ते ठरवणे
+    const maxRemarksCount = Math.max(1, ...rowsWithRemarks.map(r => r.remarkList.length));
+
+    // ४. मूळ कॉलम्स + स्वच्छ रिमार्क कॉलम्स तयार करणे
+    const excelRows = rowsWithRemarks.map(({ item, remarkList }, idx) => {
+      const row = {
         'अ. क्र.': idx + 1,
         'App ID': item.appId || item.id || '',
         'मंडळाचे नाव': toTitleCase(item.teamName || ''),
@@ -203,9 +248,15 @@ export default function InsuranceReportTab({ canExportAndPrint, requests = [] })
         'विमा गोविंदा संख्या': Number(item.govindaCount || 0),
         'लेटरहेड PDF लिंक': item.fileUrl || '',
         'पॉलिसी नंबर': item.policyNumber || '',
-        'स्टेटस': item.status || 'प्रलंबित (Pending)',
-        'रिमार्क / नाकारण्याचे कारण': remarksText || '-' // 👈 नवीन कॉलम सुरक्षितपणे जोडला
+        'स्टेटस': item.status || 'प्रलंबित (Pending)'
       };
+
+      // 🎯 फक्त शुद्ध रिमार्क मजकूर स्वतंत्र कॉलम्समध्ये जाईल
+      for (let i = 0; i < maxRemarksCount; i++) {
+        row[`रिमार्क ${i + 1}`] = remarkList[i] || '-';
+      }
+
+      return row;
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelRows);

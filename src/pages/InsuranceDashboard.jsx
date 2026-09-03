@@ -955,13 +955,12 @@ export default function InsuranceDashboard() {
         </button>
       </div>
 
-      {/* ========================================== */}
+    {/* ========================================== */}
       {/* #SECTION 10: TAB 1 - ALL REQUESTS VIEW     */}
       {/* ========================================== */}
       {activeTab === 'ALL_REQUESTS' && (
         <>
-          {/* 📊 SOBER STATS SUMMARY CARDS */}
-         {/* 📊 STATS SUMMARY CARDS (नाकारलेल्या अर्जांचे स्पष्ट विभाजन) */}
+          {/* 📊 STATS SUMMARY CARDS (नाकारलेल्या अर्जांचे स्पष्ट ५ भागांत विभाजन) */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
             {/* १. एकूण अर्ज */}
             <div 
@@ -1017,7 +1016,7 @@ export default function InsuranceDashboard() {
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-500" />
               <input
                 type="text"
-                placeholder="नाव, App ID किंवा फोनने शोधा..."
+                placeholder="नाव, App ID, पिनकोड किंवा फोनने शोधा..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setVisibleCount(10); }}
                 className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-2 py-1 text-[11px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500"
@@ -1031,22 +1030,16 @@ export default function InsuranceDashboard() {
                 className="w-full bg-slate-950 border border-slate-700/80 rounded-lg px-2 py-1.5 text-[11px] text-slate-200 font-medium focus:outline-none"
               >
                 <option value="ALL" className="bg-[#0f172a]">सर्व स्टेटस</option>
-                
-                {/* 🎯 १-क्लिक संभाव्य दुबार अर्ज पर्याय */}
                 <option value="AUTO_DETECTED_DUP" className="bg-[#0f172a] text-amber-300 font-bold">
                   ⚠️ संभाव्य दुबार अर्ज (Auto Detected)
                 </option>
-
                 <option value="Pending" className="bg-[#0f172a]">प्रलंबित (Pending)</option>
                 <option value="Approved" className="bg-[#0f172a]">मंजूर (Approved)</option>
                 <option value="PendingCert" className="bg-[#0f172a] text-amber-400 font-bold">⚠️ मंजूर (पॉलिसी अपलोड बाकी)</option>
-                
                 <option value="Rejected" className="bg-[#0f172a]">नाकारलेले (सर्व)</option>
                 <option value="REJECTED_WRONG_DATA" className="bg-[#0f172a] text-rose-400 font-semibold">📞 नाकारलेले (दुरुस्ती / संपर्क)</option>
                 <option value="REJECTED_DUPLICATE" className="bg-[#0f172a] text-slate-400 font-semibold">📑 नाकारलेले (दुबार नोंदणी)</option>
               </select>
-
-              
 
               <div className="relative flex items-center">
                 <Calendar className="w-3.5 h-3.5 absolute left-2 text-slate-400 pointer-events-none z-10" />
@@ -1076,26 +1069,58 @@ export default function InsuranceDashboard() {
                 <span>दाखवलेले अर्ज: <b className="text-slate-200">{displayedRequests.length}</b> / {filteredRequests.length}</span>
               </div>
 
-              {displayedRequests.map((item) => {
-                const isApproved = item.status === 'Approved' || item.status === 'मंजूर' || item.status?.includes('मंजूर');
+             {displayedRequests.map((item) => {
+                const itemStatus = String(item.status || '');
+                const isApproved = itemStatus === 'Approved' || itemStatus.includes('मंजूर');
+                const isRejected = itemStatus === 'Rejected' || itemStatus.includes('नामंजूर') || itemStatus.includes('नाकार');
                 const hasCertificate = !!item.certificateUrl;
                 const mandalAddressText = item.address || item.mandalAddress || '';
                 const dupInfo = duplicateMap?.get(item.id);
 
+                // 🎯 १. मूळ ID मधील डबल '##' काढून स्वच्छ करणे (फक्त Rejected असतानाच)
+                let duplicateRefAppId = null;
+                let cleanRejectReason = '';
+
+                if (isRejected) {
+                  const fullReasonText = String(item.rejectReason || '');
+                  const extractedRefMatch = fullReasonText.match(/\[मूळ अर्ज ID:\s*#*([^\]]+)\]/i);
+                  duplicateRefAppId = item.duplicateOfAppId || (extractedRefMatch ? extractedRefMatch[1].trim() : null);
+                  if (duplicateRefAppId) {
+                    duplicateRefAppId = duplicateRefAppId.replace(/^#+/, '');
+                  }
+                  cleanRejectReason = fullReasonText.replace(/\[मूळ अर्ज ID:\s*[^\]]+\]/i, '').trim();
+                }
+
+                // 🎯 २. हातने टाईप केलेल्या विशेष नोंदी (Custom Comments) शोधणे
+                const customNotes = [];
+                if (Array.isArray(item.comments) && item.comments.length > 0) {
+                  item.comments.forEach(c => {
+                    const raw = typeof c === 'object' ? (c.text || '') : String(c);
+                    // सिस्टीम प्रिफिक्स किंवा रिजेक्शन कारण नसलेली शुद्ध कमेंट घेणे
+                    const isSystemReject = raw.includes('[नामंजूर कारण]') || raw.includes('या मंडळाची आधीच नोंदणी');
+                    const cleaned = raw.replace(/^\[.*?\]:\s*/i, '').replace(/\[मूळ अर्ज ID:.*?\]/i, '').trim();
+                    
+                    if (cleaned && !isSystemReject && !customNotes.includes(cleaned)) {
+                      customNotes.push(cleaned);
+                    }
+                  });
+                }
+                const latestCustomNote = customNotes.length > 0 ? customNotes[customNotes.length - 1] : null;
+
                 return (
                   <div 
                     key={item.id}
-                    className={`p-3 rounded-xl border transition shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2.5 ${
+                    className={`p-2.5 sm:p-3 rounded-xl border transition shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2.5 ${
                       dupInfo && !isApproved 
-                        ? 'border-amber-500/40 bg-amber-950/10 hover:border-amber-500/60' 
+                        ? 'border-amber-500/30 bg-slate-900/80 hover:border-amber-500/50' 
                         : 'border-slate-800/90 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700'
                     }`}
                   >
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         
-                        {/* 🎯 APP ID + Super Admin Edit Button */}
-                        <div className="inline-flex items-center gap-1 bg-slate-800 px-1.5 py-0.2 rounded border border-slate-700">
+                        {/* APP ID */}
+                        <div className="inline-flex items-center gap-1 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
                           <span className="text-[10px] font-mono font-semibold text-slate-300">
                             #{item.appId}
                           </span>
@@ -1104,7 +1129,7 @@ export default function InsuranceDashboard() {
                               type="button"
                               onClick={() => handleEditAppId(item)}
                               className="text-amber-400 hover:text-amber-300 p-0.5 transition cursor-pointer"
-                              title="Super Admin: App ID सुधारा / एडिट करा"
+                              title="App ID सुधारा"
                             >
                               <Edit className="w-2.5 h-2.5" />
                             </button>
@@ -1113,35 +1138,19 @@ export default function InsuranceDashboard() {
                         
                         {getStatusBadge(item.status)}
 
-                        {/* ⚠️ दुबार नोंदणी शक्यता इशारा व थेट PDF Compare बटण */}
+                        {/* 🔗 🎯 मूळ अर्ज बॅज: फक्त आणि फक्त अर्ज REJECTED असतानाच दिसेल */}
+                        {isRejected && duplicateRefAppId && (
+                          <span className="text-[10px] font-mono font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <span className="text-slate-400 font-sans text-[9px]">मूळ अर्ज:</span>
+                            <b>#{duplicateRefAppId}</b>
+                          </span>
+                        )}
+
+                        {/* दुबार इशारा (फक्त मंजूर नसलेल्यांवर) */}
                         {dupInfo && !isApproved && (
-                          <div className="inline-flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
-                              ⚠️ {dupInfo.reason}
-                            </span>
-                            
-                            {(() => {
-                              const originalApprovedReq = requests.find(r => (r.appId === dupInfo.approvedRefId || r.id === dupInfo.approvedRefId));
-                              if (originalApprovedReq?.fileUrl && item.fileUrl) {
-                                return (
-                                  <button
-                                    type="button"
-                                    onClick={() => setComparePdfs({
-                                      title1: `सध्याचा अर्ज (#${item.appId})`,
-                                      pdf1: item.fileUrl,
-                                      title2: `मंजूर मूळ अर्ज (#${originalApprovedReq.appId})`,
-                                      pdf2: originalApprovedReq.fileUrl
-                                    })}
-                                    className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition shadow"
-                                    title="दोन्ही PDF समोरासमोर तपासा"
-                                  >
-                                    🔍 दोन्ही PDF तपासा
-                                  </button>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </div>
+                          <span className="text-[10px] font-medium text-amber-300/90 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            ⚠️ {dupInfo.reason}
+                          </span>
                         )}
 
                         {item.policyNumber && (
@@ -1163,14 +1172,70 @@ export default function InsuranceDashboard() {
                           </span>
                         )}
                         <span className="text-slate-300 font-semibold font-mono"><ShieldCheck className="w-3 h-3 inline text-slate-400"/> {item.govindaCount} गोविंदा</span>
-                        
-                        {item.rejectReason && (
-                          <div className="text-[11px] text-rose-300 font-sans mt-0.5 bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-800/60 flex items-start gap-1">
-                            <span className="font-bold text-rose-400 shrink-0">कारण:</span>
-                            <span className="truncate">{item.rejectReason}</span>
-                          </div>
-                        )}
                       </div>
+
+                      {/* 🔴 १. REJECTED अर्ज असेल तर: नाकारण्याचे कारण */}
+                      {isRejected && (() => {
+                        const allRemarks = [];
+                        if (Array.isArray(item.comments)) {
+                          item.comments.forEach(c => {
+                            const raw = typeof c === 'object' ? (c.text || '') : String(c);
+                            let cleaned = raw.replace(/^\[(नामंजूर कारण|नाकारले|Super Admin Update)\]:\s*/i, '').replace(/\[मूळ अर्ज ID:.*?\]/i, '').trim();
+                            if (cleaned && !allRemarks.includes(cleaned)) allRemarks.push(cleaned);
+                          });
+                        }
+                        if (cleanRejectReason && !allRemarks.includes(cleanRejectReason)) allRemarks.push(cleanRejectReason);
+                        if (allRemarks.length === 0) return null;
+
+                        const latestRemark = allRemarks[allRemarks.length - 1];
+                        const previousCount = allRemarks.length - 1;
+
+                        return (
+                          <div className="pt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <p className="text-[11px] text-rose-300/90 font-sans truncate max-w-xl flex items-center gap-1">
+                              <span className="text-rose-400 font-bold shrink-0">कारण:</span>
+                              <span className="truncate">{latestRemark}</span>
+                            </p>
+                            {previousCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedReq(item);
+                                  setPolicyNo(item.policyNumber || '');
+                                  setEditableGovindaCount(item.govindaCount || '');
+                                }}
+                                className="text-[9px] font-medium text-slate-400 hover:text-amber-300 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 px-1.5 py-0.2 rounded transition cursor-pointer shrink-0"
+                              >
+                                +{previousCount} पूर्वीचे रिमार्क
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* 🟢 २. APPROVED अर्ज असेल तर: टाईप केलेली विशेष नोंद (उदा. २ पॉलिसी दिल्या आहेत) */}
+                      {isApproved && latestCustomNote && (
+                        <div className="pt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[11px] text-amber-300/90 font-sans truncate max-w-xl flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                            <span className="text-amber-400 font-bold shrink-0">📌 विशेष नोंद:</span>
+                            <span className="truncate font-medium">{latestCustomNote}</span>
+                          </p>
+                          {customNotes.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedReq(item);
+                                setPolicyNo(item.policyNumber || '');
+                                setEditableGovindaCount(item.govindaCount || '');
+                              }}
+                              className="text-[9px] font-medium text-slate-400 hover:text-amber-300 bg-slate-800 border border-slate-700 px-1.5 py-0.2 rounded transition cursor-pointer shrink-0"
+                            >
+                              +{customNotes.length - 1} इतर नोंदी
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                     </div>
 
                     <div className="flex items-center justify-between md:justify-end gap-2 pt-1 md:pt-0 border-t md:border-t-0 border-slate-800/80">
