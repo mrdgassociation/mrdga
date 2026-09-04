@@ -9,7 +9,7 @@ import Swal from 'sweetalert2';
 import { 
   ShieldCheck, Search, Filter, RefreshCw, Phone, 
   MessageSquare, FileText, CheckCircle, XCircle, Clock, X, Lock, ExternalLink,
-  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit, TrendingUp
+  MapPin, Users, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Download, UploadCloud, Loader2, Camera, Eye, Edit3, Printer, PlusCircle, Calendar, Copy, BarChart3, Target, Edit, TrendingUp, Link as LinkIcon
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
@@ -62,7 +62,7 @@ export default function InsuranceDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('');
-  const [pincodeFilter, setPincodeFilter] = useState('ALL'); // 👈 नवीन पिनकोड स्टेट
+  const [pincodeFilter, setPincodeFilter] = useState('ALL');
 
   const [visibleCount, setVisibleCount] = useState(10);
 
@@ -220,7 +220,107 @@ export default function InsuranceDashboard() {
     }
   };
 
-  // 🔍 पिनपॉईंट अचूक दुबार पडताळणी (नाव + फोन किंवा नाव + पिनकोड)
+  // ⚡ 🎯 फक्त Super Admin: थेट फाईल URL आणि स्टेटस एडिट फंक्शन (No Custom Modal needed)
+  const handleEditFileUrlAndStatus = async (item) => {
+    if (!isSuperAdminOnly) {
+      Swal.fire({ icon: 'error', title: 'अधिकार नाही!', text: 'फक्त Super Admin लाच फाईल URL व स्टेटस बदलण्याचा अधिकार आहे.', background: '#0f172a', color: '#fff' });
+      return;
+    }
+
+    const { value: formValues } = await Swal.fire({
+      title: 'Drive File URL & स्टेटस अपडेट',
+      html: `
+        <div style="font-size:12px; color:#cbd5e1; text-align:left; margin-bottom:12px;">
+          मंडळ: <b style="color:#fff">${item.teamName}</b> (App ID: <b style="color:#f59e0b">#${item.appId}</b>)
+        </div>
+        <div style="text-align:left; margin-bottom:10px;">
+          <label style="font-size:11px; font-weight:bold; color:#94a3b8; display:block; margin-bottom:4px;">Google Drive / File URL:</label>
+          <input id="swal-file-url" class="swal2-input" style="margin:0; width:100%; font-size:12px; font-family:monospace; background:#020617; color:#fff; border:1px solid #334155;" placeholder="https://drive.google.com/file/d/..." value="${item.fileUrl || ''}">
+        </div>
+        <div style="text-align:left;">
+          <label style="font-size:11px; font-weight:bold; color:#94a3b8; display:block; margin-bottom:4px;">नवीन स्टेटस (Status):</label>
+          <select id="swal-file-status" class="swal2-select" style="margin:0; width:100%; font-size:12px; background:#020617; color:#fff; border:1px solid #334155;">
+            <option value="Pending" ${(!item.status || item.status === 'Pending') ? 'selected' : ''}>प्रलंबित (Pending)</option>
+            <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>मंजूर (Approved)</option>
+            <option value="Rejected" ${item.status === 'Rejected' ? 'selected' : ''}>नाकारलेले (Rejected)</option>
+          </select>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'अपडेट सेव्ह करा',
+      cancelButtonText: 'रद्द करा',
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#64748b',
+      background: '#0f172a',
+      color: '#fff',
+      preConfirm: () => {
+        const fileUrl = document.getElementById('swal-file-url').value.trim();
+        const status = document.getElementById('swal-file-status').value;
+        if (!fileUrl) {
+          Swal.showValidationMessage('कृपया फाईल URL टाका!');
+          return false;
+        }
+        return { fileUrl, status };
+      }
+    });
+
+    if (formValues) {
+      try {
+        const docRef = doc(db, "insurance_requests_2026", item.id);
+        const newCommentObj = {
+          id: Date.now().toString(),
+          byEmail: userEmail,
+          byName: userName,
+          role: userRole,
+          text: `[Super Admin]: फाईल URL जोडली आणि स्टेटस '${formValues.status}' केले.`,
+          createdAt: new Date().toISOString()
+        };
+
+        const updatePayload = {
+          fileUrl: formValues.fileUrl,
+          status: formValues.status,
+          updatedAt: new Date().toISOString(),
+          comments: arrayUnion(newCommentObj)
+        };
+
+        // जर स्टेटस Pending केले तर जुने रिजेक्शन कारण क्लिअर करा
+        if (formValues.status === 'Pending') {
+          updatePayload.rejectReason = '';
+          updatePayload.subStatus = '';
+        }
+
+        await updateDoc(docRef, updatePayload);
+
+        // Local state update
+        setInsurances(prev => prev.map(reqItem => 
+          reqItem.id === item.id 
+            ? { 
+                ...reqItem, 
+                ...updatePayload, 
+                comments: [...(reqItem.comments || []), newCommentObj] 
+              } 
+            : reqItem
+        ));
+
+        Swal.fire({
+          icon: 'success',
+          title: 'अपडेट यशस्वी!',
+          text: 'Drive लिंक आणि स्टेटस सेव्ह झाले आहे.',
+          timer: 1500,
+          showConfirmButton: false,
+          background: '#0f172a',
+          color: '#fff'
+        });
+
+      } catch (err) {
+        console.error("File URL update error:", err);
+        Swal.fire({ icon: 'error', title: 'त्रुटी!', text: 'अपडेट करता आले नाही.', background: '#0f172a', color: '#fff' });
+      }
+    }
+  };
+
+  // 🔍 पिनपॉईंट अचूक दुबार पडताळणी
   const duplicateMap = useMemo(() => {
     const dupMap = new Map();
     
@@ -231,7 +331,6 @@ export default function InsuranceDashboard() {
     const approvedByNameAndPhone = new Map(); 
     const approvedByNameAndPin = new Map();   
 
-    // १. मंजूर अर्जांची नोंद ठेवणे
     requests.forEach(req => {
       const isApproved = String(req.status || '').toLowerCase().includes('approved') || String(req.status || '').toLowerCase().includes('मंजूर');
       
@@ -250,12 +349,10 @@ export default function InsuranceDashboard() {
       }
     });
 
-    // २. फक्त तेच अर्ज तपासणे ज्यांना अद्याप '१०. दुबार नोंदणी' कारण लावलेले नाही
     requests.forEach(req => {
       const isApproved = String(req.status || '').toLowerCase().includes('approved') || String(req.status || '').toLowerCase().includes('मंजूर');
       if (isApproved) return;
 
-      // 🚫 ज्यांना आधीच '१०. दुबार नोंदणी' म्हणून नाकारले आहे त्यांना वगळा
       const rejectReasonText = String(req.rejectReason || '');
       const isAlreadyMarkedDuplicate = req.subStatus === 'DUPLICATE' || 
                                        rejectReasonText.includes('Duplicate Entry') || 
@@ -289,9 +386,8 @@ export default function InsuranceDashboard() {
     return dupMap;
   }, [requests]);
 
-
   // ==========================================
-  // #SECTION 4: SUMMARY STATS (नाकारलेल्यांचे २ भागांत वर्गीकरण)
+  // #SECTION 4: SUMMARY STATS
   // ==========================================
   const stats = useMemo(() => {
     let pending = 0;
@@ -311,18 +407,17 @@ export default function InsuranceDashboard() {
       } else if (st.includes('rejected') || st.includes('नामंजूर') || st.includes('नाकार')) {
         rejected++;
 
-        // १० क्रमांकाचे दुबार कारण तपासणे
         const rReason = String(item.rejectReason || item.comments || item.adminComment || '').toLowerCase();
         const isDup = item.subStatus === 'DUPLICATE' || 
                       rReason.includes('duplicate') || 
                       rReason.includes('दुबार') || 
-                      rReason.includes('आधीच नोंदणी') ||
+                      rReason.includes('आधीच नोंदणी') || 
                       rReason.includes('१०.');
 
         if (isDup) {
           rejectedDuplicate++;
         } else {
-          rejectedWrongData++; // कागदपत्र/दुरुस्ती त्रुटी
+          rejectedWrongData++;
         }
       } else {
         pending++;
@@ -341,14 +436,6 @@ export default function InsuranceDashboard() {
     };
   }, [requests]);
 
-  // सर्व उपलब्ध युनिक पिनकोड्स (Ascending order मध्ये)
-  const uniquePincodes = useMemo(() => {
-    const pins = requests
-      .map(r => String(r.pincode || '').trim())
-      .filter(p => p.length >= 6);
-    return Array.from(new Set(pins)).sort();
-  }, [requests]);
-
   // ==========================================
   // #SECTION 5: SEARCH & FILTERING LOGIC
   // ==========================================
@@ -360,9 +447,8 @@ export default function InsuranceDashboard() {
       const appId = (item.appId || item.id || '').toLowerCase();
       const cPerson = (item.contactPerson || '').toLowerCase();
       const phone = (item.whatsappNumber || item.phone || '').replace(/[^0-9]/g, '');
-      const pincode = String(item.pincode || '').replace(/[^0-9]/g, ''); // 👈 पिनकोड जोडला
+      const pincode = String(item.pincode || '').replace(/[^0-9]/g, '');
 
-      // 🎯 स्मार्ट सर्च लॉजिक (App ID, फोन, पिनकोड किंवा नाव)
       let matchesSearch = true;
       if (rawSearch) {
         const isNumeric = /^\d+$/.test(rawSearch);
@@ -371,7 +457,7 @@ export default function InsuranceDashboard() {
           const appIdDigits = appId.replace(/[^0-9]/g, '');
           const matchesExactIdEnd = appIdDigits.endsWith(rawSearch); 
           const matchesExactPhone = phone.includes(rawSearch);
-          const matchesPincode = pincode.includes(rawSearch); // 👈 सर्चमध्ये ६ अंकी किंवा आंशिक पिनकोड शोधणे
+          const matchesPincode = pincode.includes(rawSearch);
           
           matchesSearch = matchesExactIdEnd || matchesExactPhone || matchesPincode;
         } else {
@@ -381,14 +467,12 @@ export default function InsuranceDashboard() {
         }
       }
 
-      // तारीख फिल्टर
       let matchesDate = true;
       if (dateFilter) {
         const itemDateStr = parseFormattedDate(item.createdAt);
         matchesDate = itemDateStr === dateFilter;
       }
 
-      // स्टेटस फिल्टर
       const itemStatus = String(item.status || '');
       const isApproved = itemStatus === 'Approved' || itemStatus.includes('मंजूर');
       const isRejected = itemStatus === 'Rejected' || itemStatus.includes('नामंजूर') || itemStatus.includes('नाकार');
@@ -659,8 +743,8 @@ export default function InsuranceDashboard() {
         item.id === rejectModalReq.id 
           ? { 
               ...item, 
-              ...updatePayload,
-              comments: [...(item.comments || []), newCommentObj]
+              ...updatePayload, 
+              comments: [...(item.comments || []), newCommentObj] 
             } 
           : item
       ));
@@ -774,8 +858,8 @@ export default function InsuranceDashboard() {
         item.id === selectedReq.id 
           ? { 
               ...item, 
-              ...updateData,
-              comments: newCommentObj ? [...(item.comments || []), newCommentObj] : item.comments
+              ...updateData, 
+              comments: newCommentObj ? [...(item.comments || []), newCommentObj] : item.comments 
             } 
           : item
       ));
@@ -955,14 +1039,13 @@ export default function InsuranceDashboard() {
         </button>
       </div>
 
-    {/* ========================================== */}
+      {/* ========================================== */}
       {/* #SECTION 10: TAB 1 - ALL REQUESTS VIEW     */}
       {/* ========================================== */}
       {activeTab === 'ALL_REQUESTS' && (
         <>
-          {/* 📊 STATS SUMMARY CARDS (नाकारलेल्या अर्जांचे स्पष्ट ५ भागांत विभाजन) */}
+          {/* 📊 STATS SUMMARY CARDS */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-            {/* १. एकूण अर्ज */}
             <div 
               onClick={() => { setStatusFilter('ALL'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'ALL' ? 'bg-slate-800 border-slate-600' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -971,7 +1054,6 @@ export default function InsuranceDashboard() {
               <p className="text-xs sm:text-sm font-bold text-white font-mono">{stats.total}</p>
             </div>
 
-            {/* २. प्रलंबित */}
             <div 
               onClick={() => { setStatusFilter('Pending'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Pending' ? 'bg-slate-800 border-amber-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -980,7 +1062,6 @@ export default function InsuranceDashboard() {
               <p className="text-xs sm:text-sm font-bold text-amber-200/90 font-mono">{stats.pending}</p>
             </div>
 
-            {/* ३. मंजूर */}
             <div 
               onClick={() => { setStatusFilter('Approved'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'Approved' ? 'bg-slate-800 border-emerald-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -989,7 +1070,6 @@ export default function InsuranceDashboard() {
               <p className="text-xs sm:text-sm font-bold text-emerald-300 font-mono">{stats.approved}</p>
             </div>
 
-            {/* ४. कागदपत्र त्रुटी (दुरुस्ती / संपर्क) */}
             <div 
               onClick={() => { setStatusFilter('REJECTED_WRONG_DATA'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'REJECTED_WRONG_DATA' ? 'bg-slate-800 border-rose-500/50' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -999,7 +1079,6 @@ export default function InsuranceDashboard() {
               <span className="text-[8px] text-slate-500 block font-sans">दुरुस्ती/कॉल करणे</span>
             </div>
 
-            {/* ५. दुबार नोंदणी (Reject १० नंबर) */}
             <div 
               onClick={() => { setStatusFilter('REJECTED_DUPLICATE'); setVisibleCount(10); }}
               className={`p-1.5 sm:p-2 rounded-lg border transition cursor-pointer text-center ${statusFilter === 'REJECTED_DUPLICATE' ? 'bg-slate-800 border-slate-500' : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'}`}
@@ -1069,7 +1148,7 @@ export default function InsuranceDashboard() {
                 <span>दाखवलेले अर्ज: <b className="text-slate-200">{displayedRequests.length}</b> / {filteredRequests.length}</span>
               </div>
 
-             {displayedRequests.map((item) => {
+              {displayedRequests.map((item) => {
                 const itemStatus = String(item.status || '');
                 const isApproved = itemStatus === 'Approved' || itemStatus.includes('मंजूर');
                 const isRejected = itemStatus === 'Rejected' || itemStatus.includes('नामंजूर') || itemStatus.includes('नाकार');
@@ -1096,7 +1175,6 @@ export default function InsuranceDashboard() {
                 if (Array.isArray(item.comments) && item.comments.length > 0) {
                   item.comments.forEach(c => {
                     const raw = typeof c === 'object' ? (c.text || '') : String(c);
-                    // सिस्टीम प्रिफिक्स किंवा रिजेक्शन कारण नसलेली शुद्ध कमेंट घेणे
                     const isSystemReject = raw.includes('[नामंजूर कारण]') || raw.includes('या मंडळाची आधीच नोंदणी');
                     const cleaned = raw.replace(/^\[.*?\]:\s*/i, '').replace(/\[मूळ अर्ज ID:.*?\]/i, '').trim();
                     
@@ -1119,7 +1197,7 @@ export default function InsuranceDashboard() {
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         
-                        {/* APP ID */}
+                        {/* APP ID + Super Admin App ID Edit */}
                         <div className="inline-flex items-center gap-1 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
                           <span className="text-[10px] font-mono font-semibold text-slate-300">
                             #{item.appId}
@@ -1146,7 +1224,7 @@ export default function InsuranceDashboard() {
                           </span>
                         )}
 
-                        {/* दुबार इशारा (फक्त मंजूर नसलेल्यांवर) */}
+                        {/* दुबार इशारा */}
                         {dupInfo && !isApproved && (
                           <span className="text-[10px] font-medium text-amber-300/90 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
                             ⚠️ {dupInfo.reason}
@@ -1213,7 +1291,7 @@ export default function InsuranceDashboard() {
                         );
                       })()}
 
-                      {/* 🟢 २. APPROVED अर्ज असेल तर: टाईप केलेली विशेष नोंद (उदा. २ पॉलिसी दिल्या आहेत) */}
+                      {/* 🟢 २. APPROVED अर्ज असेल तर: टाईप केलेली विशेष नोंद */}
                       {isApproved && latestCustomNote && (
                         <div className="pt-0.5 flex items-center gap-1.5 flex-wrap">
                           <p className="text-[11px] text-amber-300/90 font-sans truncate max-w-xl flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
@@ -1263,6 +1341,7 @@ export default function InsuranceDashboard() {
                           <Phone className="w-3.5 h-3.5" />
                         </a>
 
+                        {/* PDF View Button */}
                         {item.fileUrl && (
                           <button 
                             onClick={() => { setViewPdfTitle('मंडळाची अपलोड केलेली लेटरहेड PDF यादी'); setViewPdfUrl(item.fileUrl); setZoomLevel(100); }}
@@ -1270,6 +1349,22 @@ export default function InsuranceDashboard() {
                             title="यादी PDF पहा"
                           >
                             <FileText className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {/* ⚡ 🎯 SUPER ADMIN: लिंक / फाईल URL व स्टेटस त्वरित बदलण्याचे बटण (Swal Popup) */}
+                        {isSuperAdminOnly && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditFileUrlAndStatus(item)}
+                            className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                              item.fileUrl 
+                                ? 'bg-slate-800 text-amber-400 border-slate-700 hover:bg-amber-500 hover:text-black' 
+                                : 'bg-rose-950/60 text-rose-300 border-rose-800/80 hover:bg-rose-900 animate-pulse'
+                            }`}
+                            title="Super Admin: फाईल URL व स्टेटस बदला / जोडा"
+                          >
+                            <LinkIcon className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
