@@ -21,13 +21,16 @@ export default function Login() {
         showConfirmButton: false
       });
 
-      // 🎯 ROLE BASED REDIRECTION (रोलनुसार योग्य पेजवर पाठवणे)
-      if (user.role === 'Team') {
-        // 📊 गोविंदा पथक असेल तर 'माझे स्टेटस' पेजवर नेणे
-        navigate('/my-status');
-      } else {
-        // 👑 ॲडमिन / सुपर ॲडमिन असेल तर 'ॲडमिन डॅशबोर्ड' वर नेणे
+      // 🎯 ROLE & DEPT BASED SAFE REDIRECTION
+      const userRole = (user.role || '').trim();
+      const userDept = (user.department || '').toUpperCase().trim();
+
+      // 👑 फक्त Super Admin असेल तरच 'ॲडमिन डॅशबोर्ड' वर नेणे
+      if (userRole === 'Super Admin' || userDept === 'SUPER') {
         navigate('/admin');
+      } else {
+        // 📊 Team (गोविंदा पथक), विमा अर्जदार, MRDGA सदस्य आणि स्पेन पाहुणे सर्वांना 'माझे स्टेटस' पेजवर नेणे
+        navigate('/my-status');
       }
 
     } catch (error) {

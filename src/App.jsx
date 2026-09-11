@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { authService } from './services/authService';
 
 // Public Pages
 import Home from './pages/Home';
@@ -32,27 +33,37 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ModuleGuard from './components/ModuleGuard';
 
 import UserProfilePage from './pages/UserProfilePage';
-
-
 import TournamentScoringHub from './pages/TournamentScoringHub';
+
+// 🇪🇸 Spain Tour 2026 Pages
+import SpainTourPortal from './pages/SpainTourPortal';
+import SpainVisaAdmin from './pages/SpainVisaAdmin';
 
 export default function App() {
   const currentYear = new Date().getFullYear();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = authService.getCurrentUser((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
   
   return (
     <Router>
       <Routes>
         {/* 🌐 सार्वजनिक वेबसाईट राऊट्स */}
         <Route path="/" element={<Home />} />
-        {/* 🚩 BUG FIXED: Competitions वर ModuleGuard जोडला आहे */}
-      <Route 
-        path="/competitions" 
-        element={
-          <ModuleGuard pageKey="competitionPage">
-            <Competitions />
-          </ModuleGuard>
-        } 
-      />
+        
+        <Route 
+          path="/competitions" 
+          element={
+            <ModuleGuard pageKey="competitionPage">
+              <Competitions />
+            </ModuleGuard>
+          } 
+        />
 
         {/* 🔒 Dynamic Feature Toggled Routes */}
         <Route 
@@ -80,13 +91,12 @@ export default function App() {
           } 
         />
 
-        {/* 📸 उपक्रम & फोटो गॅलरी (Navbar & Layout सह) */}
+        {/* 📸 उपक्रम & फोटो गॅलरी */}
         <Route 
           path="/gallery" 
           element={
             <ModuleGuard pageKey="galleryPage">
-                            <EventsGallery />
-            
+              <EventsGallery />
             </ModuleGuard>
           } 
         />
@@ -111,7 +121,7 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 1. Admin Dashboard (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        {/* 🔐 1. Admin Dashboard */}
         <Route 
           path="/admin" 
           element={
@@ -123,7 +133,7 @@ export default function App() {
           } 
         />
 
-        {/* 🛡️ 2. Insurance Dashboard (INSURANCE, MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        {/* 🛡️ 2. Insurance Dashboard */}
         <Route 
           path="/admin/insurance" 
           element={
@@ -135,7 +145,31 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 3. Reports & Export (INSURANCE, MRDGA आणि SUPER सर्व टीम्ससाठी) */}
+        {/* 🇪🇸 १. प्रवाशांचे स्पेन दौरा नोंदणी पोर्टल (Secret - AdminLayout च्या आत) */}
+        <Route 
+          path="/admin/spain-tour-portal" 
+          element={
+            <ProtectedRoute>
+              <AdminLayout>
+                <SpainTourPortal currentUser={currentUser} />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* 🇪🇸 २. स्पेन व्हिसा कन्सोल (व्हिसा एजंट, MRDGA आणि Super Admin साठी) */}
+        <Route 
+          path="/admin/spain-tour" 
+          element={
+            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER', 'VISA_AGENT']} allowedRoles={['Super Admin', 'Visa Agent']}>
+              <AdminLayout>
+                <SpainVisaAdmin currentUser={currentUser} />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* 🔐 3. Reports & Export */}
         <Route 
           path="/admin/reports" 
           element={
@@ -147,8 +181,7 @@ export default function App() {
           } 
         />
 
-        // 2. Routes मध्ये (उदा. AdminDashboard च्या खाली):
-        {/* 🔐 दहीहंडी स्पर्धा व्यवस्थापन (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        {/* 🔐 दहीहंडी स्पर्धा व्यवस्थापन */}
         <Route 
           path="/admin/tournaments" 
           element={
@@ -160,19 +193,18 @@ export default function App() {
           } 
         />
 
-        {/* 🎯 मॅनेज करा वर क्लिक केल्यावर उघडणारे पेज (हा राऊट मिसिंग असेल तर एरर येतो) */}
-  <Route 
-    path="/admin/tournaments/:tournamentId" 
-    element={
-      <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
-        <AdminLayout>
-          <TournamentScoringHub />
-        </AdminLayout>
-      </ProtectedRoute>
-    } 
-  />
+        <Route 
+          path="/admin/tournaments/:tournamentId" 
+          element={
+            <ProtectedRoute allowedDepartments={['MRDGA', 'SUPER']}>
+              <AdminLayout>
+                <TournamentScoringHub />
+              </AdminLayout>
+            </ProtectedRoute>
+          } 
+        />
 
-        {/* 🔐 📖 गोविंदा पथक डिरेक्टरी (फक्त MRDGA आणि SUPER डिपार्टमेंटसाठी) */}
+        {/* 🔐 📖 गोविंदा पथक डिरेक्टरी */}
         <Route 
           path="/admin/mandal-directory" 
           element={
@@ -184,7 +216,7 @@ export default function App() {
           } 
         />
 
-      {/* 👤 📋 माझे प्रोफाईल & कार्य अहवाल (सर्व अधिकृत डिपार्टमेंट्ससाठी) */}
+        {/* 👤 📋 माझे प्रोफाईल & कार्य अहवाल */}
         <Route 
           path="/admin/profile" 
           element={
@@ -196,8 +228,7 @@ export default function App() {
           } 
         />
 
-
-        {/* 🔐 4. User Management (फक्त Super Admin साठी) */}
+        {/* 🔐 4. User Management */}
         <Route 
           path="/admin/users" 
           element={
@@ -209,7 +240,7 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 5. Website Page Visibility Settings (फक्त Super Admin साठी) */}
+        {/* 🔐 5. Website Page Visibility Settings */}
         <Route 
           path="/admin/settings" 
           element={
@@ -221,7 +252,7 @@ export default function App() {
           } 
         />
 
-        {/* 🔐 6. Notification Hub (फक्त Super Admin साठी) */}
+        {/* 🔐 6. Notification Hub */}
         <Route 
           path="/admin/notifications" 
           element={
@@ -233,7 +264,7 @@ export default function App() {
           } 
         />
 
-                {/* 🚩 १६ ऑगस्ट बैठक RSVP (ModuleGuard द्वारे सुपर ॲडमिन कंट्रोल) */}
+        {/* 🚩 १६ ऑगस्ट बैठक RSVP */}
         <Route 
           path="/rsvp" 
           element={

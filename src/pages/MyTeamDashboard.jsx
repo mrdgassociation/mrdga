@@ -3,47 +3,128 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import Swal from 'sweetalert2';
 import { 
   Shield, Trophy, CheckCircle, Clock, XCircle, User, 
-  Phone, MapPin, Loader2, Award, FileText, AlertCircle, UploadCloud, RefreshCw, Eye, Download, X
+  Phone, MapPin, Loader2, Award, FileText, AlertCircle, UploadCloud, RefreshCw, Eye, Download, X,
+  Edit, Shirt, PlusCircle, Lock
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
+
+// 🎯 २ स्वतंत्र फॉर्म्स
+import SpainTourForm from './SpainTourForm'; // 👈 1. व्हिसा फॉर्म (Visa & Passport)
+import SpainKitForm from './SpainKitForm';   // 👈 2. किट फॉर्म (T-Shirt & Kit Sizes)
 
 export default function MyTeamDashboard() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [myTeams, setMyTeams] = useState([]);
   const [myInsurances, setMyInsurances] = useState([]);
+  const [mySpainApps, setMySpainApps] = useState([]);
+  const [isSpainWhitelisted, setIsSpainWhitelisted] = useState(false);
+  const [canAddMembers, setCanAddMembers] = useState(false);
+  const [isKitLocked, setIsKitLocked] = useState(false);     // 👈 settings मधील किट लॉक
+  const [isVisaDocLocked, setIsVisaDocLocked] = useState(true); // 👈 settings मधील व्हिसा डॉक्युमेंट लॉक
+  const [isSuperUser, setIsSuperUser] = useState(false);     // 👈 Super Admin चेक
   const [activeTab, setActiveTab] = useState('applications'); 
 
-  // 🎯 Re-upload & PDF View Modal States
+  // 🎯 फॉर्म इनलाइन उघडण्यासाठी स्टेट्स
+  const [activeFormType, setActiveFormType] = useState(null); // 'VISA' | 'KIT' | null
+  const [editingSpainData, setEditingSpainData] = useState(null);
+
+  // Re-upload & PDF View Modal States (विमा व स्पर्धा)
   const [reuploadingId, setReuploadingId] = useState(null);
   const [newFile, setNewFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [viewPdfUrl, setViewPdfUrl] = useState(null); // 👁️ PDF Inline Viewer Modal साठी
+  const [viewPdfUrl, setViewPdfUrl] = useState(null);
   const [pdfTitle, setPdfTitle] = useState('अपलोड केलेली फाईल (PDF)');
 
-  const fetchDashboardData = async (userEmail) => {
-    try {
-      const emailLower = userEmail.toLowerCase().trim();
+  // 🚀 Read-Optimized & Crash-Proof Fetch Function
+  const fetchDashboardData = async (user) => {
+    if (!user || !user.email) return;
+    setLoading(true);
 
-      const [teamsSnap, insuranceSnap] = await Promise.all([
+    try {
+      const emailLower = user.email.toLowerCase().trim();
+
+      // १. सर्व डेटा एकाच फेरीत वाचणे
+      const [teamsSnap, insuranceSnap, whitelistSnap, userEmailSnap, userUidSnap, settingsSnap] = await Promise.all([
         getDocs(query(collection(db, 'teams'), where('email', '==', emailLower))),
-        getDocs(query(collection(db, 'insurance_requests_2026'), where('email', '==', emailLower)))
+        getDocs(query(collection(db, 'insurance_requests_2026'), where('email', '==', emailLower))),
+        getDoc(doc(db, 'spain_tour_whitelist', emailLower)).catch(() => null),
+        getDoc(doc(db, 'users', emailLower)).catch(() => null),
+        user.uid ? getDoc(doc(db, 'users', user.uid)).catch(() => null) : Promise.resolve(null),
+        getDoc(doc(db, 'settings', 'registration_status')).catch(() => null)
       ]);
 
       const teamsData = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const insuranceData = insuranceSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+      // Users डेटा शोधणे (email किंवा uid)
+      let uData = null;
+      if (userEmailSnap && userEmailSnap.exists()) {
+        uData = userEmailSnap.data();
+      } else if (userUidSnap && userUidSnap.exists()) {
+        uData = userUidSnap.data();
+      }
+
+      const wData = whitelistSnap && whitelistSnap.exists() ? whitelistSnap.data() : null;
+
+      // 🔍 डिपार्टमेंट व रोल तपासणी
+      const userDept = (uData?.department || '').toUpperCase().trim();
+      const userRole = (uData?.role || '').trim();
+      const isSuper = userDept === 'SUPER' || userRole === 'Super Admin';
+      setIsSuperUser(isSuper);
+
+      // 🔒 settings -> registration_status मधील दोन्ही कुलपे (Locks) तपासणे
+      if (settingsSnap && settingsSnap.exists()) {
+        const sData = settingsSnap.data();
+        setIsKitLocked(sData.isKitLocked === true);
+        setIsVisaDocLocked(sData.isVisaDocLocked !== false); // डिफॉल्ट Locked (true)
+      }
+
+      // 🛡️ १. कडक स्पेन ट्रॅव्हलर ॲक्सेस नियम:
+      const isAllowedDepartment = isSuper || userDept === 'MRDGA';
+      const isWhitelistedUser = (wData && wData.isActive !== false) || uData?.spainTourAccess === true;
+      const hasSpainAccess = isAllowedDepartment || isWhitelistedUser;
+
+      // 🛡️ २. अतिरिक्त सदस्य जोडण्याची परवानगी
+      const allowAdd = 
+        isSuper || 
+        uData?.canAddMembers === true || 
+        wData?.canAddMembers === true;
+
+      setCanAddMembers(allowAdd);
+
+      let spainData = [];
+      if (hasSpainAccess) {
+        try {
+          const spainAppsSnap = await getDocs(
+            query(collection(db, 'spain_tour_applications_2026'), where('submittedBy', '==', emailLower))
+          );
+          spainData = spainAppsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch (sErr) {
+          console.error("Error fetching spain apps:", sErr);
+        }
+      }
+
       setMyTeams(teamsData);
       setMyInsurances(insuranceData);
+      setMySpainApps(spainData);
+      setIsSpainWhitelisted(hasSpainAccess);
 
-      if (teamsData.length > 0) {
+      // 🎯 प्रायॉरिटी टॅब
+      if (hasSpainAccess && teamsData.length === 0 && insuranceData.length === 0) {
+        setActiveTab('spain');
+      } else if (hasSpainAccess && teamsData.length === 0) {
+        setActiveTab('spain');
+      } else if (teamsData.length > 0) {
         setActiveTab('applications');
       } else if (insuranceData.length > 0) {
         setActiveTab('insurance');
+      } else if (hasSpainAccess) {
+        setActiveTab('spain');
       }
 
     } catch (error) {
@@ -57,7 +138,7 @@ export default function MyTeamDashboard() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && user.email) {
         setCurrentUser(user);
-        fetchDashboardData(user.email);
+        fetchDashboardData(user);
       } else {
         setCurrentUser(null);
         setLoading(false);
@@ -67,7 +148,7 @@ export default function MyTeamDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // 🗜️ Smart PDF Converter (< 2MB Direct Bypass)
+  // PDF Converter (< 2MB Direct Bypass)
   const convertFileToBase64 = async (file) => {
     const TWO_MB_BYTES = 2 * 1024 * 1024;
     if (file.size <= TWO_MB_BYTES) {
@@ -103,7 +184,7 @@ export default function MyTeamDashboard() {
     }
   };
 
-  // 📤 Re-upload New PDF Handler
+  // Re-upload New PDF Handler (विमा - १००% जसाच्या तसा सुरक्षित)
   const handleReuploadSubmit = async (insItem) => {
     if (!newFile) {
       Swal.fire({ icon: 'warning', title: 'कृपया नवीन PDF फाईल निवडा!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
@@ -136,7 +217,6 @@ export default function MyTeamDashboard() {
         console.warn("GAS JSON Parse Warning:", parseErr);
       }
 
-      // Firestore अपडेट (Status पुन्हा Pending होईल)
       const docRef = doc(db, "insurance_requests_2026", insItem.id);
       await updateDoc(docRef, {
         fileUrl: uploadedFileUrl || insItem.fileUrl,
@@ -155,7 +235,7 @@ export default function MyTeamDashboard() {
 
       setReuploadingId(null);
       setNewFile(null);
-      fetchDashboardData(currentUser.email);
+      fetchDashboardData(currentUser);
 
     } catch (err) {
       console.error("Re-upload error:", err);
@@ -165,25 +245,26 @@ export default function MyTeamDashboard() {
     }
   };
 
-  // Status Badge Helper
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Approved':
       case 'मंजूर':
       case 'मंजूर (Approved)':
-        return <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-extrabold text-xs rounded-full"><CheckCircle className="w-3.5 h-3.5"/> मंजूर (Approved)</span>;
+      case 'Documents Approved':
+        return <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-extrabold text-xs rounded-full"><CheckCircle className="w-3.5 h-3.5"/> Approved</span>;
       case 'Rejected':
       case 'नामंजूर':
       case 'नामंजूर (Rejected)':
-        return <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold text-xs rounded-full"><XCircle className="w-3.5 h-3.5"/> नामंजूर (Rejected)</span>;
+      case 'Correction Required':
+        return <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold text-xs rounded-full"><XCircle className="w-3.5 h-3.5"/> Correction Required</span>;
       default:
-        return <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-extrabold text-xs rounded-full"><Clock className="w-3.5 h-3.5"/> प्रलंबित (Pending)</span>;
+        return <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-extrabold text-xs rounded-full"><Clock className="w-3.5 h-3.5"/> Pending Verification</span>;
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#08090d] text-white flex flex-col justify-between">
+      <div className="min-h-screen bg-[#08090d] text-white flex flex-col justify-between font-sans">
         <Navbar />
         <div className="text-center py-20 text-amber-400 font-bold flex items-center justify-center gap-2">
           <Loader2 className="w-5 h-5 animate-spin" /> माहिती शोधत आहे...
@@ -193,9 +274,62 @@ export default function MyTeamDashboard() {
     );
   }
 
-  const hasNoData = myTeams.length === 0 && myInsurances.length === 0;
+  // 📝 १. जर युझर व्हिसा फॉर्म भरत असेल
+  if (activeFormType === 'VISA') {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
+        <Navbar />
+        <main className="flex-1 max-w-3xl mx-auto px-3 py-4 w-full">
+          <SpainTourForm
+            currentUser={currentUser}
+            initialData={editingSpainData}
+            onComplete={() => {
+              setActiveFormType(null);
+              setEditingSpainData(null);
+              fetchDashboardData(currentUser);
+            }}
+            onCancel={() => {
+              setActiveFormType(null);
+              setEditingSpainData(null);
+            }}
+          />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
-  // 🛠️ PDF Inline Open Helper
+  // 📝 २. जर युझर किट फॉर्म भरत असेल
+  if (activeFormType === 'KIT') {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
+        <Navbar />
+        <main className="flex-1 max-w-xl mx-auto px-3 py-4 w-full">
+          <SpainKitForm
+            currentUser={currentUser}
+            initialData={editingSpainData}
+            onComplete={() => {
+              setActiveFormType(null);
+              setEditingSpainData(null);
+              fetchDashboardData(currentUser);
+            }}
+            onCancel={() => {
+              setActiveFormType(null);
+              setEditingSpainData(null);
+            }}
+          />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const hasNoData = myTeams.length === 0 && myInsurances.length === 0 && !isSpainWhitelisted;
+
+  // 🔒 अधिकार नियम (Super Admin ला सर्व चालू, इतरांसाठी लॉक स्थिती लागू)
+  const isKitEditable = isSuperUser || !isKitLocked;
+  const isVisaDocEditable = isSuperUser || !isVisaDocLocked;
+
   const handleOpenPdfModal = (url, titleText = "PDF Viewer") => {
     setPdfTitle(titleText);
     setViewPdfUrl(url);
@@ -206,22 +340,37 @@ export default function MyTeamDashboard() {
       <Navbar />
 
       {/* Header Banner */}
-      <div className="py-5 px-4 bg-gradient-to-b from-amber-500/10 via-transparent to-transparent border-b border-white/10">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="py-4 px-4 bg-gradient-to-b from-amber-500/10 via-transparent to-transparent border-b border-white/10">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-              <Shield className="w-6 h-6 text-amber-400" /> My Status
+            <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              <Shield className="w-5 h-5 text-amber-400" /> My Status
             </h1>
-            <p className="text-slate-400 text-xs mt-0.5">लॉगिन ईमेल: <span className="text-amber-400 font-mono">{currentUser?.email}</span></p>
+            <p className="text-slate-400 text-xs mt-0.5">Email: <span className="text-amber-400 font-mono">{currentUser?.email}</span></p>
           </div>
         </div>
       </div>
 
       {/* DYNAMIC NAVIGATION TABS */}
       {!hasNoData && (
-        <div className="max-w-7xl mx-auto px-4 pt-4 w-full">
+        <div className="max-w-7xl mx-auto px-4 pt-3 w-full">
           <div className="flex border-b border-slate-800 gap-2 overflow-x-auto scrollbar-none">
             
+            {/* 🇪🇸 १. गोपनीय स्पेन दौरा टॅब */}
+            {isSpainWhitelisted && (
+              <button
+                onClick={() => setActiveTab('spain')}
+                className={`py-2.5 px-4 font-bold text-xs rounded-t-xl transition flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'spain'
+                    ? 'bg-[#0c0d14] border-t-2 border-amber-500 text-amber-400 border-x border-slate-800'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <FileText className="w-4 h-4 text-amber-400" /> Traveler Registration
+              </button>
+            )}
+
+            {/* 🏆 स्पर्धा टॅब */}
             {myTeams.length > 0 && (
               <button
                 onClick={() => setActiveTab('applications')}
@@ -235,6 +384,7 @@ export default function MyTeamDashboard() {
               </button>
             )}
 
+            {/* 🛡️ विमा टॅब */}
             {myInsurances.length > 0 && (
               <button
                 onClick={() => setActiveTab('insurance')}
@@ -253,7 +403,7 @@ export default function MyTeamDashboard() {
       )}
 
       {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto px-4 py-6 w-full flex-1">
+      <div className="max-w-7xl mx-auto px-4 py-5 w-full flex-1">
         
         {hasNoData ? (
           <div className="p-8 bg-[#0c0d14] border border-slate-800 rounded-3xl text-center space-y-3 max-w-xl mx-auto my-6">
@@ -265,6 +415,241 @@ export default function MyTeamDashboard() {
           </div>
         ) : (
           <>
+            {/* 🇪🇸 TAB 0: TRAVELER REGISTRATION */}
+            {activeTab === 'spain' && isSpainWhitelisted && (
+              <div className="space-y-3 max-w-2xl">
+                
+                {/* Header with Restricted "+ Add Member Kit" Button */}
+                <div className="flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wide">
+                      Traveler & Kit Registration
+                    </h2>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      Account: {currentUser?.email}
+                    </p>
+                  </div>
+
+                  {canAddMembers && isKitEditable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingSpainData(null);
+                        setActiveFormType('KIT');
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg flex items-center gap-1 transition cursor-pointer shadow-sm"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>+ Add Member Kit</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* किट लॉक सूचना */}
+                {!isKitEditable && (
+                  <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2 text-xs text-amber-300">
+                    <Lock className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>Kit measurement submissions are currently locked by Admin for production stitching.</span>
+                  </div>
+                )}
+
+                {/* व्हिसा डॉक्युमेंट लॉक सूचना */}
+                {!isVisaDocEditable && (
+                  <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-xs text-rose-300">
+                    <Lock className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span>Document submissions are currently closed by Admin.</span>
+                  </div>
+                )}
+
+                {/* जर अद्याप कोणतीही नोंदणी झाली नसेल */}
+                {mySpainApps.length === 0 ? (
+                  <div className="bg-[#0c0d14] border border-slate-800 rounded-2xl p-5 space-y-3 shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-bold text-white uppercase tracking-wide">
+                        Registration Not Found
+                      </h2>
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-bold">
+                        Action Required
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-400">
+                      Please select what you would like to submit first:
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      {isKitEditable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSpainData(null);
+                            setActiveFormType('KIT');
+                          }}
+                          className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          <Shirt className="w-4 h-4" />
+                          <span>Submit Kit Sizes Only</span>
+                        </button>
+                      )}
+
+                      {isVisaDocEditable ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSpainData(null);
+                            setActiveFormType('VISA');
+                          }}
+                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4 text-amber-400" />
+                          <span>Submit Documents</span>
+                        </button>
+                      ) : (
+                        <div className="flex-1 py-2.5 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
+                          <Lock className="w-4 h-4" />
+                          <span>Documents Locked</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* नोंदणी झालेल्या सदस्यांची कार्ड्स */
+                  mySpainApps.map((spApp) => (
+                    <div key={spApp.id} className="bg-[#0c0d14] border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-lg">
+                      
+                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                        <div>
+                          <span className="text-[10px] text-slate-500 uppercase font-mono block">
+                            MEMBER ID: #{spApp.memberId || spApp.id.slice(-6)}
+                          </span>
+                          <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wide">
+                            {spApp.fullNameAsPassport || spApp.fullName}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {spApp.travelCategory && (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              spApp.travelCategory === 'Confirmed' 
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                                : 'bg-amber-950 text-amber-300 border border-amber-800'
+                            }`}>
+                              {spApp.travelCategory}
+                            </span>
+                          )}
+                          {getStatusBadge(spApp.status)}
+                        </div>
+                      </div>
+
+                      {/* 1. पासपोर्ट व वैयक्तिक सारांश */}
+                      {spApp.passportNo && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 font-mono">
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">Passport No</p>
+                            <p className="text-amber-400 font-bold">{spApp.passportNo}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">Expiry Date</p>
+                            <p className="text-slate-300">{spApp.expiryDate || '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-500 uppercase">Contact</p>
+                            <p className="text-slate-300">{spApp.applicantContactNo || '-'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2. किट मापांचा सारांश */}
+                      <div className="p-3 bg-slate-950 rounded-xl border border-amber-500/20 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                            <Shirt className="w-3.5 h-3.5" /> Kit Measurements
+                          </span>
+                          {spApp.gender && (
+                            <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                              Gender: <b>{spApp.gender}</b>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                          <div>
+                            <span className="text-[9px] text-slate-500 block">T-SHIRT</span>
+                            <b className="text-white">{spApp.tshirtSize || 'Not Set'}</b>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block">SHORTS</span>
+                            <b className="text-white">{spApp.shortsSize || 'Not Set'}</b>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block">TRACKPANT</span>
+                            <b className="text-white">W:{spApp.trackpantWaist || '-'} | L:{spApp.trackpantLength || '-'}</b>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block">JACKET</span>
+                            <b className="text-white">{spApp.jacketSize || 'Not Set'}</b>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* एजंटचे रिमार्क असल्यास */}
+                      {Array.isArray(spApp.agentRemarks) && spApp.agentRemarks.length > 0 && (
+                        <div className="p-2.5 bg-red-950/20 border border-red-800/40 rounded-xl space-y-1 text-xs">
+                          <p className="font-bold text-red-400 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" /> Agent Remarks / Notice:
+                          </p>
+                          <p className="text-red-200 text-[11px]">
+                            {spApp.agentRemarks[spApp.agentRemarks.length - 1].text}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* 🎯 २ स्वतंत्र बटणे: किट आणि व्हिसा */}
+                      <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                        {isKitEditable ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSpainData(spApp);
+                              setActiveFormType('KIT');
+                            }}
+                            className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+                          >
+                            <Shirt className="w-3.5 h-3.5" />
+                            <span>Update Kit Sizes (मापे बदला)</span>
+                          </button>
+                        ) : (
+                          <div className="flex-1 py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Kit Measurements Locked</span>
+                          </div>
+                        )}
+
+                        {isVisaDocEditable ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSpainData(spApp);
+                              setActiveFormType('VISA');
+                            }}
+                            className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Visa & Passport Docs</span>
+                          </button>
+                        ) : (
+                          <div className="flex-1 py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Visa Documents Locked</span>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
             {/* 🏆 TAB 1: COMPETITION APPLICATIONS */}
             {activeTab === 'applications' && myTeams.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -312,7 +697,6 @@ export default function MyTeamDashboard() {
                         <span>एकूण खेळाडू: <strong className="text-amber-400 font-bold">{team.playerCount}</strong></span>
                       </div>
 
-                      {/* 🎓 APPROVED CERTIFICATE SECTION FOR COMPETITION */}
                       {isApproved && certificateLink && (
                         <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-2">
                           <div className="flex items-center justify-between">
@@ -340,7 +724,6 @@ export default function MyTeamDashboard() {
                           </div>
                         </div>
                       )}
-
                     </div>
                   );
                 })}
@@ -353,13 +736,10 @@ export default function MyTeamDashboard() {
                 {myInsurances.map((ins) => {
                   const isApproved = ins.status === 'Approved' || ins.status === 'मंजूर' || ins.status === 'मंजूर (Approved)';
                   const isRejected = ins.status === 'नामंजूर (Rejected)' || ins.status === 'Rejected' || ins.status === 'नामंजूर';
-                  
-                  // प्रमाणपत्र किंवा अप्रूव्ह्ड कॉपीची लिंक
                   const certificateLink = ins.certificateUrl || ins.approvedCopyUrl || ins.approvedCertificateUrl || ins.policyCopyUrl;
 
                   return (
                     <div key={ins.id} className="bg-[#0c0d14] border border-slate-800 hover:border-amber-500/40 transition-colors rounded-[24px] p-5 space-y-4 shadow-xl relative overflow-hidden">
-                      
                       <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                         <div>
                           <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">INSURANCE APPLICATION ID</span>
@@ -405,7 +785,6 @@ export default function MyTeamDashboard() {
                         <span>विमा गोविंदा संख्या: <strong className="text-amber-400 font-bold">{ins.govindaCount} गोविंदा</strong></span>
                       </div>
 
-                      {/* 🎓 APPROVED STATUS: SHOW OFFICIAL CERTIFICATE / APPROVED COPY */}
                       {isApproved && certificateLink && (
                         <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-2">
                           <div className="flex items-center justify-between">
@@ -419,7 +798,7 @@ export default function MyTeamDashboard() {
                               onClick={() => handleOpenPdfModal(certificateLink, "मंजूर विमा प्रमाणपत्र")}
                               className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-lg shadow-emerald-500/20"
                             >
-                              <Eye className="w-4 h-4" /> मंजूर प्रत / Certificate पहा
+                              <Eye className="w-3.5 h-3.5" /> मंजूर प्रत / Certificate पहा
                             </button>
                             <a
                               href={certificateLink}
@@ -428,17 +807,16 @@ export default function MyTeamDashboard() {
                               className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 flex items-center justify-center transition"
                               title="डाऊनलोड करा"
                             >
-                              <Download className="w-4 h-4" />
+                              <Download className="w-3.5 h-3.5" />
                             </a>
                           </div>
                         </div>
                       )}
 
-                      {/* 🛑 ॲडमिनचे नाकारण्याचे कारण */}
                       {isRejected && ins.rejectReason && (
                         <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl space-y-1">
                           <p className="text-[11px] font-bold text-red-400 flex items-center gap-1">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> अर्ज नाकारण्याचे कारण (Reject Reason):
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> अर्ज नाकारण्याचे कारण:
                           </p>
                           <p className="text-xs text-red-200 leading-relaxed font-medium pl-4">
                             "{ins.rejectReason}"
@@ -446,7 +824,6 @@ export default function MyTeamDashboard() {
                         </div>
                       )}
 
-                      {/* 👁️ जुनी अपलोड केलेली लेटरहेड फाईल (FILE PREVIEW & DOWNLOAD) */}
                       {ins.fileUrl && (
                         <div className="flex gap-2">
                           <button
@@ -456,7 +833,6 @@ export default function MyTeamDashboard() {
                           >
                             <Eye className="w-3.5 h-3.5 text-amber-400" /> मूळ अर्ज लेटरहेड पहा
                           </button>
-
                           <a
                             href={ins.fileUrl}
                             target="_blank"
@@ -469,7 +845,6 @@ export default function MyTeamDashboard() {
                         </div>
                       )}
 
-                      {/* 📤 RE-UPLOAD OPTION FOR REJECTED APPLICATIONS */}
                       {isRejected && (
                         <div className="pt-1">
                           {reuploadingId === ins.id ? (
@@ -479,7 +854,7 @@ export default function MyTeamDashboard() {
                               </label>
                               <input 
                                 type="file" 
-                                accept="application/pdf"
+                                accept="application/pdf" 
                                 onChange={(e) => setNewFile(e.target.files[0])}
                                 className="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-black cursor-pointer w-full"
                               />
@@ -512,7 +887,6 @@ export default function MyTeamDashboard() {
                           )}
                         </div>
                       )}
-
                     </div>
                   );
                 })}
@@ -523,12 +897,10 @@ export default function MyTeamDashboard() {
 
       </div>
 
-      {/* 👁️ INLINE PDF PREVIEW MODAL */}
+      {/* INLINE PDF PREVIEW MODAL */}
       {viewPdfUrl && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
           <div className="bg-[#0c0d14] border border-amber-500/40 w-full max-w-4xl h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-            
-            {/* Modal Header */}
             <div className="p-3.5 border-b border-slate-800 bg-slate-900 flex items-center justify-between">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-xs sm:text-sm">
                 <FileText className="w-4 h-4" /> {pdfTitle}
@@ -551,7 +923,6 @@ export default function MyTeamDashboard() {
               </div>
             </div>
 
-            {/* Embedded PDF Frame */}
             <div className="flex-1 bg-slate-950 p-2 overflow-hidden relative">
               <iframe
                 src={
@@ -563,10 +934,10 @@ export default function MyTeamDashboard() {
                 className="w-full h-full rounded-xl border border-slate-800"
               />
             </div>
-
           </div>
         </div>
       )}
+
       <Footer />
     </div>
   );

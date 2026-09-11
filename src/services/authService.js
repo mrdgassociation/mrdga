@@ -1,29 +1,22 @@
 import { auth, googleProvider, db } from '../firebase/config';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { notificationService } from './notificationService'; // 🔔 Step 1: Notification Trigger जोडले
+import { notificationService } from './notificationService';
 
 export const authService = {
-  // 🔑 Google Sign-In with Multi-Role Checking (Users -> Teams -> Insurance)
+  // 🔑 Google Sign-In with Multi-Role Checking
   async loginWithGoogle() {
-   // console.log("🔐 Starting Google Popup Authentication...");
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-    //  console.log("✅ Google Auth Successful for Email:", user.email);
-
       const emailLower = user.email.toLowerCase();
 
-      // 🔍 १. आधी 'users' कलेक्शनमध्ये चेक करा (Staff / Admin)
-    //  console.log("🔍 Checking 'users' collection for:", emailLower);
+      // 🔍 १. 'users' कलेक्शन (Staff / Admin / Super Admin)
       const userDocRef = doc(db, "users", emailLower);
       const userDoc = await getDoc(userDocRef);
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
-      //  console.log("📄 User Data from 'users' Firestore:", userData);
-
-        // 💡 `isActive === false` किंवा `status === "Inactive"` असेल तर ब्लॉक करा
         const isUserActive = userData.isActive !== false && userData.status !== "Inactive";
 
         if (!isUserActive) {
@@ -32,36 +25,56 @@ export const authService = {
           throw new Error("ACCOUNT_INACTIVE");
         }
 
-       // console.log(`🎉 Staff/Admin Access Granted! Role: [${userData.role}]`);
-
-        // 📲 🎯 Step 1 Trigger: लॉगिन यशस्वी झाल्यामुळे टोकन मिळवून सेव्ह करा
         try {
           notificationService.requestPushPermission(emailLower);
         } catch (pushErr) {
-          console.warn("⚠️ Push Permission trigger warning on login:", pushErr);
+          console.warn("⚠️ Push Permission warning on login:", pushErr);
         }
 
         return {
           ...user,
           role: userData.role || "Reviewer",
-          department: userData.department || "MRDGA"
+          department: userData.department || "MRDGA",
+          spainTourAccess: userData.spainTourAccess || false
         };
       }
 
-      // 🏆 २. जर Staff नसेल, तर 'teams' (स्पर्धा फॉर्म) चेक करा
+      // 🇪🇸 २. 'spain_tour_whitelist' (बाहेरील स्पेन दौरा पाहुणे सदस्य)
       try {
-       // console.log("🔍 Checking 'teams' collection for:", emailLower);
+        const whitelistDocRef = doc(db, "spain_tour_whitelist", emailLower);
+        const whitelistDoc = await getDoc(whitelistDocRef);
+
+        if (whitelistDoc.exists() && whitelistDoc.data().isActive !== false) {
+          const wData = whitelistDoc.data();
+
+          try {
+            notificationService.requestPushPermission(emailLower);
+          } catch (pushErr) {
+            console.warn("⚠️ Push Permission warning on login:", pushErr);
+          }
+
+          return {
+            ...user,
+            role: wData.role || "Traveler",
+            department: "SPAIN_GUEST", // 👈 या टॅगमुळे त्याला फक्त स्पेन दिसेल, MRDGA चे काहीही दिसणार नाही
+            spainTourAccess: true,
+            isSpainGuest: true
+          };
+        }
+      } catch (wErr) {
+        console.warn("⚠️ Whitelist check warning:", wErr.message);
+      }
+
+      // 🏆 ३. 'teams' (स्पर्धा फॉर्म युझर्स)
+      try {
         const qTeams = query(collection(db, "teams"), where("email", "==", emailLower));
         const teamSnap = await getDocs(qTeams);
 
         if (!teamSnap.empty) {
-         // console.log(`🎉 Team Access Granted! Found competition user.`);
-
-          // 📲 🎯 Step 1 Trigger: स्पर्धा युझरसाठी टोकन सेव्ह करा
           try {
             notificationService.requestPushPermission(emailLower);
           } catch (pushErr) {
-            console.warn("⚠️ Push Permission trigger warning on login:", pushErr);
+            console.warn("⚠️ Push Permission warning on login:", pushErr);
           }
 
           return {
@@ -74,20 +87,16 @@ export const authService = {
         console.warn("⚠️ Could not query 'teams' collection:", teamErr.message);
       }
 
-      // 🛡️ ३. जर 'teams' मध्ये नसेल, तर 'insurance_requests_2026' (विमा फॉर्म) चेक करा
+      // 🛡️ ४. 'insurance_requests_2026' (विमा फॉर्म युझर्स)
       try {
-       // console.log("🔍 Checking 'insurance_requests_2026' collection for:", emailLower);
         const qInsurance = query(collection(db, "insurance_requests_2026"), where("email", "==", emailLower));
         const insuranceSnap = await getDocs(qInsurance);
 
         if (!insuranceSnap.empty) {
-         // console.log(`🎉 Insurance User Access Granted! Found insurance request.`);
-
-          // 📲 🎯 Step 1 Trigger: विमा युझरसाठी टोकन सेव्ह करा
           try {
             notificationService.requestPushPermission(emailLower);
           } catch (pushErr) {
-            console.warn("⚠️ Push Permission trigger warning on login:", pushErr);
+            console.warn("⚠️ Push Permission warning on login:", pushErr);
           }
 
           return {
@@ -100,8 +109,8 @@ export const authService = {
         console.warn("⚠️ Could not query 'insurance_requests_2026' collection:", insErr.message);
       }
 
-      // 🛑 ४. कुठेही डेटा सापडला नाही तरच Access Denied करा
-      console.error("❌ Access Denied: User email not found in any collection!");
+      // 🛑 ५. कुठेही नोंद नसलेला युझर ब्लॉक करा
+      console.error("❌ Access Denied: User email not authorized!");
       await signOut(auth);
       throw new Error("UNAUTHORIZED_EMAIL");
 
@@ -113,10 +122,8 @@ export const authService = {
 
   // 🚪 Logout
   async logout() {
-   // console.log("🚪 Logging out user...");
     try {
       await signOut(auth);
-    //  console.log("✅ Logout successful.");
     } catch (error) {
       console.error("❌ Logout Error:", error);
     }
@@ -143,11 +150,31 @@ export const authService = {
           ...data,
           role: data.role || "Reviewer",
           department: data.department || "MRDGA",
+          spainTourAccess: data.spainTourAccess || false,
           isSuperAdmin: (data.department === "SUPER" || data.role === "Super Admin") && (data.isActive !== false && data.status !== "Inactive")
         };
       }
 
-      // 2. Check in 'teams' collection (Competition User)
+      // 2. Check in 'spain_tour_whitelist' (Spain Guests)
+      try {
+        const whitelistDocRef = doc(db, "spain_tour_whitelist", emailLower);
+        const whitelistDoc = await getDoc(whitelistDocRef);
+
+        if (whitelistDoc.exists() && whitelistDoc.data().isActive !== false) {
+          const wData = whitelistDoc.data();
+          return {
+            role: wData.role || "Traveler",
+            department: "SPAIN_GUEST",
+            spainTourAccess: true,
+            isSpainGuest: true,
+            isSuperAdmin: false
+          };
+        }
+      } catch (wErr) {
+        console.warn("⚠️ Whitelist Query Warning:", wErr.message);
+      }
+
+      // 3. Check in 'teams' collection
       try {
         const qTeams = query(collection(db, "teams"), where("email", "==", emailLower));
         const teamSnap = await getDocs(qTeams);
@@ -159,7 +186,7 @@ export const authService = {
         console.warn("⚠️ Team Query Warning:", e.message);
       }
 
-      // 3. Check in 'insurance_requests_2026' collection (Insurance User)
+      // 4. Check in 'insurance_requests_2026' collection
       try {
         const qInsurance = query(collection(db, "insurance_requests_2026"), where("email", "==", emailLower));
         const insuranceSnap = await getDocs(qInsurance);

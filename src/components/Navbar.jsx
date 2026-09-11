@@ -21,10 +21,12 @@ export default function Navbar() {
   const [userDepartment, setUserDepartment] = useState('MRDGA'); // 🏢 Default MRDGA
   const [dbRole, setDbRole] = useState(''); // 'Super Admin', 'Competition', 'Directory', etc.
   const [hasTeamData, setHasTeamData] = useState(false); // 🎯 Admin युझरची स्वतःची पर्सनल टिम आहे का हे तपासण्यासाठी
+  const [canAccessMyStatus, setCanAccessMyStatus] = useState(false); // 👈 0-Cost Read State
 
   const navigate = useNavigate();
 
   // 💡 अचूक रोल व विभाग चेकिंग (Users -> Teams -> Insurance)
+ // 💡 अचूक रोल व विभाग चेकिंग (Users -> Teams -> Insurance)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -42,30 +44,32 @@ export default function Navbar() {
           const userDocSnap = await getDoc(userDocRef);
 
           let isAdminUser = false;
+          let userHasTourAccess = false;
 
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            const isActive = userData.isActive !== false && userData.status !== 'Inactive';
-            const userRoleInDb = userData.role || 'Reviewer';
+          // Navbar.jsx मधील userDocSnap तपासताना:
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          const isActive = userData.isActive !== false && userData.status !== 'Inactive';
+          const userRoleInDb = userData.role || 'Reviewer';
+          const dept = (userData.department || '').toUpperCase().trim();
 
-            // 🎯 सर्व चालू आणि नवीन रोल्स तपासणे (Competition, Directory, Insurance, Viewer, Admin, Super Admin, Reviewer)
-            const allowedAdminRoles = [
-              'Super Admin', 
-              'Admin', 
-              'Reviewer', 
-              'Competition', 
-              'Directory', 
-              'Insurance', 
-              'Viewer'
-            ];
+          const allowedAdminRoles = [
+            'Super Admin', 'Admin', 'Reviewer', 'Competition', 
+            'Directory', 'Insurance', 'Viewer'
+          ];
 
-            if (isActive && allowedAdminRoles.includes(userRoleInDb)) {
-              isAdminUser = true;
-              setUserRole('admin');
-              setDbRole(userRoleInDb);
-              setUserDepartment(userData.department || 'MRDGA');
-            }
+          if (isActive && allowedAdminRoles.includes(userRoleInDb)) {
+            isAdminUser = true;
+            setUserRole('admin');
+            setDbRole(userRoleInDb);
+            setUserDepartment(userData.department || 'MRDGA');
           }
+
+          // 🎯 फक्त SUPER किंवा MRDGA विभाग असलेल्यांनाच टूर ॲक्सेस! (Insurance किंवा इतर विभाग पूर्ण ब्लॉक)
+          if (dept === 'SUPER' || dept === 'MRDGA') {
+            userHasTourAccess = true;
+          }
+        }
 
           // २. 'teams' आणि 'insurance_requests_2026' मध्ये वैयक्तिक अर्ज शोधणे
           const [teamSnap, insuranceSnap] = await Promise.all([
@@ -84,16 +88,20 @@ export default function Navbar() {
           }
 
           setHasTeamData(hasPersonalReg);
+          // 🎯 MRDGA डिपार्टमेंट, वैयक्तिक संघ किंवा टूर ॲक्सेस असलेल्या सर्वांना My Status दिसेल
+          setCanAccessMyStatus(hasPersonalReg || userHasTourAccess);
 
         } catch (err) {
           console.error("Role checking error:", err);
           setUserRole('guest');
           setHasTeamData(false);
+          setCanAccessMyStatus(false);
         }
       } else {
         setUserRole(null);
         setDbRole('');
         setHasTeamData(false);
+        setCanAccessMyStatus(false);
       }
     });
     return () => unsubscribe();
@@ -120,6 +128,7 @@ export default function Navbar() {
       setUserRole(null);
       setDbRole('');
       setHasTeamData(false);
+      setCanAccessMyStatus(false);
       navigate('/');
     } catch (error) {
       console.error("Logout Error:", error);
@@ -193,8 +202,8 @@ export default function Navbar() {
                     </button>
                   )}
 
-                  {/* 🛡️ 2. My Status Button */}
-                  {(userRole === 'team' || userRole === 'guest' || hasTeamData) && (
+                  {/* 🛡️ 2. My Status Button (Team, Guest किंवा Tour Access असलेला Admin या सर्वांना दिसेल) */}
+                  {(userRole === 'team' || userRole === 'guest' || hasTeamData || canAccessMyStatus) && (
                     <button
                       onClick={() => navigate('/my-status')}
                       className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
@@ -247,7 +256,6 @@ export default function Navbar() {
           <Link to="/competitions" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Competitions</Link>      
           <Link to="/insurance-info" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Insurance Info</Link>
           <Link to="/contact" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Contact</Link>
-          {/* 📸 🆕 Gallery Link */}
           <Link to="/gallery" onClick={() => setIsOpen(false)} className="block py-2 text-slate-200 hover:text-amber-400">Gallery</Link>
 
           {/* MOBILE: LOGGED-IN STATE */}
@@ -262,7 +270,7 @@ export default function Navbar() {
                 </button>
               )}
 
-              {(userRole === 'team' || userRole === 'guest' || hasTeamData) && (
+              {(userRole === 'team' || userRole === 'guest' || hasTeamData || canAccessMyStatus) && (
                 <button
                   onClick={() => { setIsOpen(false); navigate('/my-status'); }}
                   className="w-full py-2.5 px-4 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-extrabold rounded-xl flex items-center gap-2 cursor-pointer text-xs"

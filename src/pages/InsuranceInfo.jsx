@@ -536,8 +536,8 @@ const generateUniqueAppId = async () => {
       <InsuranceGuideModal />
       <button
         onClick={handleOpenFormModal}
-        className="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-[11px] sm:text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1 cursor-pointer shrink-0"
-      >
+        className="px-3 py-1.5 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-[11px] sm:text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1 cursor-pointer shrink-0 "
+      disabled >
         <PlusCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
         <span>नवीन अर्ज</span>
       </button>

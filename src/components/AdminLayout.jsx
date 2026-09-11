@@ -61,10 +61,10 @@ export default function AdminLayout({ children }) {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 🔐 १. Strict Super Admin Check (फक्त Department 'SUPER' आणि Role 'Super Admin' असणाऱ्यालाच)
-const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin';
+  // 🔐 १. Strict Super Admin Check
+  const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin';
 
-  // 🔒 २. मेनू व्हिजिबिलिटी
+  // 🔒 २. नियमित ॲडमिन मेनू व्हिजिबिलिटी
   const canSeeInsurance = 
     isSuperAdminUser ||
     userDepartment === 'INSURANCE' ||
@@ -72,29 +72,37 @@ const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin
 
   const canSeeCompetition = 
     (isSuperAdminUser || allowedModules.includes('COMPETITION')) &&
-    userDepartment !== 'INSURANCE';
+    userDepartment !== 'INSURANCE' &&
+    userDepartment !== 'SPAIN_MEMBER';
 
   const canSeeDahiHandi = 
     (isSuperAdminUser || allowedModules.includes('COMPETITION')) &&
-    userDepartment !== 'INSURANCE';
+    userDepartment !== 'INSURANCE' &&
+    userDepartment !== 'SPAIN_MEMBER';
 
   const canSeeDirectory = 
     (isSuperAdminUser || allowedModules.includes('DIRECTORY')) &&
-    userDepartment !== 'INSURANCE';
+    userDepartment !== 'INSURANCE' &&
+    userDepartment !== 'SPAIN_MEMBER';
 
- const canSeeReports = 
-  (isSuperAdminUser || allowedModules.includes('REPORTS')) &&
-  userDepartment !== 'INSURANCE' &&
-  pageConfig.showReportsMenu !== false;
+  const canSeeReports = 
+    (isSuperAdminUser || allowedModules.includes('REPORTS')) &&
+    userDepartment !== 'INSURANCE' &&
+    userDepartment !== 'SPAIN_MEMBER' &&
+    pageConfig.showReportsMenu !== false;
 
-  // 👤 प्रोफाइल व कार्य अहवाल (फक्त MRDGA आणि SUPER साठी)
- const canSeeProfile = 
+  const canSeeProfile = 
     isSuperAdminUser || 
-    (userDepartment !== 'INSURANCE' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER') && pageConfig.showProfileMenu !== false);
+    (userDepartment !== 'INSURANCE' && userDepartment !== 'SPAIN_MEMBER' && (userDepartment === 'MRDGA' || userDepartment === 'SUPER') && pageConfig.showProfileMenu !== false);
 
+  // 🇪🇸 ३. फक्त Super Admin आणि Visa Agent साठी कन्सोल (प्रवाशांचा फॉर्म पूर्ण काढला)
+  const canSeeSpainVisaConsole = 
+    isSuperAdminUser || 
+    userDepartment === 'VISA_AGENT' || 
+    userRole === 'Visa Agent' || 
+    userDepartment === 'SUPER';
 
-
-  // 🎯 ३. ऑटो-रिडायरेक्शन
+  // 🎯 ४. ऑटो-रिडायरेक्शन
   useEffect(() => {
     if (loadingConfig || !currentUser) return;
 
@@ -121,6 +129,7 @@ const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin
     !canSeeDahiHandi &&
     !canSeeDirectory &&
     !canSeeReports &&
+    !canSeeSpainVisaConsole &&
     !isSuperAdminUser;
 
   if (!loadingConfig && areAllMenusDisabled) {
@@ -283,6 +292,22 @@ const isSuperAdminUser = userDepartment === 'SUPER' && userRole === 'Super Admin
                 }`}
               >
                 <User className="w-4 h-4 text-amber-400" /> माझे प्रोफाईल & कार्य अहवाल
+              </Link>
+            )}
+
+            {/* 🇪🇸 व्हिसा कन्सोल (केवळ Super Admin आणि Visa Agent साठी) */}
+            {canSeeSpainVisaConsole && (
+              <Link
+                to="/admin/spain-tour"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${
+                  location.pathname === '/admin/spain-tour'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-black shadow-lg shadow-amber-500/20'
+                    : 'text-gray-300 hover:bg-white/5'
+                }`}
+              >
+                <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>स्पेन व्हिसा कन्सोल (Agent)</span>
               </Link>
             )}
 

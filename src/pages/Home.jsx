@@ -4,10 +4,11 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SplashScreen from '../components/SplashScreen';
 import InstallPWAButton from '../components/InstallPWAButton';
+import Swal from 'sweetalert2';
 
 import { 
   Shield, ChevronRight, HeartPulse, 
-  PhoneCall, CheckCircle2, Info, ShieldCheck, AlertCircle, LogIn
+  PhoneCall, CheckCircle2, Info, ShieldCheck, LogIn, FileSpreadsheet
 } from 'lucide-react';
 
 export default function Home() {
@@ -23,22 +24,121 @@ export default function Home() {
     setShowSplash(false);
   };
 
+// 🏥 विमा क्लेम प्रक्रिया दाखवणारा पॉपअप (ईमेल १-क्लिक कॉपीसह)
+  const handleShowClaimSteps = () => {
+    const OFFICIAL_EMAIL = "sachin.khanvilkar@orientalinsurance.co.in"; // 👈 तुमचा अधिकृत ईमेल
+    const OFFICIAL_WHATSAPP = "918422919066";          // 👈 तुमचा व्हॉट्सॲप नंबर
+
+    Swal.fire({
+      title: 'गोविंदा विमा क्लेम प्रक्रिया (Insurance Claim Steps)',
+      html: `
+        <div style="text-align: left; font-size: 13px; line-height: 1.6; color: #cbd5e1; max-height: 65vh; overflow-y: auto; padding-right: 4px;">
+          
+          <!-- Step 1 -->
+          <div style="background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px;">
+            <b style="color: #fbbf24; font-size: 14px;">Step 1: क्लेम नोंदणीसाठी माहिती पाठवणे</b>
+            <p style="margin: 4px 0 0 0; color: #e2e8f0;">विमा क्लेम नोंदणीसाठी खालील माहिती ईमेलवर पाठवा:</p>
+            <ul style="margin: 6px 0 0 16px; padding: 0; list-style-type: disc; color: #cbd5e1;">
+              <li>मंडळाचे नाव व परिसर (Name of Mandal & Area)</li>
+              <li>जखमी गोविंदाचे नाव (Name of Injured Govinda)</li>
+              <li>अपघाताची तारीख (Date of Accident)</li>
+              <li>अपघाताचा सविस्तर तपशील (Details of Accident)</li>
+              <li>मंडळाच्या प्रतिनिधीचा मोबाईल नंबर व ईमेल (Contact No & Email)</li>
+            </ul>
+          </div>
+
+          <!-- Step 2 (१-क्लिक कॉपी ईमेल) -->
+          <div style="background: rgba(59, 130, 246, 0.08); border-left: 3px solid #3b82f6; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px;">
+            <b style="color: #60a5fa; font-size: 14px;">Step 2: ईमेलवर विमा प्रमाणपत्र व माहिती पाठवणे</b>
+            <p style="margin: 4px 0 6px 0; color: #e2e8f0;">
+              मंडळाचे अधिकृत विमा प्रमाणपत्र (Certificate of Insurance) आणि वरील माहिती खालील ईमेलवर पाठवा:
+            </p>
+            
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+              <span style="font-family: monospace; color: #93c5fd; font-weight: bold; background: rgba(30, 58, 138, 0.4); padding: 5px 10px; border-radius: 6px; border: 1px dashed #3b82f6;">
+                📧 ${OFFICIAL_EMAIL}
+              </span>
+              <button 
+                type="button" 
+                id="copy-email-btn"
+                style="background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+              >
+                📋 कॉपी करा
+              </button>
+              <span id="copy-status-text" style="font-size: 11px; color: #4ade80; display: none; font-weight: bold;">
+                ✓ कॉपी झाला!
+              </span>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div style="background: rgba(16, 185, 129, 0.08); border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px;">
+            <b style="color: #34d399; font-size: 14px;">Step 3: क्लेम फॉर्म व कागदपत्रांची यादी मिळणे</b>
+            <p style="margin: 4px 0 0 0; color: #e2e8f0;">ईमेल प्राप्त झाल्यानंतर आम्ही आपल्या ईमेलवर अधिकृत क्लेम फॉर्म (Claim Form) आणि आवश्यक कागदपत्रांची यादी पाठवू.</p>
+          </div>
+
+          <!-- Step 4 -->
+          <div style="background: rgba(239, 68, 68, 0.08); border-left: 3px solid #ef4444; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px;">
+            <b style="color: #f87171; font-size: 14px;">Step 4: मूळ कागदपत्रे कार्यालयात जमा करणे</b>
+            <p style="margin: 4px 0 0 0; color: #e2e8f0;">जखमी गोविंदाला रुग्णालयातून डिस्चार्ज मिळाल्यानंतर सर्व मूळ कागदपत्रे (Original Documents) आमच्या कार्यालयात जमा करावीत.</p>
+            <p style="margin: 4px 0 0 0; font-size: 11px; color: #94a3b8;">* कार्यालयाचा पत्ता विमा प्रमाणपत्रावर (Certificate of Insurance) दिलेला आहे.</p>
+          </div>
+
+        </div>
+      `,
+      didOpen: () => {
+        const copyBtn = document.getElementById('copy-email-btn');
+        const statusText = document.getElementById('copy-status-text');
+
+        if (copyBtn) {
+          copyBtn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(OFFICIAL_EMAIL);
+              copyBtn.innerText = "✓ कॉपी झाले";
+              copyBtn.style.background = "#065f46";
+              copyBtn.style.color = "#fff";
+              if (statusText) statusText.style.display = "inline";
+
+              setTimeout(() => {
+                copyBtn.innerText = "📋 कॉपी करा";
+                copyBtn.style.background = "#1e293b";
+                copyBtn.style.color = "#38bdf8";
+                if (statusText) statusText.style.display = "none";
+              }, 2500);
+            } catch (err) {
+              console.error("Copy failed", err);
+            }
+          });
+        }
+      },
+      showCloseButton: true,
+      showCancelButton: true,
+      confirmButtonText: '💬 अधिक माहितीसाठी WhatsApp करा',
+      cancelButtonText: 'समजले (बंद करा)',
+      confirmButtonColor: '#25D366',
+      cancelButtonColor: '#334155',
+      background: '#0f172a',
+      color: '#fff',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-700'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const defaultMsg = encodeURIComponent(
+          "*(विमा क्लेम मदत)*\n\n" +
+          "नमस्कार,\nआम्हाला गोविंदा विमा क्लेम प्रक्रियेबद्दल अधिक माहिती हवी आहे."
+        );
+        window.open(`https://wa.me/${OFFICIAL_WHATSAPP}?text=${defaultMsg}`, '_blank');
+      }
+    });
+  };
+
   return (
     <>
       {showSplash && <SplashScreen onFinish={handleSplashFinish} season="2026" />}
 
       <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
         <Navbar />
-
-        {/* 📢 महत्त्वाची सूचना बॅनर */}
-        <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-b border-amber-500/30 px-4 py-3">
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2.5 text-center text-xs sm:text-sm font-semibold text-amber-200">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
-            <span>
-              <strong>महत्त्वाची सूचना:</strong> संध्याकाळी ७:०० नंतर अपलोड केलेल्या विमा पॉलिसीचा Status पुढील दिवशी दुपारी १२:०० वाजेपर्यंत कळेल. कृपया त्यानंतरच Status तपासावा.
-            </span>
-          </div>
-        </div>
 
         {/* 🌟 1. HERO BANNER SECTION */}
         <div className="relative overflow-hidden pt-12 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-amber-500/15 via-orange-500/5 to-transparent border-b border-amber-500/10">
@@ -56,23 +156,23 @@ export default function Home() {
             </h1>
 
             <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto font-medium leading-relaxed">
-              परंपरा, संस्कृती, सुरक्षितता आणि भव्यतेचा संगम! असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विमा नोंदणी, अर्जाची स्थिती आणि महत्त्वाच्या सूचना एकाच ठिकाणी उपलब्ध.
+              परंपरा, संस्कृती, सुरक्षितता आणि भव्यतेचा संगम! असोसिएशनच्या अधिकृत डिजिटल प्लॅटफॉर्मद्वारे विमा नोंदणी, अर्जाची स्थिती आणि क्लेम प्रक्रिया एकाच ठिकाणी उपलब्ध.
             </p>
 
             {/* मुख्य CTA बटन्स */}
             <div className="pt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
 
-              {/* 🛡️ १. गोविंदा विमा माहिती व अर्ज बटण */}
+              {/* 🏥 १. विमा क्लेम प्रक्रिया (पॉपअप) */}
               <button
                 type="button"
-                onClick={() => navigate('/insurance-info')}
-                className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-sm sm:text-base rounded-2xl transition flex items-center justify-center gap-2.5 shadow-xl shadow-amber-500/20 cursor-pointer group"
+                onClick={handleShowClaimSteps}
+                className="w-full sm:w-auto px-7 py-4 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-white font-black text-sm sm:text-base rounded-2xl transition flex items-center justify-center gap-2.5 shadow-xl shadow-rose-500/20 cursor-pointer group"
               >
-                <ShieldCheck className="w-5 h-5 text-black group-hover:scale-110 transition shrink-0" />
-                <span>🛡️ गोविंदा विमा माहिती व अर्ज</span>
+                <HeartPulse className="w-5 h-5 text-white group-hover:scale-110 transition shrink-0" />
+                <span>🏥 विमा क्लेम प्रक्रिया (Claim Steps)</span>
               </button>
 
-              {/* 🔐 २. अर्जाची स्थिती तपासा -> थेट लॉगिन पेजवर रिडायरेक्ट */}
+              {/* 🔐 २. अर्जाची स्थिती तपासा */}
               <button
                 type="button"
                 onClick={() => navigate('/login')}
@@ -125,18 +225,28 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Highlight Card */}
+          {/* Right Highlight Card - विमा क्लेम मार्गदर्शक */}
           <div className="relative rounded-3xl overflow-hidden border border-amber-500/20 bg-[#0c0d14] p-6 text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl flex items-center justify-center mx-auto">
+            <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
               <HeartPulse className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold text-amber-400">खेळाडू विमा व सुरक्षा मार्गदर्शन</h3>
+            <h3 className="text-xl font-bold text-amber-400">खेळाडू विमा व क्लेम प्रक्रिया</h3>
             <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
-              सराव सत्रादरम्यान किंवा उत्सवादरम्यान दुखापत झाल्यास वैद्यकीय मदतीची आणि विमा क्लेमची पूर्ण प्रक्रिया असोसिएशनतर्फे हाताळली जाते.
+              उत्सवादरम्यान किंवा सरावात दुखापत झाल्यास वैद्यकीय मदत व विमा क्लेमसाठीच्या सर्व स्टेप्स तपासा.
             </p>
-            <div className="pt-2">
-              <Link to="/insurance-info" className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 font-bold text-xs rounded-xl transition">
-                विमा नियमावली व क्लेम माहिती <ChevronRight className="w-4 h-4" />
+            <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
+              <button 
+                type="button"
+                onClick={handleShowClaimSteps}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                <span>विमा क्लेम कसा करावा?</span> <ChevronRight className="w-4 h-4" />
+              </button>
+              <Link 
+                to="/insurance-info" 
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium text-xs rounded-xl transition"
+              >
+                विमा नियमावली
               </Link>
             </div>
           </div>
@@ -176,8 +286,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 py-12 w-full">
           <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent border border-amber-500/30 rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center sm:text-left">
-              <h3 className="text-lg sm:text-xl font-black text-white">काही शंका किंवा तांत्रिक अडचण आहे का?</h3>
-              <p className="text-xs text-slate-300">आमच्या असोसिएशन हेल्पडेस्कशी संपर्क साधा किंवा संपर्क पानाला भेट द्या.</p>
+              <h3 className="text-lg sm:text-xl font-black text-white">काही शंका किंवा क्लेमसंबंधी अडचण आहे का?</h3>
+              <p className="text-xs text-slate-300">आमच्या असोसिएशन हेल्पडेस्कशी संपर्क साधा किंवा संपर्क केंद्राला भेट द्या.</p>
             </div>
             <Link 
               to="/helpdesk" 
