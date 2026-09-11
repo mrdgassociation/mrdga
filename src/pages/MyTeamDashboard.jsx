@@ -8,13 +8,13 @@ import Swal from 'sweetalert2';
 import { 
   Shield, Trophy, CheckCircle, Clock, XCircle, User, 
   Phone, MapPin, Loader2, Award, FileText, AlertCircle, UploadCloud, RefreshCw, Eye, Download, X,
-  Edit, Shirt, PlusCircle, Lock
+  Shirt, PlusCircle, Lock
 } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 
 // 🎯 २ स्वतंत्र फॉर्म्स
-import SpainTourForm from './SpainTourForm'; // 👈 1. व्हिसा फॉर्म (Visa & Passport)
-import SpainKitForm from './SpainKitForm';   // 👈 2. किट फॉर्म (T-Shirt & Kit Sizes)
+import SpainTourForm from './SpainTourForm'; // 👈 1. डॉक्युमेंट फॉर्म (Passport & Personal Docs)
+import SpainKitForm from './SpainKitForm';   // 👈 2. किट फॉर्म (Kit Sizes)
 
 export default function MyTeamDashboard() {
   const [loading, setLoading] = useState(true);
@@ -24,13 +24,15 @@ export default function MyTeamDashboard() {
   const [mySpainApps, setMySpainApps] = useState([]);
   const [isSpainWhitelisted, setIsSpainWhitelisted] = useState(false);
   const [canAddMembers, setCanAddMembers] = useState(false);
-  const [isKitLocked, setIsKitLocked] = useState(false);     // 👈 settings मधील किट लॉक
-  const [isVisaDocLocked, setIsVisaDocLocked] = useState(true); // 👈 settings मधील व्हिसा डॉक्युमेंट लॉक
-  const [isSuperUser, setIsSuperUser] = useState(false);     // 👈 Super Admin चेक
+
+  // 🔒 Master Locks State (डिफॉल्ट सुरक्षित लॉक)
+  const [isKitLocked, setIsKitLocked] = useState(true);
+  const [isVisaDocLocked, setIsVisaDocLocked] = useState(true);
+  const [isSuperUser, setIsSuperUser] = useState(false);
   const [activeTab, setActiveTab] = useState('applications'); 
 
   // 🎯 फॉर्म इनलाइन उघडण्यासाठी स्टेट्स
-  const [activeFormType, setActiveFormType] = useState(null); // 'VISA' | 'KIT' | null
+  const [activeFormType, setActiveFormType] = useState(null); // 'DOCS' | 'KIT' | null
   const [editingSpainData, setEditingSpainData] = useState(null);
 
   // Re-upload & PDF View Modal States (विमा व स्पर्धा)
@@ -71,27 +73,40 @@ export default function MyTeamDashboard() {
 
       const wData = whitelistSnap && whitelistSnap.exists() ? whitelistSnap.data() : null;
 
-      // 🔍 डिपार्टमेंट व रोल तपासणी
+      // 🔍 डिपार्टमेंट व सुपर ॲडमिन तपासणी
       const userDept = (uData?.department || '').toUpperCase().trim();
       const userRole = (uData?.role || '').trim();
-      const isSuper = userDept === 'SUPER' || userRole === 'Super Admin';
+
+      // 👑 २. कडक Super Admin नियम (फक्त Department SUPER आणि Role Super Admin असणाराच!)
+      const isSuper = userDept === 'SUPER' && userRole === 'Super Admin';
       setIsSuperUser(isSuper);
 
-      // 🔒 settings -> registration_status मधील दोन्ही कुलपे (Locks) तपासणे
+      // 🔒 settings -> registration_status मधील कुलूपे वाचणे
       if (settingsSnap && settingsSnap.exists()) {
         const sData = settingsSnap.data();
         setIsKitLocked(sData.isKitLocked === true);
-        setIsVisaDocLocked(sData.isVisaDocLocked !== false); // डिफॉल्ट Locked (true)
+        setIsVisaDocLocked(sData.isVisaDocLocked !== false);
+      } else {
+        setIsKitLocked(true);
+        setIsVisaDocLocked(true);
       }
 
-      // 🛡️ १. कडक स्पेन ट्रॅव्हलर ॲक्सेस नियम:
-      const isAllowedDepartment = isSuper || userDept === 'MRDGA';
-      const isWhitelistedUser = (wData && wData.isActive !== false) || uData?.spainTourAccess === true;
+      // 🚫 जर डिपार्टमेंट INSURANCE असेल तर स्पेन टूरचा ॲक्सेस अजिबात देऊ नये
+      const isInsuranceDept = userDept === 'INSURANCE';
+
+      // 🛡️ १. स्पेन ट्रॅव्हलर ॲक्सेस नियम:
+      const isAllowedDepartment = !isInsuranceDept && (isSuper || userDept === 'MRDGA');
+      const isWhitelistedUser = !isInsuranceDept && ((wData && wData.isActive !== false) || uData?.spainTourAccess === true);
       const hasSpainAccess = isAllowedDepartment || isWhitelistedUser;
+
+      // ➕ ४. नवीन अचूक allowAdd नियम:
+      const isMrdgaAdmin = userDept === 'MRDGA' && userRole === 'Admin';
+      const isSuperDept = userDept === 'SUPER';
 
       // 🛡️ २. अतिरिक्त सदस्य जोडण्याची परवानगी
       const allowAdd = 
-        isSuper || 
+        isSuperDept || 
+        isMrdgaAdmin || 
         uData?.canAddMembers === true || 
         wData?.canAddMembers === true;
 
@@ -184,7 +199,7 @@ export default function MyTeamDashboard() {
     }
   };
 
-  // Re-upload New PDF Handler (विमा - १००% जसाच्या तसा सुरक्षित)
+  // Re-upload New PDF Handler (विमा)
   const handleReuploadSubmit = async (insItem) => {
     if (!newFile) {
       Swal.fire({ icon: 'warning', title: 'कृपया नवीन PDF फाईल निवडा!', confirmButtonColor: '#f59e0b', background: '#0c0d14', color: '#fff' });
@@ -274,8 +289,8 @@ export default function MyTeamDashboard() {
     );
   }
 
-  // 📝 १. जर युझर व्हिसा फॉर्म भरत असेल
-  if (activeFormType === 'VISA') {
+  // 📝 १. जर युझर डॉक्युमेंट्स फॉर्म भरत असेल
+  if (activeFormType === 'DOCS') {
     return (
       <div className="min-h-screen flex flex-col bg-[#08090d] text-white font-sans">
         <Navbar />
@@ -326,9 +341,9 @@ export default function MyTeamDashboard() {
 
   const hasNoData = myTeams.length === 0 && myInsurances.length === 0 && !isSpainWhitelisted;
 
-  // 🔒 अधिकार नियम (Super Admin ला सर्व चालू, इतरांसाठी लॉक स्थिती लागू)
-  const isKitEditable = isSuperUser || !isKitLocked;
-  const isVisaDocEditable = isSuperUser || !isVisaDocLocked;
+  // 🔒 अचूक कुलूप नियम: फक्त Super Admin साठी उघडे राहील, बाकी सर्वांसाठी कुलूप पाळले जाईल
+  const isKitEditable = isSuperUser ? true : !isKitLocked;
+  const isDocEditable = isSuperUser ? true : !isVisaDocLocked;
 
   const handleOpenPdfModal = (url, titleText = "PDF Viewer") => {
     setPdfTitle(titleText);
@@ -346,7 +361,9 @@ export default function MyTeamDashboard() {
             <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
               <Shield className="w-5 h-5 text-amber-400" /> My Status
             </h1>
-            <p className="text-slate-400 text-xs mt-0.5">Email: <span className="text-amber-400 font-mono">{currentUser?.email}</span></p>
+            <p className="text-slate-400 text-xs mt-0.5">
+              Email: <span className="text-amber-400 font-mono">{currentUser?.email}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -453,8 +470,8 @@ export default function MyTeamDashboard() {
                   </div>
                 )}
 
-                {/* व्हिसा डॉक्युमेंट लॉक सूचना */}
-                {!isVisaDocEditable && (
+                {/* डॉक्युमेंट लॉक सूचना */}
+                {!isDocEditable && (
                   <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-xs text-rose-300">
                     <Lock className="w-4 h-4 shrink-0 text-rose-400" />
                     <span>Document submissions are currently closed by Admin.</span>
@@ -478,7 +495,7 @@ export default function MyTeamDashboard() {
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                      {isKitEditable && (
+                      {isKitEditable ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -490,19 +507,24 @@ export default function MyTeamDashboard() {
                           <Shirt className="w-4 h-4" />
                           <span>Submit Kit Sizes Only</span>
                         </button>
+                      ) : (
+                        <div className="flex-1 py-2.5 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
+                          <Lock className="w-4 h-4" />
+                          <span>Kit Sizes Locked</span>
+                        </div>
                       )}
 
-                      {isVisaDocEditable ? (
+                      {isDocEditable ? (
                         <button
                           type="button"
                           onClick={() => {
                             setEditingSpainData(null);
-                            setActiveFormType('VISA');
+                            setActiveFormType('DOCS');
                           }}
                           className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <FileText className="w-4 h-4 text-amber-400" />
-                          <span>Submit Documents</span>
+                          <span>Submit Travel Documents</span>
                         </button>
                       ) : (
                         <div className="flex-1 py-2.5 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
@@ -603,7 +625,7 @@ export default function MyTeamDashboard() {
                         </div>
                       )}
 
-                      {/* 🎯 २ स्वतंत्र बटणे: किट आणि व्हिसा */}
+                      {/* 🎯 २ स्वतंत्र बटणे: किट आणि डॉक्युमेंट्स */}
                       <div className="flex flex-col sm:flex-row gap-2 pt-1">
                         {isKitEditable ? (
                           <button
@@ -620,26 +642,26 @@ export default function MyTeamDashboard() {
                         ) : (
                           <div className="flex-1 py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
                             <Lock className="w-3.5 h-3.5" />
-                            <span>Kit Measurements Locked</span>
+                            <span>Kit Sizes Locked</span>
                           </div>
                         )}
 
-                        {isVisaDocEditable ? (
+                        {isDocEditable ? (
                           <button
                             type="button"
                             onClick={() => {
                               setEditingSpainData(spApp);
-                              setActiveFormType('VISA');
+                              setActiveFormType('DOCS');
                             }}
                             className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
                           >
                             <FileText className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Visa & Passport Docs</span>
+                            <span>Travel Documents</span>
                           </button>
                         ) : (
                           <div className="flex-1 py-2 bg-slate-900 border border-slate-800 text-slate-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed">
                             <Lock className="w-3.5 h-3.5" />
-                            <span>Visa Documents Locked</span>
+                            <span>Documents Locked</span>
                           </div>
                         )}
                       </div>

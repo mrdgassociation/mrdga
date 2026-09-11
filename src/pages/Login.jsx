@@ -26,7 +26,7 @@ export default function Login() {
       const userDept = (user.department || '').toUpperCase().trim();
 
       // 👑 फक्त Super Admin असेल तरच 'ॲडमिन डॅशबोर्ड' वर नेणे
-      if (userRole === 'Super Admin' || userDept === 'SUPER') {
+      if (userRole === 'Super Admin' && userDept === 'SUPER') {
         navigate('/admin');
       } else {
         // 📊 Team (गोविंदा पथक), विमा अर्जदार, MRDGA सदस्य आणि स्पेन पाहुणे सर्वांना 'माझे स्टेटस' पेजवर नेणे

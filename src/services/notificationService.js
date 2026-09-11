@@ -1,7 +1,7 @@
 import { db } from '../firebase/config';
 import { 
   collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp, 
-  doc, getDoc, updateDoc, where 
+  doc, setDoc, getDoc, updateDoc, where 
 } from 'firebase/firestore';
 import { getMessaging, getToken } from 'firebase/messaging'; // 👈 १. FCM SDK डायरेक्ट इंपोर्ट केले
 
@@ -74,158 +74,127 @@ export const notificationService = {
     }
   },
 
-  // 3️⃣ 💾 FIRESTORE TOKEN SAVE FUNCTION
-  async saveUserFcmToken(email, tokenOrSubscription) {
-  //  console.log(`🚀 [FCM-LOG 3]: Initiating Token Save for Email: '${email}'`);
+ // 3️⃣ 💾 FIRESTORE TOKEN SAVE FUNCTION
+  async saveUserFcmToken(email, tokenOrSubscription, source = 'web') {
     if (!email || !tokenOrSubscription) {
-      console.warn("⚠️ [FCM-LOG 3.1]: Missing Email or Token. Aborting save.");
+      console.warn("⚠️ [FCM]: Missing Email or Token.");
       return;
     }
 
     const emailLower = email.toLowerCase().trim();
     let cleanToken = '';
-    let subscriptionJson = '';
 
     if (typeof tokenOrSubscription === 'object' && tokenOrSubscription.endpoint) {
-      subscriptionJson = JSON.stringify(tokenOrSubscription);
       const parts = tokenOrSubscription.endpoint.split('/');
       cleanToken = parts[parts.length - 1];
     } else if (typeof tokenOrSubscription === 'string') {
       try {
         const parsed = JSON.parse(tokenOrSubscription);
-        if (parsed.endpoint) {
-          subscriptionJson = tokenOrSubscription;
-          const parts = parsed.endpoint.split('/');
-          cleanToken = parts[parts.length - 1];
-        } else {
-          cleanToken = tokenOrSubscription;
-        }
+        cleanToken = parsed.endpoint ? parsed.endpoint.split('/').pop() : tokenOrSubscription;
       } catch (e) {
         cleanToken = tokenOrSubscription;
       }
     }
 
-    //console.log(`🔑 [FCM-LOG 3.2]: Normalized Email: '${emailLower}' | Clean Token Snippet: '${cleanToken.substring(0, 20)}...'`);
-
-    const payloadToSave = {
-      fcmToken: cleanToken,
-      webPushSubscription: subscriptionJson || null,
-      notificationsEnabled: true,
-      updatedAt: serverTimestamp()
-    };
-
     try {
-      // 🏢 A. Update in 'users' collection
-      try {
-        const userDocRef = doc(db, 'users', emailLower);
-        const userSnap = await getDoc(userDocRef);
-        if (userSnap.exists()) {
-          await updateDoc(userDocRef, payloadToSave);
-         // console.log("✅ [FCM-LOG 3.4]: Token successfully updated in 'users' collection!");
-        }
-      } catch (userErr) {
-        //console.log("ℹ️ [FCM-LOG 3.5b]: 'users' check safely bypassed.");
-      }
+      console.log("💾 [FCM] Saving to 'fcm_tokens' collection for:", emailLower);
+      
+      // 🎯 थेट setDoc वापरणे (डॉक्युमेंट नसेल तर नवीन तयार करेल, असेल तर अपडेट करेल)
+      const tokenDocRef = doc(db, 'fcm_tokens', emailLower);
+      await setDoc(tokenDocRef, {
+        email: emailLower,
+        fcmToken: cleanToken,
+        source: source,
+        platform: 'web',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
 
-      // 🛡️ B. Update in 'insurance_requests_2026' collection
-      const insQuery = query(collection(db, 'insurance_requests_2026'), where('email', '==', emailLower));
-      const insSnap = await getDocs(insQuery);
-      if (!insSnap.empty) {
-        insSnap.forEach(async (d) => {
-          await updateDoc(doc(db, 'insurance_requests_2026', d.id), { fcmToken: cleanToken });
-        });
-        //console.log(`✅ [FCM-LOG 3.7]: Token updated in ${insSnap.size} insurance records.`);
-      }
-
-      // 🏆 C. Update in 'teams' collection
-      const teamsQuery = query(collection(db, 'teams'), where('email', '==', emailLower));
-      const teamsSnap = await getDocs(teamsQuery);
-      if (!teamsSnap.empty) {
-        teamsSnap.forEach(async (d) => {
-          await updateDoc(doc(db, 'teams', d.id), { fcmToken: cleanToken });
-        });
-       // console.log(`✅ [FCM-LOG 3.10]: Token updated in ${teamsSnap.size} team records.`);
-      }
-
+      console.log("✅ [FCM SUCCESS] Document written to 'fcm_tokens'!");
     } catch (err) {
-      console.error("❌ [FCM-ERROR 3]: Error saving FCM Token to Firestore:", err);
+      console.error("❌ [FCM FIRESTORE ERROR]:", err);
+      throw err;
     }
   },
 
-  // 🎯 RELIABLE PUSH PERMISSION (Fallback Fixed)
   async requestPushPermission(userEmail = null) {
-    //console.log("--------------------------------------------------");
-    //console.log("🚀 [PUSH PROCESS START]: Requesting Permission for:", userEmail);
-
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      console.warn("⚠️ या ब्राउझरमध्ये Push Notification सपोर्ट नाही.");
+      console.warn("⚠️ Push Notification not supported.");
       return null;
     }
-
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.warn("⚠️ Permission denied.");
-      return null;
-    }
-   // console.log("✅ [STEP 1 SUCCESS]: Permission Granted!");
 
     try {
-      const swPath = `${import.meta.env.BASE_URL}firebase-messaging-sw.js`;
-      await navigator.serviceWorker.register(swPath, { scope: import.meta.env.BASE_URL });
-      const activeRegistration = await navigator.serviceWorker.ready;
-     // console.log("✅ [STEP 2 SUCCESS]: Service Worker Active!", activeRegistration);
+      console.log("👉 [STEP A]: Checking permission...");
+      let permission = Notification.permission;
+      if (permission === 'default') {
+        permission = await Notification.requestPermission();
+      }
+      console.log("🔔 Permission status:", permission);
+      
+      if (permission !== "granted") return null;
 
-      let finalTokenOrSub = null;
+      console.log("👉 [STEP B]: Registering Service Worker...");
+      const swUrl = `${import.meta.env.BASE_URL}firebase-messaging-sw.js`;
+      await navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL });
+      
+      console.log("👉 [STEP C]: Waiting for Service Worker READY...");
+      const readyReg = await navigator.serviceWorker.ready;
+      console.log("✅ [STEP C SUCCESS]: Service Worker is READY!");
 
-      // 📌 STEP 3: SDK Direct Method First (Fast & Reliable)
+      let finalToken = null;
+
+      // 🎯 STEP D1: जुनी सबस्क्रिप्शन क्लिअर करून नवीन घेणे
+      console.log("👉 [STEP D]: Subscribing via PushManager...");
       try {
-      //  console.log("🔑 [STEP 3]: Requesting FCM Token via Firebase Messaging SDK...");
-        const messaging = getMessaging();
-        
-        finalTokenOrSub = await getToken(messaging, {
-          vapidKey: VAPID_KEY,
-          serviceWorkerRegistration: activeRegistration
+        const convertedKey = urlBase64ToUint8Array(VAPID_KEY);
+
+        // जुनी अडकलेली सबस्क्रिप्शन असल्यास आधी ती काढून टाकणे
+        const existingSub = await readyReg.pushManager.getSubscription();
+        if (existingSub) {
+          console.log("🧹 [STEP D]: Unsubscribing old push subscription...");
+          await existingSub.unsubscribe();
+        }
+
+        console.log("🚀 [STEP D]: Creating fresh push subscription...");
+        const newSub = await readyReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey
         });
 
-        if (finalTokenOrSub) {
-        //  console.log("📲 [STEP 3 SUCCESS]: FCM Token Received directly via SDK!", finalTokenOrSub);
+        if (newSub && newSub.endpoint) {
+          const parts = newSub.endpoint.split('/');
+          finalToken = parts[parts.length - 1];
+          console.log("🔑 [STEP D SUCCESS - NATIVE]: Fresh Token Obtained:", finalToken);
         }
-      } catch (sdkErr) {
-        console.warn("⚠️ Firebase Messaging SDK failed, trying PushManager fallback:", sdkErr.message);
+      } catch (nativeErr) {
+        console.warn("❌ Native subscription failed:", nativeErr.message || nativeErr);
       }
 
-      // 📌 PushManager Native Fallback (जर SDK फेल झाला तर)
-      if (!finalTokenOrSub) {
-        //console.log("🔑 [STEP 3 FALLBACK]: Trying Native PushManager...");
-        const convertedVapidKey = urlBase64ToUint8Array(VAPID_KEY);
-        
-        if (convertedVapidKey) {
-          let sub = await activeRegistration.pushManager.getSubscription();
-          if (!sub) {
-            sub = await activeRegistration.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: convertedVapidKey
-            });
-          }
-          finalTokenOrSub = sub;
+      // 🎯 STEP D2: जर Native ने टोकन दिले नसेल तरच SDK प्रयत्न करणे
+      if (!finalToken) {
+        try {
+          const messaging = getMessaging();
+          finalToken = await getToken(messaging, {
+            vapidKey: VAPID_KEY,
+            serviceWorkerRegistration: readyReg
+          });
+          console.log("🔑 [STEP D SUCCESS - SDK]: FCM Token Obtained:", finalToken);
+        } catch (sdkErr) {
+          console.error("SDK getToken Error:", sdkErr);
         }
       }
 
-      // 📌 STEP 4: Firestore Save
-      if (finalTokenOrSub) {
-        if (userEmail) {
-        //  console.log("👉 [STEP 4 TRIGGER]: Saving token for email:", userEmail);
-          await this.saveUserFcmToken(userEmail, finalTokenOrSub);
-        }
-        return finalTokenOrSub;
-      } else {
-        console.warn("❌ [STEP 3 FAIL]: Could not retrieve FCM token.");
-        return null;
+      // 🎯 STEP E: Firestore मध्ये सेव्ह करणे
+      if (finalToken && userEmail) {
+        console.log("👉 [STEP E]: Saving token to Firestore for:", userEmail);
+        await this.saveUserFcmToken(userEmail, finalToken, 'spain_tour_whitelist');
+        console.log("🎉 [SUCCESS]: Token saved to fcm_tokens collection!");
+        return finalToken;
       }
 
+      return finalToken;
     } catch (err) {
-      console.error("❌ [STEP 3 ERROR LOG]:", err.message || err);
-      return null;
+      console.error("❌ [CRITICAL FCM FAILURE]:", err);
+      throw err;
     }
   }
 };
