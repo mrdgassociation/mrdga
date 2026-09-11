@@ -10,8 +10,9 @@ import {
   Clock, FileText, Phone, Mail, ChevronRight, ChevronDown, X, 
   RefreshCw, Send, Loader2, Eye, Printer, MessageCircle, UserCheck, 
   Briefcase, Lock, Unlock, Users, Calendar, Ticket, FileSpreadsheet,
-  UploadCloud, ClipboardList
+  UploadCloud, ClipboardList, Shirt
 } from 'lucide-react';
+import TshirtReportModal from '../components/TshirtReportModal';
 
 const STATUS_OPTIONS = [
   "Documents Pending",
@@ -43,9 +44,12 @@ export default function SpainVisaAdmin({ currentUser }) {
   const [submitting, setSubmitting] = useState(false);
   const [applications, setApplications] = useState([]);
 
+  // 👕 T-Shirt Modal State
+  const [showTshirtModal, setShowTshirtModal] = useState(false);
+
   // 🔒 Master Kit Lock State
   const [isKitLocked, setIsKitLocked] = useState(false);
-  const [isVisaDocLocked, setIsVisaDocLocked] = useState(true); // 👈 डीफॉल्ट लॉक ठेवले आहे
+  const [isVisaDocLocked, setIsVisaDocLocked] = useState(true);
   const [lockUpdating, setLockUpdating] = useState(false);
 
   // Filters & Search
@@ -78,7 +82,7 @@ export default function SpainVisaAdmin({ currentUser }) {
   const [pastedExcelText, setPastedExcelText] = useState('');
   const [importing, setImporting] = useState(false);
 
-// 🔄 डेटा लोड करताना दोन्ही लॉक वाचणे
+  // 🔄 डेटा लोड करताना दोन्ही लॉक वाचणे
   const loadApplications = async () => {
     setLoading(true);
     try {
@@ -94,7 +98,7 @@ export default function SpainVisaAdmin({ currentUser }) {
       if (settingsSnap && settingsSnap.exists()) {
         const data = settingsSnap.data();
         setIsKitLocked(data.isKitLocked === true);
-        setIsVisaDocLocked(data.isVisaDocLocked !== false); // डिफॉल्ट true (Locked)
+        setIsVisaDocLocked(data.isVisaDocLocked !== false);
       }
     } catch (err) {
       console.error("Error loading applications:", err);
@@ -137,7 +141,7 @@ export default function SpainVisaAdmin({ currentUser }) {
     }
   };
 
-  // 🔒 १. मास्टर व्हिसा डॉक्युमेंट सबमिशन लॉक टॉगल (Admin Switch)
+  // 🔒 मास्टर व्हिसा डॉक्युमेंट सबमिशन लॉक टॉगल (१००% अचूक सिंटॅक्स)
   const handleToggleVisaDocLock = async () => {
     setLockUpdating(true);
     const targetState = !isVisaDocLocked;
@@ -164,62 +168,6 @@ export default function SpainVisaAdmin({ currentUser }) {
       Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update visa doc lock.' });
     } finally {
       setLockUpdating(false);
-    }
-  };
-
-  // 🔑 २. Non-MRDGA Whitelist सिंक (फक्त email, isActive, name ही ३ च फील्ड्स)
-  const handleSyncNonMrdgaWhitelist = async () => {
-    const nonMrdgaMembers = applications.filter(item => {
-      const grp = (item.groupName || '').trim();
-      const email = (item.applicantEmail || item.submittedBy || '').trim().toLowerCase();
-      return grp !== 'MRDGA Members' && email && email.includes('@');
-    });
-
-    if (nonMrdgaMembers.length === 0) {
-      Swal.fire({
-        icon: 'info',
-        title: 'No Non-MRDGA Members',
-        text: 'All members are in MRDGA Members group or missing emails.',
-        background: '#0f172a',
-        color: '#fff'
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const batch = writeBatch(db);
-      let count = 0;
-
-      for (let member of nonMrdgaMembers) {
-        const cleanEmail = (member.applicantEmail || member.submittedBy).trim().toLowerCase();
-        const whitelistDocRef = doc(db, "spain_tour_whitelist", cleanEmail);
-
-        // 🎯 फक्त हीच ३ फील्ड्स सेव्ह होतील
-        batch.set(whitelistDocRef, {
-          email: cleanEmail,
-          isActive: true,
-          name: member.fullNameAsPassport || member.fullName || ''
-        }, { merge: true });
-
-        count++;
-      }
-
-      await batch.commit();
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Whitelist Synced!',
-        text: `Updated 3-field whitelist for ${count} non-MRDGA members.`,
-        background: '#0f172a',
-        color: '#fff'
-      });
-
-    } catch (err) {
-      console.error("Whitelist sync error:", err);
-      Swal.fire({ icon: 'error', title: 'Sync Failed', text: err.message });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -261,9 +209,7 @@ export default function SpainVisaAdmin({ currentUser }) {
     });
   }, [applications, searchTerm, statusFilter, categoryFilter, groupFilter]);
 
- 
-  // 📋 स्मार्ट पाईप (|) व टॅब बल्क इंपोर्टर
-// 📋 १००% अचूक मॅपिंग असलेला बल्क इंपोर्टर
+  // 📋 बल्क इंपोर्टर
   const handleExecuteBulkImport = async () => {
     if (!pastedExcelText.trim()) {
       Swal.fire({ icon: 'warning', title: 'Empty', text: 'Please paste lines.' });
@@ -280,7 +226,6 @@ export default function SpainVisaAdmin({ currentUser }) {
         let delimiter = line.includes('|') ? '|' : '\t';
         let cols = line.split(delimiter).map(c => c.trim().replace(/^"|"$/g, ''));
 
-        // हेडर ओळ वगळणे
         if (cols[0]?.toLowerCase() === 'name' || cols[1]?.toLowerCase() === 'surname') {
           continue;
         }
@@ -291,17 +236,16 @@ export default function SpainVisaAdmin({ currentUser }) {
         const lName = cols[1] || '';
         const full = `${fName} ${lName}`.replace(/\s+/g, ' ').trim().toUpperCase();
 
-        // 🎯 अचूक इंडेक्सनुसार मॅपिंग:
         const dobRaw = cols[2] || '';
         const passportRaw = (cols[3] || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         const issueRaw = cols[4] || '';
         const expiryRaw = cols[5] || '';
         const maritalRaw = cols[6] || 'Married';
-        const phoneRaw = (cols[7] || '').replace(/[^0-9]/g, '').slice(-10); // cols[7] = Phone
-        const emailRaw = (cols[8] || '').toLowerCase().trim();              // cols[8] = Email
-        const designationRaw = cols[9] || '';                              // cols[9] = Designation
-        const officeRaw = cols[10] || '';                                  // cols[10] = Office/Company
-        const homeAddressRaw = cols[11] || '';                             // cols[11] = Home Address
+        const phoneRaw = (cols[7] || '').replace(/[^0-9]/g, '').slice(-10);
+        const emailRaw = (cols[8] || '').toLowerCase().trim();
+        const designationRaw = cols[9] || '';
+        const officeRaw = cols[10] || '';
+        const homeAddressRaw = cols[11] || '';
 
         const memberPayload = {
           memberId: `SP-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`,
@@ -312,22 +256,14 @@ export default function SpainVisaAdmin({ currentUser }) {
           issueDate: issueRaw,
           expiryDate: expiryRaw,
           maritalStatus: maritalRaw,
-          
-          // संपर्क
           applicantContactNo: phoneRaw,
           applicantEmail: emailRaw,
           submittedBy: emailRaw || 'admin_import',
-
-          // रोजगार
           designation: designationRaw,
           employmentCategory: designationRaw ? 'Salaried' : 'Business / Self-Employed',
-          employerName: officeRaw.split(',')[0] || officeRaw, // कंपनीचे नाव
+          employerName: officeRaw.split(',')[0] || officeRaw,
           employerAddress: officeRaw,
-
-          // घराचा पत्ता (स्वल्पविरामासह १००% सुरक्षित)
           residentialAddress: homeAddressRaw,
-
-          // टूर ऑपरेशन्स
           travelCategory: 'Confirmed',
           groupName: 'MRDGA Members',
           status: 'Documents Pending',
@@ -456,7 +392,7 @@ export default function SpainVisaAdmin({ currentUser }) {
     }
   };
 
-  // 📊 फिल्टरनुसार एक्सेल/CSV एक्सपोर्ट
+  // 📊 CSV एक्सपोर्ट
   const handleExportFilteredCsv = () => {
     if (filteredApplications.length === 0) {
       Swal.fire({ icon: 'warning', title: 'No Data', text: 'No records match the current filter.' });
@@ -505,7 +441,7 @@ export default function SpainVisaAdmin({ currentUser }) {
     document.body.removeChild(link);
   };
 
-  // 🖨️ मास्टर ग्रुप PDF (A4 Landscape)
+  // 🖨️ मास्टर ग्रुप PDF
   const handlePrintMasterManifest = () => {
     if (filteredApplications.length === 0) {
       Swal.fire({ icon: 'warning', title: 'No Data', text: 'No records to print.' });
@@ -589,7 +525,7 @@ export default function SpainVisaAdmin({ currentUser }) {
     setTimeout(() => { printWindow.print(); }, 500);
   };
 
-  // 🖨️ सिंगल पॅसेंजर डॉसियर पास (A4 Portrait Pass)
+  // 🖨️ सिंगल पॅसेंजर डॉसियर पास
   const handlePrintSingleDossier = (item) => {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
@@ -603,9 +539,7 @@ export default function SpainVisaAdmin({ currentUser }) {
           </style>
         </head>
         <body style="padding: 10px;">
-          
           <div style="border: 2px solid #0f172a; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-            
             <div style="background: #0f172a; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
               <div>
                 <h1 style="margin: 0; font-size: 17px; letter-spacing: 1px; color: #f59e0b; text-transform: uppercase;">MRDGA SPAIN TOUR 2026</h1>
@@ -620,7 +554,7 @@ export default function SpainVisaAdmin({ currentUser }) {
 
             <div style="padding: 20px;">
               <div style="display: flex; gap: 18px; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 18px;">
-                <div style="width: 110px; height: 130px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; display: flex; align-items: center; justify-content: center; shrink-0;">
+                <div style="width: 110px; height: 130px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; display: flex; align-items: center; justify-content: center;">
                   ${item.photoUrl 
                     ? `<img src="${item.photoUrl}" style="width: 100%; height: 100%; object-fit: cover;" />`
                     : `<span style="color: #94a3b8; font-size: 11px; text-align: center; font-weight: bold;">PHOTO<br>ATTACHED</span>`
@@ -667,16 +601,13 @@ export default function SpainVisaAdmin({ currentUser }) {
                 <p style="font-size: 11.5px; margin: 4px 0;"><b>Address:</b> ${item.residentialAddress || item.employerAddress || 'On File'}</p>
                 <p style="font-size: 11.5px; margin: 4px 0;"><b>Occupation:</b> ${item.designation || item.employmentCategory || '-'} (${item.employerAddress || '-'})</p>
               </div>
-
             </div>
 
             <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 10px 20px; font-size: 10.5px; color: #64748b; display: flex; justify-content: space-between; align-items: center;">
               <span>Official MRDGA Spain Tour Delegation Document</span>
               <span>Authorized Signature: __________________</span>
             </div>
-
           </div>
-
         </body>
       </html>
     `);
@@ -729,10 +660,10 @@ export default function SpainVisaAdmin({ currentUser }) {
           </div>
         </div>
 
-        {/* Action Controls: Import, Lock, Print Group PDF, Export CSV & Refresh */}
+        {/* Action Controls */}
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
           
-          {/* 📥 1-CLICK BULK EXCEL IMPORT */}
+          {/* 📥 BULK IMPORT */}
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
@@ -743,7 +674,7 @@ export default function SpainVisaAdmin({ currentUser }) {
             <span className="hidden sm:inline">Bulk Import</span>
           </button>
 
-          {/* 🔒 GLOBAL KIT LOCK */}
+          {/* 🔒 KIT LOCK */}
           <button
             type="button"
             disabled={lockUpdating}
@@ -764,29 +695,40 @@ export default function SpainVisaAdmin({ currentUser }) {
             <span className="hidden sm:inline">{isKitLocked ? 'Kit Locked' : 'Kit Open'}</span>
           </button>
 
-          {/* 🔒 GLOBAL VISA DOCS LOCK TOGGLE */}
-<button
-  type="button"
-  disabled={lockUpdating}
-  onClick={handleToggleVisaDocLock}
-  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer border shadow-sm ${
-    isVisaDocLocked 
-      ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900' 
-      : 'bg-blue-950 text-blue-300 border-blue-800 hover:bg-blue-900'
-  }`}
-  title={isVisaDocLocked ? "Click to Open Visa Document Uploads" : "Click to Lock Visa Document Uploads"}
->
-  {lockUpdating ? (
-    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-  ) : isVisaDocLocked ? (
-    <Lock className="w-3.5 h-3.5 text-rose-400" />
-  ) : (
-    <Unlock className="w-3.5 h-3.5 text-blue-400" />
-  )}
-  <span className="hidden sm:inline">{isVisaDocLocked ? 'Visa Docs Locked' : 'Visa Docs Open'}</span>
-</button>
+          {/* 🔒 VISA DOCS LOCK (✅ १००% फिक्स सिंटॅक्स) */}
+          <button
+            type="button"
+            disabled={lockUpdating}
+            onClick={handleToggleVisaDocLock}
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer border shadow-sm ${
+              isVisaDocLocked 
+                ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900' 
+                : 'bg-blue-950 text-blue-300 border-blue-800 hover:bg-blue-900'
+            }`}
+            title={isVisaDocLocked ? "Click to Open Visa Document Uploads" : "Click to Lock Visa Document Uploads"}
+          >
+            {lockUpdating ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : isVisaDocLocked ? (
+              <Lock className="w-3.5 h-3.5 text-rose-400" />
+            ) : (
+              <Unlock className="w-3.5 h-3.5 text-blue-400" />
+            )}
+            <span className="hidden sm:inline">{isVisaDocLocked ? 'Visa Docs Locked' : 'Visa Docs Open'}</span>
+          </button>
 
-          {/* 🖨️ PRINT MASTER GROUP PDF */}
+          {/* 👕 T-SHIRT SPECIAL REPORT BUTTON */}
+          <button
+            type="button"
+            onClick={() => setShowTshirtModal(true)}
+            className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer shadow-sm"
+            title="View Dynamic T-Shirt Production Summary & Reports"
+          >
+            <Shirt className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">T-Shirt Report</span>
+          </button>
+
+          {/* 🖨️ GROUP PDF */}
           <button
             onClick={handlePrintMasterManifest}
             className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer shadow-sm"
@@ -796,7 +738,7 @@ export default function SpainVisaAdmin({ currentUser }) {
             <span className="hidden sm:inline">Group PDF</span>
           </button>
 
-          {/* 📊 EXPORT FILTERED CSV */}
+          {/* 📊 EXPORT CSV */}
           <button
             onClick={handleExportFilteredCsv}
             className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer shadow-sm"
@@ -925,9 +867,7 @@ export default function SpainVisaAdmin({ currentUser }) {
                           <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
                             item.travelCategory === 'Confirmed' 
                               ? 'bg-emerald-950 text-emerald-300 border-emerald-800' 
-                              : item.travelCategory === 'Waitlist'
-                                ? 'bg-amber-950 text-amber-300 border-amber-800'
-                                : 'bg-red-950 text-red-300 border-red-800'
+                              : 'bg-amber-950 text-amber-300 border-amber-800'
                           }`}>
                             {item.travelCategory}
                           </span>
@@ -994,7 +934,6 @@ export default function SpainVisaAdmin({ currentUser }) {
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {/* 🖨️ INDIVIDUAL PASS PRINT BUTTON */}
                         <button
                           type="button"
                           onClick={() => handlePrintSingleDossier(item)}
@@ -1087,7 +1026,7 @@ export default function SpainVisaAdmin({ currentUser }) {
         </div>
       )}
 
-      {/* 📥 1-CLICK BULK EXCEL IMPORT MODAL */}
+      {/* 📥 BULK IMPORT MODAL */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 font-sans overflow-y-auto">
           <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-xl p-4 sm:p-5 space-y-3 shadow-2xl my-6">
@@ -1115,7 +1054,7 @@ export default function SpainVisaAdmin({ currentUser }) {
 
               <textarea
                 rows={8}
-                placeholder="Excel मधील ओळी सिलेक्ट करा, Ctrl+C दाबा आणि इथे Ctrl+V (पेस्ट) करा..."
+                placeholder="Excel मधील ओळी सिलेक्ट करा, Ctrl+C दाबा आणि इथे Ctrl+V करा..."
                 value={pastedExcelText}
                 onChange={(e) => setPastedExcelText(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-400 resize-y"
@@ -1123,10 +1062,10 @@ export default function SpainVisaAdmin({ currentUser }) {
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-800">
                 <span className="text-[11px] text-slate-400 font-mono">
-  {pastedExcelText.trim() 
-    ? `${pastedExcelText.trim().split(/\r?\n/).filter(l => l.trim().length > 5).length} Valid Rows Detected` 
-    : '0 Rows'}
-</span>
+                  {pastedExcelText.trim() 
+                    ? `${pastedExcelText.trim().split(/\r?\n/).filter(l => l.trim().length > 5).length} Valid Rows Detected` 
+                    : '0 Rows'}
+                </span>
 
                 <div className="flex gap-2">
                   <button
@@ -1288,8 +1227,9 @@ export default function SpainVisaAdmin({ currentUser }) {
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
                   disabled={submitting}
+                  onClick={handleSaveMemberDetails}
                   className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-xs transition flex items-center gap-1 disabled:opacity-50"
                 >
                   {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
@@ -1343,6 +1283,13 @@ export default function SpainVisaAdmin({ currentUser }) {
           </div>
         </div>
       )}
+
+      {/* 👕 T-SHIRT PRODUCTION MODAL */}
+      <TshirtReportModal
+        isOpen={showTshirtModal}
+        onClose={() => setShowTshirtModal(false)}
+        applications={filteredApplications}
+      />
 
     </div>
   );
