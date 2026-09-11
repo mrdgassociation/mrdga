@@ -70,7 +70,7 @@ export default function SplashScreen({ onFinish, season = "2026", posterImage = 
                 महाराष्ट्र राज्य दहीहंडी गोविंदा असोसिएशन
               </h1>
               <p className="text-[10px] font-extrabold text-amber-400 uppercase tracking-widest mt-0.5">
-                Official Portal • Season {season}
+                Official Portal 
               </p>
             </div>
 
